@@ -1,0 +1,5 @@
+git init -b main
+git add .
+git commit -m "Initial commit: Add website files"
+git remote add origin https://github.com/almarar88/ideashelf.git
+git push -u origin main
