@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    margin: 0;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  [dir="rtl"] body {
+    font-family: "Cairo", "Plus Jakarta Sans", system-ui, sans-serif;
+  }
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-ink-faint;
+  }
+}
+
+@layer components {
+  /* The phone frame: on desktop the app is centred in a device-sized column. */
+  .app-shell {
+    @apply relative mx-auto flex h-full w-full max-w-[440px] flex-col overflow-hidden bg-canvas;
+  }
+  .screen {
+    @apply flex-1 overflow-y-auto overflow-x-hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .screen::-webkit-scrollbar {
+    display: none;
+  }
+  .card {
+    @apply rounded-3xl bg-white shadow-card;
+  }
+  .pill {
+    @apply inline-flex items-center justify-center rounded-full font-semibold transition active:scale-[.97];
+  }
+  .btn-dark {
+    @apply pill bg-ink px-6 py-4 text-white shadow-pill;
+  }
+  .btn-light {
+    @apply pill bg-white px-5 py-3 text-ink shadow-soft;
+  }
+  .icon-btn {
+    @apply grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-ink shadow-soft transition active:scale-95;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold;
+  }
+  .field {
+    @apply flex items-center gap-3 rounded-2xl bg-canvas/80 px-4 py-3;
+  }
+  .label-xs {
+    @apply text-[11px] font-medium text-ink-muted;
+  }
+  .dotted-line {
+    background-image: linear-gradient(to right, #C9CBDD 45%, transparent 0%);
+    background-position: bottom;
+    background-size: 7px 1.5px;
+    background-repeat: repeat-x;
+  }
+  .stagger > * {
+    @apply animate-fade-up;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0ms }
+  .stagger > *:nth-child(2) { animation-delay: 45ms }
+  .stagger > *:nth-child(3) { animation-delay: 90ms }
+  .stagger > *:nth-child(4) { animation-delay: 135ms }
+  .stagger > *:nth-child(5) { animation-delay: 180ms }
+  .stagger > *:nth-child(6) { animation-delay: 225ms }
+  .stagger > *:nth-child(7) { animation-delay: 270ms }
+  .stagger > *:nth-child(8) { animation-delay: 315ms }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer utilities {
+  .pt-safe {
+    padding-top: calc(var(--safe-top) + 0.5rem);
+  }
+  .pb-safe {
+    padding-bottom: calc(var(--safe-bottom) + 0.5rem);
+  }
+  .flip-rtl {
+    transform: scaleX(1);
+  }
+  [dir="rtl"] .flip-rtl {
+    transform: scaleX(-1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

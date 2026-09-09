@@ -1,0 +1,20 @@
+{
+  "appId": "app.alcodetrips.mobile",
+  "appName": "Alcode Trips",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#EFF1F8"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 900,
+      "backgroundColor": "#EFF1F8",
+      "androidSplashResourceName": "splash",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#EFF1F8"
+    }
+  }
+}

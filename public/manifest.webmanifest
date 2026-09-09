@@ -1,0 +1,14 @@
+{
+  "name": "Alcode Trips",
+  "short_name": "Alcode Trips",
+  "description": "Flights, hotels, cars, packages and eSIM — the best price from every site.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EFF1F8",
+  "theme_color": "#EFF1F8",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
