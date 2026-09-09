@@ -2,6 +2,7 @@ import { Bath, Car, Coffee, Dumbbell, MapPin, Plane, ShieldCheck, Star, Waves, W
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { DestinationArt } from "@/components/Art";
+import Photo, { PhotoCredit } from "@/components/Photo";
 import PriceCompare from "@/components/PriceCompare";
 import { BackButton, Stars } from "@/components/ui";
 import { cityById } from "@/data/catalog";
@@ -71,7 +72,13 @@ export default function HotelDetail() {
   return (
     <div className="screen pb-40">
       <div className="relative h-[240px]">
-        <DestinationArt name={city.image} className="absolute inset-0 h-full w-full" />
+        <Photo
+          photo={hotel.photo}
+          alt={hotel.name}
+          showCredit={false}
+          className="absolute inset-0 h-full w-full"
+          fallback={<DestinationArt name={city.image} className="h-full w-full" />}
+        />
         <div className="relative px-5 pt-safe">
           <BackButton />
         </div>
@@ -84,17 +91,29 @@ export default function HotelDetail() {
             <p className="mt-1 flex items-center gap-1.5 text-[12px] text-ink-muted">
               <MapPin size={12} /> {locale === "ar" ? hotel.areaAr : hotel.area} · {iso(`${hotel.distanceKm} km`)}
             </p>
-            <div className="mt-2">
-              <Stars value={hotel.stars} />
-            </div>
+            {hotel.stars > 0 && (
+              <div className="mt-2">
+                <Stars value={hotel.stars} />
+              </div>
+            )}
+            {hotel.address && <p className="mt-1.5 text-[11px] text-ink-faint">{hotel.address}</p>}
           </div>
-          <span className="shrink-0 rounded-2xl bg-brand px-3 py-2 text-center text-white">
-            <span className="block text-[16px] font-extrabold leading-none">{hotel.rating}</span>
-            <span className="block text-[9px] opacity-80">{hotel.reviews} {t("reviews")}</span>
-          </span>
+          {hotel.rating > 0 && (
+            <span className="shrink-0 rounded-2xl bg-brand px-3 py-2 text-center text-white">
+              <span className="block text-[16px] font-extrabold leading-none">{hotel.rating}</span>
+              <span className="block text-[9px] opacity-80">{hotel.reviews} {t("reviews")}</span>
+            </span>
+          )}
         </div>
 
+        {hotel.roomDescription && (
+          <p className="mt-3 border-t border-canvas pt-3 text-[12.5px] leading-relaxed text-ink-soft">
+            {hotel.roomDescription}
+          </p>
+        )}
+
         <div className="mt-4 flex flex-wrap gap-2 border-t border-canvas pt-4">
+          {hotel.board && <span className="chip bg-mint-100 text-[11px] text-mint-600">{hotel.board}</span>}
           {hotel.amenities.map((a) => {
             const Icon = AMENITY_ICONS[a] ?? Star;
             return (
@@ -110,6 +129,10 @@ export default function HotelDetail() {
             <ShieldCheck size={13} /> {t("freeCancellation")}
           </p>
         )}
+      </div>
+
+      <div className="mt-2 px-5">
+        <PhotoCredit photo={hotel.photo} />
       </div>
 
       <section className="mt-5 px-5">

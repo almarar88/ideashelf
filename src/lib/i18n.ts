@@ -47,6 +47,7 @@ export const STRINGS = {
   from: { ar: "من", en: "From" },
   to: { ar: "إلى", en: "To" },
   date: { ar: "التاريخ", en: "Date" },
+  durationLabel: { ar: "المدة", en: "Duration" },
   returnDate: { ar: "تاريخ العودة", en: "Return" },
   passenger: { ar: "المسافرون", en: "Passenger" },
   search: { ar: "بحث", en: "Search" },

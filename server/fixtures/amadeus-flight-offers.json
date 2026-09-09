@@ -1,0 +1,87 @@
+{
+  "meta": { "count": 2 },
+  "data": [
+    {
+      "type": "flight-offer",
+      "id": "1",
+      "numberOfBookableSeats": 7,
+      "lastTicketingDate": "2026-09-28",
+      "itineraries": [
+        {
+          "duration": "PT4H25M",
+          "segments": [
+            {
+              "departure": { "iataCode": "DXB", "terminal": "3", "at": "2026-10-01T08:45:00" },
+              "arrival": { "iataCode": "IST", "terminal": "1", "at": "2026-10-01T12:10:00" },
+              "carrierCode": "EK",
+              "number": "121",
+              "aircraft": { "code": "77W" },
+              "duration": "PT4H25M",
+              "numberOfStops": 0
+            }
+          ]
+        }
+      ],
+      "price": { "currency": "USD", "total": "412.30", "grandTotal": "412.30" },
+      "pricingOptions": { "refundableFare": false },
+      "validatingAirlineCodes": ["EK"],
+      "travelerPricings": [
+        {
+          "price": { "currency": "USD", "total": "412.30" },
+          "fareDetailsBySegment": [
+            {
+              "cabin": "ECONOMY",
+              "brandedFare": "ECOFLEX",
+              "includedCheckedBags": { "weight": 30, "weightUnit": "KG" }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "flight-offer",
+      "id": "2",
+      "numberOfBookableSeats": 3,
+      "itineraries": [
+        {
+          "duration": "PT8H50M",
+          "segments": [
+            {
+              "departure": { "iataCode": "DXB", "terminal": "1", "at": "2026-10-01T14:30:00" },
+              "arrival": { "iataCode": "DOH", "at": "2026-10-01T15:35:00" },
+              "carrierCode": "QR",
+              "number": "1005",
+              "aircraft": { "code": "320" },
+              "duration": "PT1H5M",
+              "numberOfStops": 0
+            },
+            {
+              "departure": { "iataCode": "DOH", "at": "2026-10-01T18:20:00" },
+              "arrival": { "iataCode": "IST", "at": "2026-10-01T22:20:00" },
+              "carrierCode": "QR",
+              "number": "239",
+              "aircraft": { "code": "788" },
+              "duration": "PT4H0M",
+              "numberOfStops": 0
+            }
+          ]
+        }
+      ],
+      "price": { "currency": "USD", "total": "356.90" },
+      "pricingOptions": { "refundableFare": true },
+      "validatingAirlineCodes": ["QR"],
+      "travelerPricings": [
+        {
+          "price": { "currency": "USD", "total": "356.90" },
+          "fareDetailsBySegment": [
+            { "cabin": "ECONOMY", "includedCheckedBags": { "quantity": 2 } }
+          ]
+        }
+      ]
+    }
+  ],
+  "dictionaries": {
+    "carriers": { "EK": "EMIRATES", "QR": "QATAR AIRWAYS" },
+    "aircraft": { "77W": "BOEING 777-300ER", "320": "AIRBUS A320", "788": "BOEING 787-8" }
+  }
+}

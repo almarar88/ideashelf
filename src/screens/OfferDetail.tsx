@@ -3,9 +3,11 @@ import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CarrierMark } from "@/components/Art";
 import PriceCompare from "@/components/PriceCompare";
+import DataBadge from "@/components/DataBadge";
 import { BackButton, Toast, cx } from "@/components/ui";
 import { carrierById } from "@/data/catalog";
 import { quoteTotal, searchTrips } from "@/lib/aggregator";
+import { useTripOffers } from "@/lib/live";
 import { priceInsight } from "@/lib/ai";
 import { clock, duration, formatDate, iso, money, weekday } from "@/lib/format";
 import type { Booking, TripOffer } from "@/lib/types";
@@ -26,14 +28,21 @@ export default function OfferDetail() {
 
   // Offers are derived, not stored, so a direct link or a refresh rebuilds the
   // same deterministic list and finds the offer again by id.
+  // The list screen passes the offer through router state. A refresh or a
+  // shared link loses that, so it is re-resolved: live results first (they are
+  // cached by the backend for the same query), then the demo catalogue, which
+  // is deterministic and rebuilds the same ids.
+  const listed = useTripOffers(search, currency);
   const offer = useMemo(() => {
     if (location.state?.offer) return location.state.offer;
+    const fromList = listed.data.find((o) => o.id === offerId);
+    if (fromList) return fromList;
     for (const mode of ["flight", "train", "boat", "bus"] as const) {
       const found = searchTrips({ ...search, mode }).find((o) => o.id === offerId);
       if (found) return found;
     }
     return null;
-  }, [location.state, offerId, search]);
+  }, [location.state, offerId, search, listed.data]);
 
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -47,6 +56,7 @@ export default function OfferDetail() {
   }
 
   const carrier = carrierById(offer.carrierId);
+  const carrierLabel = offer.carrierName ?? (locale === "ar" ? carrier.nameAr : carrier.name);
   const quote = offer.quotes.find((q) => q.providerId === selected) ?? offer.quotes[0];
   const perPax = quoteTotal(quote);
   const total = perPax * search.passengers;
@@ -73,11 +83,15 @@ export default function OfferDetail() {
   };
 
   const facts = [
-    { icon: Clock, label: t("date"), value: duration(offer.durationMin, locale) },
-    { icon: Briefcase, label: t("baggage"), value: `${offer.baggageKg} kg` },
-    { icon: Users, label: t("seat"), value: `${offer.seatsLeft}` },
-    { icon: Leaf, label: "CO₂", value: `${offer.co2Kg} kg` },
-  ];
+    { icon: Clock, label: t("durationLabel"), value: duration(offer.durationMin, locale) },
+    offer.baggageKg
+      ? { icon: Briefcase, label: t("baggage"), value: `${offer.baggageKg} kg` }
+      : offer.baggagePieces
+        ? { icon: Briefcase, label: t("baggage"), value: `${offer.baggagePieces} pc` }
+        : null,
+    offer.seatsLeft ? { icon: Users, label: t("seat"), value: `${offer.seatsLeft}` } : null,
+    offer.co2Kg ? { icon: Leaf, label: "CO₂", value: `${offer.co2Kg} kg` } : null,
+  ].filter((f): f is { icon: typeof Clock; label: string; value: string } => f !== null);
 
   return (
     <div className="screen pb-40">
@@ -99,13 +113,21 @@ export default function OfferDetail() {
         </div>
       </header>
 
+      <DataBadge source={offer.live === true ? listed.source : "demo"} />
+
       <div className="mx-5 mt-4 card p-5">
         <div className="flex items-center gap-3">
           <span className="grid h-12 w-12 place-items-center rounded-2xl" style={{ background: carrier.bg, color: carrier.color }}>
-            <CarrierMark id={carrier.id} className="h-7 w-7" />
+            {offer.live ? (
+              <span className="text-[13px] font-extrabold">
+                {(offer.carrierName ?? carrier.name).replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase()}
+              </span>
+            ) : (
+              <CarrierMark id={carrier.id} className="h-7 w-7" />
+            )}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[16px] font-extrabold">{locale === "ar" ? carrier.nameAr : carrier.name}</p>
+            <p className="truncate text-[16px] font-extrabold">{carrierLabel}</p>
             <p className="text-[12px] text-ink-muted">
               {formatDate(offer.departISO, locale)} · {weekday(offer.departISO, locale)}
             </p>
@@ -136,7 +158,7 @@ export default function OfferDetail() {
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-4 gap-2 border-t border-canvas pt-4">
+        <div className={cx("mt-5 grid gap-2 border-t border-canvas pt-4", facts.length >= 4 ? "grid-cols-4" : facts.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
           {facts.map(({ icon: Icon, label, value }) => (
             <div key={label} className="text-center">
               <Icon size={16} className="mx-auto text-brand" />
@@ -159,6 +181,35 @@ export default function OfferDetail() {
           )}
         </div>
       </div>
+
+      {offer.segments && offer.segments.length > 0 && (
+        <section className="mx-5 mt-3 card p-5">
+          <h2 className="text-[15px] font-bold">{t("seeDetails")}</h2>
+          <ol className="mt-3 space-y-3">
+            {offer.segments.map((seg, i) => (
+              <li key={`${seg.flightNumber}-${i}`} className="rounded-2xl bg-canvas px-4 py-3" dir="ltr">
+                <p className="flex items-center justify-between text-[13px] font-bold">
+                  <span>
+                    {seg.from} → {seg.to}
+                  </span>
+                  <span className="text-ink-soft">{duration(seg.durationMin, locale)}</span>
+                </p>
+                <p className="mt-1 text-[11px] text-ink-muted">
+                  {clock(seg.departISO)} – {clock(seg.arriveISO)} · {seg.flightNumber}
+                  {seg.aircraft ? ` · ${seg.aircraft}` : ""}
+                </p>
+                {(seg.terminalFrom || seg.terminalTo) && (
+                  <p className="mt-0.5 text-[11px] text-ink-faint">
+                    {seg.terminalFrom ? `${t("terminal")} ${seg.terminalFrom}` : ""}
+                    {seg.terminalFrom && seg.terminalTo ? " → " : ""}
+                    {seg.terminalTo ? `${t("terminal")} ${seg.terminalTo}` : ""}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       {insight && (
         <p className="mx-5 mt-3 rounded-[22px] bg-white px-4 py-3 text-[12px] leading-relaxed shadow-soft">

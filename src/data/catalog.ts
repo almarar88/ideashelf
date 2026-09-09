@@ -17,9 +17,37 @@ export const PROVIDERS: Provider[] = [
   { id: "driveo", name: "Driveo", short: "DR", color: "#3AA9A4", bg: "#DFF4F2", feeFactor: 1.05, supports: ["car"] },
   { id: "simglobe", name: "SimGlobe", short: "SG", color: "#FF8A29", bg: "#FFEFD6", feeFactor: 1.0, supports: ["esim"] },
   { id: "nomadsim", name: "NomadSim", short: "NS", color: "#7C3AED", bg: "#EDE6FE", feeFactor: 1.08, supports: ["esim"] },
+
+  // Live partners. These appear only when the backend has credentials for
+  // them; feeFactor is unused for live quotes because the partner states its
+  // own price.
+  { id: "amadeus", name: "Amadeus", short: "AM", color: "#0B4EA2", bg: "#DEE9F8", feeFactor: 1, supports: ["flight", "hotel"] },
+  { id: "aviasales", name: "Aviasales", short: "AV", color: "#1F7AE0", bg: "#DDEBFA", feeFactor: 1, supports: ["flight"] },
 ];
 
-export const providerById = (id: string) => PROVIDERS.find((p) => p.id === id) ?? PROVIDERS[0];
+/** Deterministic colours for a partner the catalogue has never seen. */
+function syntheticProvider(id: string, name?: string): Provider {
+  const palette = [
+    ["#6C5CE7", "#E4E0FD"], ["#1FA97F", "#D9F4EA"], ["#F36C36", "#FFE3D8"],
+    ["#E0356F", "#FFE1EA"], ["#0F8FE0", "#DCEEFB"], ["#FF8A29", "#FFEFD6"],
+  ] as const;
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  const [color, bg] = palette[hash % palette.length];
+  const label = name ?? id;
+  return {
+    id,
+    name: label,
+    short: label.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase() || "??",
+    color,
+    bg,
+    feeFactor: 1,
+    supports: ["flight", "hotel", "car", "package", "esim", "train", "bus", "boat"],
+  };
+}
+
+export const providerById = (id: string, name?: string): Provider =>
+  PROVIDERS.find((p) => p.id === id) ?? syntheticProvider(id, name);
 
 export const CITIES: City[] = [
   { id: "jkt", code: "CGK", name: "Jakarta", nameAr: "جاكرتا", country: "Indonesia", countryAr: "إندونيسيا", countryCode: "ID", image: "jakarta" },

@@ -9,8 +9,11 @@ The UI is a React web app; the Android app is the same codebase wrapped with
 Capacitor, so one build produces both the installable APK and the web version.
 
 - **Arabic (RTL) by default**, English available from Profile → Language.
-- **Offline-capable**: fonts and artwork are bundled, nothing is fetched at
-  runtime, and the traveller's bookings, plans and favourites persist locally.
+- **Real prices** from booking partners once keys are configured, with real
+  photographs and live exchange rates that need no key at all.
+- **Offline-capable**: fonts and artwork are bundled, the app falls back to its
+  own catalogue when the network is gone, and bookings, plans and favourites
+  persist locally.
 
 ## Screens
 
@@ -59,30 +62,108 @@ The **Build Android APK** GitHub Actions workflow builds the debug APK on
 demand and uploads it as a downloadable artifact — useful if you do not have
 Android Studio to hand.
 
-## Where the prices come from
+## Where the data comes from
 
-**The bundled build ships a demo catalogue, not live fares, and every screen
-says so.** Prices, availability and provider quotes are generated from a seeded
-local dataset so results are stable and the app works with no network.
+The app runs on three tiers of data, and **every screen states which tier it is
+showing** — a price comparison tool that implied demo figures were live fares
+would be worse than useless.
 
-`src/lib/aggregator.ts` is the seam for a real integration. `searchTrips`,
-`searchHotels`, `searchCars` and `searchEsim` each take a query and return
-results with a `quotes[]` array — one entry per booking site, sorted by the true
-total (price + that site's fees). Replace the body of each function with the
-partner HTTP call, keep the signature, and the entire UI works unchanged.
+| Tier | What it covers | Needs a key |
+|---|---|---|
+| **Live partners** | Real flight and hotel prices, one quote per booking site | Yes — free tiers available |
+| **Keyless sources** | Destination and hotel photographs, exchange rates | No |
+| **Bundled catalogue** | Everything else, and the fallback when a partner is unreachable | No |
 
-Connect partners by setting:
+### The backend (`server/`)
 
+The app cannot call partner APIs directly: the credentials would ship inside
+the APK, and none of these APIs accept browser origins. `server/` is a small
+Node service (no runtime dependencies) that holds the keys, fans one search out
+to every configured partner in parallel, merges the responses into a single
+comparison, and caches hard because partner calls are metered.
+
+```bash
+cd server
+cp .env.example .env      # add whichever keys you have
+node --env-file=.env index.mjs
 ```
-VITE_PARTNER_ENDPOINT=https://your-backend.example.com
-VITE_PARTNER_KEY=...
+
+It starts with no credentials at all — photos and exchange rates need none, and
+`/health` reports exactly which partners are active. Point the app at it:
+
+```bash
+VITE_API_URL=https://your-server.example.com npm run build
 ```
 
-`isLiveData()` then returns true and the "demo prices" notices disappear.
+Deploy it anywhere that runs Node 20 (Render, Railway, Fly.io, a VPS). Set
+`ALLOWED_ORIGIN` to your app's origin in production.
 
-> Partner APIs (Amadeus, Booking.com, Expedia Rapid, Airalo, and the car-hire
-> aggregators) require commercial agreements and server-side keys. Route them
-> through your own backend — never ship a partner key in the app bundle.
+**Endpoints**
+
+| Route | Returns |
+|---|---|
+| `GET /health` | Which providers are configured, and whether prices are live |
+| `GET /api/flights` | Merged flight offers with one quote per booking site |
+| `GET /api/hotels` | Hotels with per-site rates and a photo |
+| `GET /api/place` | Destination photos plus an encyclopaedia description |
+| `GET /api/photos` | Photo search by term |
+| `GET /api/rates` | Live exchange rates |
+| `GET /api/locations` | Free-text place to IATA code |
+| `GET /api/img` | Optional image proxy (`PROXY_IMAGES=1`) |
+
+### Getting real prices
+
+Two partners are implemented. Either one alone gives real fares; both together
+give an actual comparison, because the merge puts each site's price for the
+same flight on one card.
+
+**Amadeus Self-Service** — real flights *and* hotels.
+Sign up free at [developers.amadeus.com](https://developers.amadeus.com),
+create a Self-Service app, and copy the key and secret into
+`AMADEUS_CLIENT_ID` / `AMADEUS_CLIENT_SECRET`. The default test host serves
+real cached fares on a limited set of routes; a production key plus
+`AMADEUS_HOST=https://api.amadeus.com` switches to full inventory.
+
+**Travelpayouts (Aviasales)** — real fares that come with a bookable affiliate
+link, which is what makes the "Book on…" button go somewhere. Free token from
+[travelpayouts.com](https://www.travelpayouts.com) into `TRAVELPAYOUTS_TOKEN`.
+
+Verify before pointing the app at it:
+
+```bash
+node --env-file=server/.env server/test-providers.mjs
+```
+
+It checks every configured provider, skips the ones without keys, and always
+runs the response-mapping checks from a recorded payload — so a partner
+changing a field is caught without spending quota.
+
+Adding a third partner is one file in `server/providers/` exporting
+`searchFlights` or `searchHotels` in the shape the others return, plus a line
+in the fan-out in `server/index.mjs`. The merge and the whole UI follow.
+
+### Photos, and what they are honest about
+
+Destination and hotel photographs come from Wikimedia Commons and Wikipedia —
+real images, no key, no quota. They are CC-licensed, so the licence is shown on
+every thumbnail and the full credit with the author on detail screens.
+
+A hotel only gets a photo *of that hotel* when the file genuinely matches the
+property name. Otherwise the app falls back to a photo of the city and labels
+it "city photo, not this property" rather than passing it off as the hotel. The
+illustrated scene stays behind every image, so a slow or offline connection
+shows a designed placeholder instead of a grey box.
+
+Exchange rates are fetched daily from a keyless provider; the fixed table in
+`src/lib/format.ts` is only a fallback, and the app knows the difference.
+
+### Developing without partner keys
+
+`MOCK_PARTNERS=1` serves a recorded Amadeus response through the exact same
+mapping, merge and HTTP path the live providers use, so the whole chain can be
+exercised without credentials. Everything it returns is flagged and appears
+under an amber "development fixtures — not real prices" badge. Never enable it
+in production.
 
 ## The AI layer
 
@@ -103,11 +184,17 @@ median fare") is computed from the spread of the returned offers, not guessed.
 
 ```
 src/
-  components/   Art (all inline SVG), BottomNav, OfferCard, PriceCompare, ui primitives
+  components/   Art (inline SVG), Photo, DataBadge, OfferCard, PriceCompare, ui primitives
   data/         catalog.ts — providers, cities, carriers, terminals
-  lib/          aggregator.ts (search + comparison), ai.ts, i18n.ts, format.ts, rng.ts, types.ts
+  lib/          api.ts (backend client), live.ts (live/demo hooks), aggregator.ts
+                (demo catalogue + comparison), ai.ts, i18n.ts, format.ts, rng.ts, types.ts
   screens/      one file per screen
   state/        store.tsx — reducer + localStorage persistence
+server/
+  index.mjs     HTTP routing, caching, image proxy
+  providers/    amadeus, travelpayouts, commons (photos), rates, mock
+  lib/          cache (TTL + single-flight), merge (one card per flight), http
+  fixtures/     recorded partner payloads for the mapping tests
 android/        Capacitor Android project (generated; safe to regenerate)
 ```
 

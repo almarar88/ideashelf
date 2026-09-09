@@ -2,6 +2,7 @@ import { Bell, Search as SearchIcon, Sparkles, Star } from "lucide-react";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { BoatArt, BusArt, CarArt, DestinationArt, HotelArt, PackageArt, PlaneArt, SimArt, TrainArt } from "@/components/Art";
+import Photo from "@/components/Photo";
 import RouteLine from "@/components/RouteLine";
 import { SectionHeader, cx } from "@/components/ui";
 import { CARRIERS, CITIES, cityById, terminalFor } from "@/data/catalog";
@@ -9,6 +10,7 @@ import { searchPackages, searchTrips } from "@/lib/aggregator";
 import { clock, duration, formatDate, money } from "@/lib/format";
 import type { StringKey } from "@/lib/i18n";
 import type { TransportMode } from "@/lib/types";
+import { useCityPhoto } from "@/lib/live";
 import { useStore } from "@/state/store";
 
 const CATEGORIES: Array<{
@@ -212,27 +214,15 @@ export default function Home() {
       />
 
       <div className="no-scrollbar mt-3 flex gap-3 overflow-x-auto px-5 pb-2">
-        {deals.map((pkg) => {
-          const city = cityById(pkg.cityId);
-          return (
-            <button
-              key={pkg.id}
-              type="button"
-              onClick={() => navigate("/packages")}
-              className="relative h-[176px] w-[142px] shrink-0 overflow-hidden rounded-[24px] text-start shadow-card transition active:scale-95"
-            >
-              <DestinationArt name={city.image} className="absolute inset-0 h-full w-full" />
-              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/80 to-transparent p-3">
-                <span className="block text-[13px] font-bold text-white">
-                  {locale === "ar" ? city.nameAr : city.name}
-                </span>
-                <span className="block text-[11px] text-white/80">
-                  {t("from")} {money(pkg.price, currency)}
-                </span>
-              </span>
-            </button>
-          );
-        })}
+        {deals.map((pkg) => (
+          <DestinationCard
+            key={pkg.id}
+            cityId={pkg.cityId}
+            price={money(pkg.price, currency)}
+            fromLabel={t("from")}
+            onClick={() => navigate("/packages")}
+          />
+        ))}
       </div>
 
       <SectionHeader className="mt-5 px-5" title={t("selectCountry")} actionLabel={t("viewAll")} onAction={() => navigate("/esim")} />
@@ -253,5 +243,49 @@ export default function Home() {
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * One recommendation tile. Split out so each card can resolve its own photo —
+ * hooks cannot be called inside a map callback.
+ */
+function DestinationCard({
+  cityId,
+  price,
+  fromLabel,
+  onClick,
+}: {
+  cityId: string;
+  price: string;
+  fromLabel: string;
+  onClick: () => void;
+}) {
+  const { locale } = useStore();
+  const city = cityById(cityId);
+  const photo = useCityPhoto(cityId);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative h-[176px] w-[142px] shrink-0 overflow-hidden rounded-[24px] text-start shadow-card transition active:scale-95"
+    >
+      <Photo
+        photo={photo}
+        alt={city.name}
+        showCredit={false}
+        className="absolute inset-0 h-full w-full"
+        fallback={<DestinationArt name={city.image} className="h-full w-full" />}
+      />
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/85 to-transparent p-3">
+        <span className="block text-[13px] font-bold text-white">
+          {locale === "ar" ? city.nameAr : city.name}
+        </span>
+        <span className="block text-[11px] text-white/80">
+          {fromLabel} {price}
+        </span>
+      </span>
+    </button>
   );
 }

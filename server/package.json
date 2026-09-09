@@ -1,0 +1,13 @@
+{
+  "name": "alcode-trips-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Partner-API proxy and price aggregator for Alcode Trips",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node index.mjs",
+    "dev": "MOCK_PARTNERS=1 node --watch index.mjs",
+    "test": "node test-providers.mjs"
+  }
+}

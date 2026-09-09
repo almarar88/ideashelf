@@ -58,10 +58,47 @@ export interface TripOffer {
   co2Kg: number;
   /** Every site that sells this exact trip, cheapest first. */
   quotes: Quote[];
+  /** Set on results that came from a partner API rather than the demo data. */
+  live?: boolean;
+  carrierName?: string;
+  segments?: Segment[];
+  sources?: string[];
+  brandedFare?: string | null;
+  baggagePieces?: number | null;
+}
+
+export interface Photo {
+  id: string;
+  title: string;
+  url: string;
+  fullUrl?: string;
+  /** CC licences require this credit to be shown wherever the photo appears. */
+  licence: string;
+  author: string;
+  descriptionUrl?: string;
+  /** False when the picture shows the city rather than the property itself. */
+  representative?: boolean;
+}
+
+export interface Segment {
+  from: string;
+  to: string;
+  departISO: string;
+  arriveISO: string;
+  carrierCode: string;
+  carrierName: string;
+  flightNumber: string;
+  aircraft: string | null;
+  durationMin: number;
+  terminalFrom: string | null;
+  terminalTo: string | null;
 }
 
 export interface Quote {
   providerId: string;
+  /** Present on live quotes whose provider is not in the static catalogue. */
+  providerName?: string;
+  currency?: string;
   price: number;
   /** Extras the traveller pays at checkout on that site. */
   fees: number;
@@ -87,6 +124,14 @@ export interface Hotel {
   breakfast: boolean;
   freeCancel: boolean;
   quotes: Quote[];
+  live?: boolean;
+  photo?: Photo | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  roomDescription?: string | null;
+  board?: string | null;
+  sources?: string[];
 }
 
 export interface CarRental {

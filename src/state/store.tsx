@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import type { Locale } from "@/lib/i18n";
 import { STRINGS } from "@/lib/i18n";
 import type { Booking, TripPlan } from "@/lib/types";
+import { fetchRates } from "@/lib/api";
+import { setLiveRates } from "@/lib/format";
 
 export interface SearchState {
   fromId: string;
@@ -169,6 +171,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const persisted = loadPersisted();
     if (Object.keys(persisted).length) dispatch({ type: "hydrate", state: persisted });
+  }, []);
+
+  useEffect(() => {
+    // One call at boot; the backend caches for six hours so this is cheap.
+    let cancelled = false;
+    fetchRates("USD").then((payload) => {
+      if (!cancelled && payload?.live) setLiveRates(payload.rates);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

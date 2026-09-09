@@ -4,12 +4,14 @@ import { useNavigate } from "react-router-dom";
 import OfferCard from "@/components/OfferCard";
 import { BackButton, Empty, Sheet, Toast, cx } from "@/components/ui";
 import { cityById } from "@/data/catalog";
-import { isLiveData, quoteTotal, searchTrips, sortOffers } from "@/lib/aggregator";
+import { quoteTotal, sortOffers } from "@/lib/aggregator";
 import type { SortKey } from "@/lib/aggregator";
+import { useTripOffers } from "@/lib/live";
 import { priceInsight } from "@/lib/ai";
 import { money } from "@/lib/format";
 import type { StringKey } from "@/lib/i18n";
 import { useStore } from "@/state/store";
+import DataBadge from "@/components/DataBadge";
 
 const SORTS: Array<{ key: SortKey; label: StringKey }> = [
   { key: "best", label: "best" },
@@ -28,7 +30,8 @@ export default function Results() {
   const [directOnly, setDirectOnly] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  const all = useMemo(() => searchTrips(search), [search]);
+  const result = useTripOffers(search, currency);
+  const all = result.data;
 
   const priceCeiling = useMemo(
     () => Math.max(...all.map((o) => Math.min(...o.quotes.map(quoteTotal)))),
@@ -147,11 +150,7 @@ export default function Results() {
         </div>
       )}
 
-      {!isLiveData() && (
-        <p className="mx-5 mt-3 rounded-2xl bg-white/70 px-4 py-2.5 text-[11px] leading-relaxed text-ink-muted">
-          <span className="font-bold text-ink-soft">{t("demoDataTitle")}:</span> {t("demoDataBody")}
-        </p>
-      )}
+      <DataBadge source={result.source} reason={result.reason} />
 
       <div className="mt-4 space-y-3 px-5 stagger">
         {visible.map((offer) => (

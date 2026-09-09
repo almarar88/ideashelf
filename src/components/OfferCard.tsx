@@ -16,7 +16,11 @@ export default function OfferCard({
   onOpen: () => void;
 }) {
   const { t, locale, currency, dispatch, isFav, isSaved } = useStore();
+  // Live results carry the airline name straight from the partner; only the
+  // demo catalogue has a styled carrier entry to look up.
   const carrier = carrierById(offer.carrierId);
+  const carrierLabel = offer.carrierName ?? (locale === "ar" ? carrier.nameAr : carrier.name);
+  const initials = (offer.carrierName ?? carrier.name).replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase();
   const best = offer.quotes[0];
   const cabinLabel = t(offer.cabin === "economy" ? "economy" : offer.cabin === "business" ? "business" : "first");
 
@@ -24,14 +28,16 @@ export default function OfferCard({
     <article className="card p-4">
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full" style={{ background: carrier.bg, color: carrier.color }}>
-          <CarrierMark id={carrier.id} className="h-6 w-6" />
+          {offer.live ? (
+            <span className="text-[11px] font-extrabold">{initials}</span>
+          ) : (
+            <CarrierMark id={carrier.id} className="h-6 w-6" />
+          )}
         </span>
 
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-medium text-ink-muted">{cabinLabel}</p>
-          <p className="truncate text-[15px] font-bold leading-tight">
-            {locale === "ar" ? carrier.nameAr : carrier.name}
-          </p>
+          <p className="truncate text-[15px] font-bold leading-tight">{carrierLabel}</p>
         </div>
 
         <button
@@ -70,14 +76,28 @@ export default function OfferCard({
         <div className="mt-3.5 flex items-end justify-between gap-3">
           <div className="min-w-0 space-y-2">
             <span className="flex items-center gap-1.5">
-              <Star size={14} className="text-sun" fill="#FF8A29" />
-              <span className="text-[13px] font-bold">{offer.rating.toFixed(1)}</span>
-              <span className="text-[11px] text-ink-muted">
-                · {offer.stops === 0 ? t("direct") : `${offer.stops} ${offer.stops === 1 ? t("stop") : t("stops")}`}
+              {/* A live partner does not publish a passenger rating, so the
+                  card shows the stop count on its own rather than a made-up
+                  score. */}
+              {offer.rating > 0 && (
+                <>
+                  <Star size={14} className="text-sun" fill="#FF8A29" />
+                  <span className="text-[13px] font-bold">{offer.rating.toFixed(1)}</span>
+                  <span className="text-[11px] text-ink-muted">·</span>
+                </>
+              )}
+              <span className="text-[11px] font-semibold text-ink-soft">
+                {offer.stops === 0 ? t("direct") : `${offer.stops} ${offer.stops === 1 ? t("stop") : t("stops")}`}
               </span>
+              {offer.quotes.length > 1 && (
+                <span className="text-[11px] text-ink-muted">· {offer.quotes.length} {t("sitesCompared")}</span>
+              )}
             </span>
             {offer.reschedulable && (
               <span className="chip bg-brand-100 text-brand-900">{t("abilityToReschedule")}</span>
+            )}
+            {offer.brandedFare && (
+              <span className="chip bg-canvas text-[10px] text-ink-soft">{offer.brandedFare}</span>
             )}
           </div>
 

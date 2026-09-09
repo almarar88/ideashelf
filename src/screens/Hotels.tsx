@@ -2,9 +2,12 @@ import { CalendarDays, Heart, MapPin, Search as SearchIcon, Star, Users } from "
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DestinationArt } from "@/components/Art";
+import DataBadge from "@/components/DataBadge";
+import Photo from "@/components/Photo";
 import { BackButton, Sheet, cx } from "@/components/ui";
 import { CITIES, cityById } from "@/data/catalog";
-import { isLiveData, quoteTotal, savingsOf, searchHotels } from "@/lib/aggregator";
+import { quoteTotal, savingsOf } from "@/lib/aggregator";
+import { useHotelResults } from "@/lib/live";
 import { addDays, formatDate, iso, money, todayISO } from "@/lib/format";
 import { useStore } from "@/state/store";
 
@@ -20,10 +23,12 @@ export default function Hotels() {
   const [sort, setSort] = useState<Sort>("best");
   const [cityOpen, setCityOpen] = useState(false);
 
-  const hotels = useMemo(
-    () => searchHotels({ cityId, checkInISO: checkIn, nights, guests, rooms: Math.max(1, Math.ceil(guests / 2)) }),
+  const query = useMemo(
+    () => ({ cityId, checkInISO: checkIn, nights, guests, rooms: Math.max(1, Math.ceil(guests / 2)) }),
     [cityId, checkIn, nights, guests],
   );
+  const result = useHotelResults(query, currency);
+  const hotels = result.data;
 
   const sorted = useMemo(() => {
     const cheapest = (h: (typeof hotels)[number]) => Math.min(...h.quotes.map(quoteTotal));
@@ -101,11 +106,7 @@ export default function Hotels() {
         ))}
       </div>
 
-      {!isLiveData() && (
-        <p className="mx-5 mt-3 rounded-2xl bg-white/70 px-4 py-2.5 text-[11px] leading-relaxed text-ink-muted">
-          <span className="font-bold text-ink-soft">{t("demoDataTitle")}:</span> {t("demoDataBody")}
-        </p>
-      )}
+      <DataBadge source={result.source} reason={result.reason} />
 
       <div className="mt-4 space-y-3 px-5 stagger">
         {sorted.map((h) => {
@@ -115,10 +116,23 @@ export default function Hotels() {
             <article key={h.id} className="card relative overflow-hidden">
               <button type="button" onClick={() => navigate(`/hotels/${h.id}`, { state: { hotel: h, nights } })} className="block w-full text-start">
                 <div className="relative h-[132px]">
-                  <DestinationArt name={city.image} className="absolute inset-0 h-full w-full" />
-                  <span className="absolute start-3 top-3 chip bg-white/90 text-[11px] text-ink">
-                    <Star size={11} className="text-sun" fill="#FF8A29" /> {h.rating}
-                  </span>
+                  <Photo
+                    photo={h.photo}
+                    alt={h.name}
+                    className="absolute inset-0 h-full w-full"
+                    fallback={<DestinationArt name={city.image} className="h-full w-full" />}
+                  />
+                  {h.rating > 0 ? (
+                    <span className="absolute start-3 top-3 chip bg-white/90 text-[11px] text-ink">
+                      <Star size={11} className="text-sun" fill="#FF8A29" /> {h.rating}
+                    </span>
+                  ) : (
+                    h.quotes.length > 1 && (
+                      <span className="absolute start-3 top-3 chip bg-white/90 text-[10px] text-ink-soft">
+                        {h.quotes.length} {t("sitesCompared")}
+                      </span>
+                    )
+                  )}
                   {saved > 0 && (
                     <span className="absolute end-3 top-3 chip bg-mint text-[11px] text-white">
                       {t("save")} {money(saved, currency, { decimals: 0 })}
@@ -128,7 +142,8 @@ export default function Hotels() {
                 <div className="p-4">
                   <p className="truncate text-[15px] font-bold">{locale === "ar" ? h.nameAr : h.name}</p>
                   <p className="mt-0.5 truncate text-[12px] text-ink-muted">
-                    {locale === "ar" ? h.areaAr : h.area} · {iso(`${h.distanceKm} km`)} {t("fromCentre")}
+                    {locale === "ar" ? h.areaAr : h.area}
+                    {h.distanceKm > 0 && <> · {iso(`${h.distanceKm} km`)} {t("fromCentre")}</>}
                   </p>
                   <div className="mt-3 flex items-end justify-between gap-2">
                     <div className="flex flex-wrap gap-1.5">

@@ -41,7 +41,7 @@ export default function PriceCompare({
 
       <ul className="space-y-2.5">
         {quotes.map((q, i) => {
-          const p = providerById(q.providerId);
+          const p = providerById(q.providerId, q.providerName);
           const best = i === 0;
           const active = selectedId === q.providerId;
           return (
@@ -89,6 +89,19 @@ export default function PriceCompare({
                   <span className="block text-[15px] font-extrabold">{money(quoteTotal(q), currency)}</span>
                   {unitLabel && <span className="block text-[10px] text-ink-muted">{unitLabel}</span>}
                 </span>
+
+                {q.url && (
+                  <a
+                    href={q.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`${t("bookOn")} ${p.name}`}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-canvas text-ink-soft transition active:scale-90"
+                  >
+                    <ExternalLink size={15} />
+                  </a>
+                )}
               </button>
             </li>
           );

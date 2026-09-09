@@ -9,10 +9,24 @@ export const CURRENCIES: Record<string, { symbol: string; rate: number; code: st
   TRY: { symbol: "₺", rate: 34.2, code: "TRY" },
 };
 
-/** Prices in the catalogue are USD; convert then format for display. */
+/**
+ * Live rates, once the backend has supplied them. The table above is only a
+ * last resort: pegged currencies barely move, but a hard-coded TRY or EGP rate
+ * goes badly stale within months and quietly misprices every screen.
+ */
+let liveRates: Record<string, number> | null = null;
+
+export function setLiveRates(rates: Record<string, number> | null) {
+  liveRates = rates;
+}
+
+export const ratesAreLive = () => liveRates !== null;
+
+/** USD amount converted with the best rate available, then formatted. */
 export function money(usd: number, currency = "USD", opts?: { decimals?: number }) {
   const c = CURRENCIES[currency] ?? CURRENCIES.USD;
-  const value = usd * c.rate;
+  const rate = liveRates?.[c.code] ?? c.rate;
+  const value = usd * rate;
   const decimals = opts?.decimals ?? (value < 20 ? 2 : 0);
   const formatted = value.toLocaleString("en-US", {
     minimumFractionDigits: decimals,
