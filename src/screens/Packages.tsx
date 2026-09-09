@@ -1,11 +1,12 @@
-import { Check, Star } from "lucide-react";
+import { Check, ExternalLink, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DestinationArt } from "@/components/Art";
 import { BackButton, Sheet } from "@/components/ui";
 import { cityById } from "@/data/catalog";
 import { searchPackages } from "@/lib/aggregator";
+import { hotelSearchUrl, openBookingSite, savedBooking } from "@/lib/booking";
 import { iso, money } from "@/lib/format";
-import type { Booking, TravelPackage } from "@/lib/types";
+import type { TravelPackage } from "@/lib/types";
 import { addDays, todayISO } from "@/lib/format";
 import { useStore } from "@/state/store";
 
@@ -15,20 +16,30 @@ export default function Packages() {
   const [active, setActive] = useState<TravelPackage | null>(null);
 
   const book = (pkg: TravelPackage) => {
-    const booking: Booking = {
-      id: `bk-${Date.now()}`,
-      kind: "package",
-      refId: pkg.id,
-      title: locale === "ar" ? pkg.titleAr : pkg.title,
-      subtitle: `${pkg.nights} ${t("nights")}`,
-      dateISO: `${addDays(todayISO(), 21)}T09:00:00`,
-      price: pkg.price,
-      status: "upcoming",
-      passenger: profile.name,
-      code: `PK${pkg.id.length}${pkg.nights}0${Math.round(pkg.rating * 10)}`,
-    };
-    dispatch({ type: "addBooking", booking });
+    const city = cityById(pkg.cityId);
+    const checkIn = addDays(todayISO(), 21);
+    const bookingUrl = hotelSearchUrl({
+      destination: city.name,
+      checkIn,
+      checkOut: addDays(checkIn, pkg.nights),
+      adults: 2,
+    });
+    dispatch({
+      type: "addBooking",
+      booking: savedBooking({
+        kind: "package",
+        refId: pkg.id,
+        title: locale === "ar" ? pkg.titleAr : pkg.title,
+        subtitle: `${city.name} · ${pkg.nights} ${t("nights")}`,
+        dateISO: `${checkIn}T09:00:00`,
+        price: pkg.price,
+        passenger: profile.name,
+        bookingUrl,
+        provider: "Hotellook",
+      }),
+    });
     setActive(null);
+    openBookingSite(bookingUrl);
   };
 
   return (
@@ -84,8 +95,8 @@ export default function Packages() {
         title={active ? (locale === "ar" ? active.titleAr : active.title) : ""}
         footer={
           active && (
-            <button type="button" onClick={() => book(active)} className="btn-dark w-full py-4">
-              {t("bookNow")} · {money(active.price, currency)}
+            <button type="button" onClick={() => book(active)} className="btn-dark w-full gap-2 py-4">
+              <ExternalLink size={16} /> {t("continueOn")} Hotellook
             </button>
           )
         }

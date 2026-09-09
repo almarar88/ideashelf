@@ -6,6 +6,9 @@ import * as amadeus from "./providers/amadeus.mjs";
 import * as travelpayouts from "./providers/travelpayouts.mjs";
 import * as commons from "./providers/commons.mjs";
 import * as mock from "./providers/mock.mjs";
+import * as places from "./providers/places.mjs";
+import * as duffel from "./providers/duffel.mjs";
+import * as affiliate from "./lib/affiliate.mjs";
 import { fetchRates } from "./providers/rates.mjs";
 
 /**
@@ -74,14 +77,64 @@ function rewritePhotos(node) {
 const providerStatus = () => ({
   amadeus: amadeus.isConfigured(),
   travelpayouts: travelpayouts.isConfigured(),
+  duffel: duffel.isConfigured(),
   photos: true,
   rates: true,
+  places: true,
+  affiliate: affiliate.markerConfigured(),
   mock: mock.isEnabled(),
 });
 
-const anyPriceProvider = () => amadeus.isConfigured() || travelpayouts.isConfigured();
+const anyPriceProvider = () =>
+  amadeus.isConfigured() || travelpayouts.isConfigured() || duffel.isConfigured();
+
+/**
+ * In-app booking is off unless it is deliberately switched on, and even then
+ * the order endpoint requires a shared secret. This endpoint spends real money
+ * on the operator's account; it must not be reachable by anyone who finds the
+ * URL.
+ */
+const BOOKING_ENABLED = process.env.ENABLE_BOOKING === "1" && duffel.isConfigured();
+const BOOKING_SECRET = process.env.BOOKING_SECRET ?? "";
 
 /* ------------------------------- handlers ------------------------------- */
+
+/** A link that lands on something specific, not a partner's front page. */
+function isDeepLink(url) {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    return u.pathname.replace(/\/+$/, "").length > 0 || u.search.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fills in what the partners left out: a readable airline name for a bare
+ * IATA code, and a link that actually books the trip. Without the link the
+ * comparison is a dead end.
+ */
+async function decorateOffers(offers, { from, to, date, adults }) {
+  const searchUrl = affiliate.flightSearchUrl({ from, to, date, passengers: adults });
+
+  return Promise.all(
+    offers.map(async (offer) => {
+      const named = offer.carrierName && offer.carrierName !== offer.carrierCode
+        ? offer.carrierName
+        : (await places.airlineName(offer.carrierCode)) ?? offer.carrierName ?? offer.carrierCode;
+
+      return {
+        ...offer,
+        carrierName: named,
+        // A quote's own deep link goes straight to that fare and wins — but
+        // only if it is one: a partner that hands back its own home page
+        // would otherwise drop the traveller nowhere near their trip.
+        bookingUrl: offer.quotes.map((quote) => quote.url).find(isDeepLink) ?? searchUrl,
+      };
+    }),
+  );
+}
 
 async function handleFlights(q) {
   const from = (q.get("from") ?? "").toUpperCase();
@@ -105,12 +158,17 @@ async function handleFlights(q) {
     if (travelpayouts.isConfigured()) {
       jobs.push(travelpayouts.searchFlights({ from, to, date, currency }));
     }
+    if (duffel.isConfigured()) {
+      // Duffel offers are the only ones that can be booked in-app, so they
+      // are worth fetching even alongside the others.
+      jobs.push(duffel.searchFlights({ from, to, date, adults, cabin, currency }));
+    }
     if (jobs.length === 0 && mock.isEnabled()) {
       // Flagged as mock, never as live: the badge in the app depends on this.
       return {
         live: false,
         mock: true,
-        offers: mergeOffers([mock.searchFlights({ from, to, date, currency })]),
+        offers: await decorateOffers(mergeOffers([mock.searchFlights({ from, to, date, currency })]), { from, to, date, adults }),
         providers: providerStatus(),
         fetchedISO: new Date().toISOString(),
       };
@@ -125,7 +183,7 @@ async function handleFlights(q) {
 
     return {
       live: lists.some((l) => l.length > 0),
-      offers: mergeOffers(lists),
+      offers: await decorateOffers(mergeOffers(lists), { from, to, date, adults }),
       errors,
       providers: providerStatus(),
       fetchedISO: new Date().toISOString(),
@@ -161,7 +219,18 @@ async function handleHotels(q) {
             .catch(() => null);
         }),
       );
-      return { live: false, mock: true, hotels, providers: providerStatus(), fetchedISO: new Date().toISOString() };
+      return {
+        live: false,
+        mock: true,
+        hotels: hotels.map((h) => ({
+          ...h,
+          bookingUrl:
+            h.quotes.map((quote) => quote.url).find(isDeepLink) ??
+            affiliate.hotelPropertyUrl({ name: h.name, city: cityName, checkIn, checkOut, adults }),
+        })),
+        providers: providerStatus(),
+        fetchedISO: new Date().toISOString(),
+      };
     }
     if (!amadeus.isConfigured()) {
       return { live: false, reason: "no hotel partner configured", hotels: [], providers: providerStatus() };
@@ -184,7 +253,14 @@ async function handleHotels(q) {
       }),
     );
 
-    return { live: hotels.length > 0, hotels, providers: providerStatus(), fetchedISO: new Date().toISOString() };
+    const withLinks = hotels.map((h) => ({
+      ...h,
+      bookingUrl:
+        h.quotes.map((quote) => quote.url).find(isDeepLink) ??
+        affiliate.hotelPropertyUrl({ name: h.name, city: cityName, checkIn, checkOut, adults }),
+    }));
+
+    return { live: withLinks.length > 0, hotels: withLinks, providers: providerStatus(), fetchedISO: new Date().toISOString() };
   });
 }
 
@@ -213,12 +289,69 @@ async function handleRates(q) {
 
 async function handleLocations(q) {
   const keyword = (q.get("q") ?? "").trim();
-  if (!keyword) throw badRequest("q is required");
-  if (!amadeus.isConfigured()) return { locations: [], live: false };
+  if (!keyword || keyword.length > 60) throw badRequest("q is required");
   return cache.wrap(`loc|${keyword}`, TTL.places, async () => ({
-    locations: await amadeus.findLocation(keyword),
+    locations: await places.searchPlaces(keyword),
     live: true,
   }));
+}
+
+/**
+ * Builds a hand-off link for a trip the app already knows about — used when
+ * the offer came from the bundled catalogue, so the "book" button still
+ * reaches a real booking page.
+ */
+async function handleBookingLink(q) {
+  const kind = q.get("kind") ?? "flight";
+
+  if (kind === "flight") {
+    const from = (q.get("from") ?? "").toUpperCase();
+    const to = (q.get("to") ?? "").toUpperCase();
+    const date = q.get("date") ?? "";
+    if (!/^[A-Z]{3}$/.test(from) || !/^[A-Z]{3}$/.test(to)) throw badRequest("from and to must be IATA codes");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw badRequest("date must be YYYY-MM-DD");
+    return {
+      url: affiliate.flightSearchUrl({
+        from,
+        to,
+        date,
+        returnDate: q.get("returnDate") || undefined,
+        passengers: clampInt(q.get("adults"), 1, 9, 1),
+      }),
+      affiliate: affiliate.markerConfigured(),
+    };
+  }
+
+  if (kind === "hotel") {
+    const city = (q.get("city") ?? "").trim();
+    if (!city) throw badRequest("city is required");
+    return {
+      url: affiliate.hotelSearchUrl({
+        city,
+        checkIn: q.get("checkIn") ?? "",
+        checkOut: q.get("checkOut") ?? "",
+        adults: clampInt(q.get("adults"), 1, 9, 2),
+      }),
+      affiliate: affiliate.markerConfigured(),
+    };
+  }
+
+  if (kind === "car") {
+    return {
+      url: affiliate.carSearchUrl({
+        city: (q.get("city") ?? "").trim(),
+        pickUp: q.get("date") ?? "",
+        days: clampInt(q.get("days"), 1, 60, 3),
+      }),
+      affiliate: affiliate.markerConfigured(),
+    };
+  }
+
+  if (kind === "esim") {
+    return { url: affiliate.esimUrl({ countryCode: q.get("country") ?? "" }), affiliate: affiliate.markerConfigured() };
+  }
+
+  throw badRequest("unknown kind");
 }
 
 const ROUTES = {
@@ -228,6 +361,7 @@ const ROUTES = {
   "/api/photos": handlePhotos,
   "/api/rates": handleRates,
   "/api/locations": handleLocations,
+  "/api/booking-link": handleBookingLink,
 };
 
 /* -------------------------------- server -------------------------------- */
@@ -242,6 +376,14 @@ function clampInt(raw, min, max, fallback) {
   const n = Number.parseInt(raw ?? "", 10);
   if (Number.isNaN(n)) return fallback;
   return Math.min(max, Math.max(min, n));
+}
+
+/** Never let a key or an upstream URL escape in an error body. */
+function sanitise(message) {
+  return String(message ?? "upstream error").replace(
+    /([?&](token|apikey|api_key|client_secret|secret)=)[^&\s]+/gi,
+    "$1***",
+  );
 }
 
 function send(res, status, payload) {
@@ -291,19 +433,98 @@ async function streamImage(url, res) {
   }
 }
 
+/** Reads a JSON request body, with a cap so a huge upload cannot exhaust memory. */
+async function readJsonBody(req, limitBytes = 64 * 1024) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limitBytes) throw badRequest("body too large");
+    chunks.push(chunk);
+  }
+  if (size === 0) return {};
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw badRequest("body must be JSON");
+  }
+}
+
+/** Re-prices an offer immediately before an order, as the API requires. */
+async function handleBookingPrice(body) {
+  if (!duffel.isConfigured()) throw badRequest("DUFFEL_TOKEN is not set");
+  const offerId = String(body.offerId ?? "").replace(/^df-/, "");
+  if (!offerId) throw badRequest("offerId is required");
+  return { ...(await duffel.confirmPrice(offerId)), live: duffel.isLiveMode() };
+}
+
+/**
+ * Creates a real order. Every guard here is deliberate: this is the one call
+ * in the codebase that charges someone.
+ */
+async function handleBookingOrder(body, req) {
+  if (!BOOKING_ENABLED) {
+    throw Object.assign(new Error("in-app booking is disabled — set ENABLE_BOOKING=1 with a Duffel token"), { status: 403 });
+  }
+  if (!BOOKING_SECRET || req.headers["x-booking-secret"] !== BOOKING_SECRET) {
+    throw Object.assign(new Error("unauthorised"), { status: 401 });
+  }
+
+  const offerId = String(body.offerId ?? "").replace(/^df-/, "");
+  if (!offerId) throw badRequest("offerId is required");
+  if (!Array.isArray(body.passengers) || body.passengers.length === 0) throw badRequest("passengers are required");
+  if (!body.payment) throw badRequest("payment is required");
+
+  // Re-price first: an expired or moved fare must fail here, before money
+  // moves, rather than be discovered by the traveller afterwards.
+  const priced = await duffel.confirmPrice(offerId);
+  if (body.expectedTotal !== undefined && Number(body.expectedTotal) !== priced.total) {
+    throw Object.assign(
+      new Error(`price changed from ${body.expectedTotal} to ${priced.total} ${priced.currency}`),
+      { status: 409 },
+    );
+  }
+
+  const order = await duffel.createOrder({
+    offerId,
+    passengers: body.passengers,
+    payment: body.payment,
+    metadata: { source: "alcode-trips" },
+  });
+
+  console.log(`order created: ${order.reference ?? order.orderId} (${order.live ? "LIVE" : "test"})`);
+  return order;
+}
+
+const POST_ROUTES = {
+  "/api/booking/price": handleBookingPrice,
+  "/api/booking/order": handleBookingOrder,
+};
+
 export const app = createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Booking-Secret",
       "Access-Control-Max-Age": "86400",
     });
     return res.end();
   }
-  if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
-
   const url = new URL(req.url, `http://${req.headers.host ?? "localhost"}`);
+
+  if (req.method === "POST") {
+    const handler = POST_ROUTES[url.pathname];
+    if (!handler) return send(res, 404, { error: "not found" });
+    try {
+      return send(res, 200, await handler(await readJsonBody(req), req));
+    } catch (err) {
+      const status = err.status ?? 502;
+      return send(res, status, { error: sanitise(err.message) });
+    }
+  }
+
+  if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
 
   if (url.pathname === "/health" || url.pathname === "/") {
     return send(res, 200, {
@@ -311,6 +532,8 @@ export const app = createServer(async (req, res) => {
       service: "alcode-trips-api",
       providers: providerStatus(),
       livePrices: anyPriceProvider(),
+      inAppBooking: BOOKING_ENABLED,
+      bookingMode: duffel.isConfigured() ? (duffel.isLiveMode() ? "live" : "test") : null,
       cached: cache.size,
       time: new Date().toISOString(),
     });
@@ -325,9 +548,7 @@ export const app = createServer(async (req, res) => {
     return send(res, 200, await handler(url.searchParams));
   } catch (err) {
     const status = err.status ?? 502;
-    // Never leak a key or an upstream URL in an error body.
-    const message = String(err.message ?? "upstream error").replace(/([?&](token|apikey|client_secret)=)[^&\s]+/gi, "$1***");
-    return send(res, status, { error: message });
+    return send(res, status, { error: sanitise(err.message) });
   }
 });
 

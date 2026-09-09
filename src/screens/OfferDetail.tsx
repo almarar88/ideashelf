@@ -1,28 +1,22 @@
-import { Bell, Briefcase, Clock, Leaf, RefreshCw, ShieldCheck, Users } from "lucide-react";
+import { Bell, Briefcase, Clock, ExternalLink, Info, Leaf, RefreshCw, ShieldCheck, Users } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { CarrierMark } from "@/components/Art";
 import PriceCompare from "@/components/PriceCompare";
 import DataBadge from "@/components/DataBadge";
 import { BackButton, Toast, cx } from "@/components/ui";
-import { carrierById } from "@/data/catalog";
+import { carrierById, providerById } from "@/data/catalog";
 import { quoteTotal, searchTrips } from "@/lib/aggregator";
+import { offerBookingUrl, openBookingSite, savedBooking } from "@/lib/booking";
 import { useTripOffers } from "@/lib/live";
 import { priceInsight } from "@/lib/ai";
 import { clock, duration, formatDate, iso, money, weekday } from "@/lib/format";
-import type { Booking, TripOffer } from "@/lib/types";
+import type { TripOffer } from "@/lib/types";
 import { useStore } from "@/state/store";
-
-function makeCode(seed: string) {
-  const letters = seed.toUpperCase().replace(/[^A-Z]/g, "").padEnd(3, "X").slice(0, 3);
-  const digits = Math.abs([...seed].reduce((a, c) => a * 31 + c.charCodeAt(0), 7)) % 100000;
-  return `${letters}${String(digits).padStart(5, "0")}`;
-}
 
 export default function OfferDetail() {
   const { offerId } = useParams();
   const location = useLocation() as { state?: { offer?: TripOffer } };
-  const navigate = useNavigate();
   const { t, locale, currency, search, profile, dispatch, priceAlerts } = useStore();
   const [toast, setToast] = useState<string | null>(null);
 
@@ -63,23 +57,34 @@ export default function OfferDetail() {
   const insight = priceInsight(searchTrips({ ...search, mode: offer.mode }), offer);
   const alertOn = priceAlerts.includes(offer.id);
 
+  const providerName = providerById(quote.providerId, quote.providerName).name;
+  const bookingUrl = offerBookingUrl(offer, search, quote.url);
+
+  /**
+   * Records the trip and opens the seller. The record is deliberately a saved
+   * trip, not a confirmed booking: the purchase happens on the partner's site
+   * and this app never learns whether it went through.
+   */
   const book = () => {
-    const booking: Booking = {
-      id: `bk-${Date.now()}`,
-      kind: "trip",
-      refId: offer.id,
-      title: `${offer.fromCode} → ${offer.toCode}`,
-      subtitle: `${locale === "ar" ? carrier.nameAr : carrier.name} · ${t(offer.cabin === "economy" ? "economy" : offer.cabin === "business" ? "business" : "first")}`,
-      dateISO: offer.departISO,
-      price: total,
-      status: "upcoming",
-      passenger: profile.name,
-      seat: `${1 + (Math.abs(offer.id.length * 7) % 30)}${"ABCDEF"[offer.id.length % 6]}`,
-      gate: `G${1 + (offer.id.length % 9)}`,
-      code: makeCode(offer.id),
-    };
-    dispatch({ type: "addBooking", booking });
-    navigate(`/ticket/${booking.id}`, { replace: true });
+    if (!bookingUrl) {
+      setToast(t("noResults"));
+      return;
+    }
+    dispatch({
+      type: "addBooking",
+      booking: savedBooking({
+        kind: "trip",
+        refId: offer.id,
+        title: `${offer.fromCode} → ${offer.toCode}`,
+        subtitle: `${carrierLabel} · ${t(offer.cabin === "economy" ? "economy" : offer.cabin === "business" ? "business" : "first")}`,
+        dateISO: offer.departISO,
+        price: total,
+        passenger: profile.name,
+        bookingUrl,
+        provider: providerName,
+      }),
+    });
+    openBookingSite(bookingUrl);
   };
 
   const facts = [
@@ -220,6 +225,12 @@ export default function OfferDetail() {
 
       <section className="mt-5 px-5">
         <h2 className="mb-3 text-[17px] font-bold">{t("comparePrices")}</h2>
+        <p className="mb-3 flex items-start gap-2 rounded-2xl bg-white px-4 py-3 text-[11.5px] leading-relaxed text-ink-muted shadow-soft">
+          <Info size={13} className="mt-0.5 shrink-0 text-brand" />
+          <span>
+            <span className="font-bold text-ink-soft">{t("handoffTitle")}.</span> {t("handoffBody")}
+          </span>
+        </p>
         <PriceCompare
           quotes={offer.quotes}
           unitLabel={t("perPax")}
@@ -231,13 +242,14 @@ export default function OfferDetail() {
       <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-[440px] border-t border-canvas-deep/60 bg-white/95 px-5 pb-safe pt-3 backdrop-blur">
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] text-ink-muted">
-              {t("total")} · {iso(search.passengers)} {t("passengers")}
+            <p className="truncate text-[11px] text-ink-muted">
+              {t("total")} · {iso(search.passengers)} {t("passengers")} · {t("via")} {providerName}
             </p>
             <p className="text-[20px] font-extrabold leading-tight">{money(total, currency)}</p>
           </div>
-          <button type="button" onClick={book} className="btn-dark px-8 py-4 text-[15px]">
-            {t("bookNow")}
+          <button type="button" onClick={book} className="btn-dark shrink-0 gap-2 px-5 py-4 text-[14px]">
+            <ExternalLink size={16} />
+            {t("continueBooking")}
           </button>
         </div>
       </div>

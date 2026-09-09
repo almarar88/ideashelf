@@ -65,6 +65,8 @@ export interface TripOffer {
   sources?: string[];
   brandedFare?: string | null;
   baggagePieces?: number | null;
+  /** Where to send the traveller to actually buy this trip. */
+  bookingUrl?: string;
 }
 
 export interface Photo {
@@ -132,6 +134,7 @@ export interface Hotel {
   roomDescription?: string | null;
   board?: string | null;
   sources?: string[];
+  bookingUrl?: string;
 }
 
 export interface CarRental {
@@ -190,11 +193,19 @@ export interface Booking {
   subtitle: string;
   dateISO: string;
   price: number;
-  status: "confirmed" | "upcoming" | "completed";
+  /**
+   * "saved" means the traveller was handed to a partner to complete the
+   * purchase and the app cannot know the outcome. Only an order placed
+   * through a booking API is ever "confirmed".
+   */
+  status: "saved" | "confirmed" | "upcoming" | "completed";
   passenger: string;
   seat?: string;
   gate?: string;
+  /** Booking reference. Empty for saved trips — there is no ticket yet. */
   code: string;
+  bookingUrl?: string;
+  provider?: string;
 }
 
 export interface PlannedItem {

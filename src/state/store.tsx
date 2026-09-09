@@ -109,8 +109,16 @@ function reducer(state: State, action: Action): State {
       return {
         ...state,
         bookings: [action.booking, ...state.bookings],
-        // Loyalty points accrue at 1 point per $2 spent.
-        profile: { ...state.profile, points: state.profile.points + Math.round(action.booking.price / 2) },
+        profile: {
+          ...state.profile,
+          // Points accrue at 1 per $2 spent, and only on a purchase the app
+          // actually saw complete — a trip handed off to a partner may never
+          // have been bought at all.
+          points:
+            action.booking.status === "saved"
+              ? state.profile.points
+              : state.profile.points + Math.round(action.booking.price / 2),
+        },
       };
     case "addPlan":
       return { ...state, plans: [action.plan, ...state.plans.filter((p) => p.id !== action.plan.id)] };

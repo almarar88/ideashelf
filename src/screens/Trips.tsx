@@ -62,7 +62,7 @@ export default function Trips() {
               <button
                 key={b.id}
                 type="button"
-                onClick={() => (b.kind === "trip" ? navigate(`/ticket/${b.id}`) : undefined)}
+                onClick={() => navigate(`/ticket/${b.id}`)}
                 className="card flex w-full items-center gap-3.5 p-4 text-start"
               >
                 <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand">
@@ -72,13 +72,19 @@ export default function Trips() {
                   <span className="block truncate text-[15px] font-bold">{b.title}</span>
                   <span className="mt-0.5 block truncate text-[11.5px] text-ink-muted">{b.subtitle}</span>
                   <span className="mt-1 block text-[11px] font-semibold text-ink-soft">
-                    {formatDate(b.dateISO, locale, "short")} · {iso(b.code)}
+                    {formatDate(b.dateISO, locale, "short")}
+                    {b.code ? <> · {iso(b.code)}</> : b.provider ? <> · {b.provider}</> : null}
                   </span>
                 </span>
                 <span className="shrink-0 text-end">
                   <span className="block text-[15px] font-extrabold">{money(b.price, currency)}</span>
-                  <span className="mt-1 inline-block rounded-full bg-mint-100 px-2 py-0.5 text-[9px] font-bold text-mint-600">
-                    {t(b.status === "completed" ? "completed" : "upcoming")}
+                  <span
+                    className={cx(
+                      "mt-1 inline-block rounded-full px-2 py-0.5 text-[9px] font-bold",
+                      b.status === "saved" ? "bg-brand-50 text-brand" : "bg-mint-100 text-mint-600",
+                    )}
+                  >
+                    {t(b.status === "saved" ? "savedTrip" : b.status === "completed" ? "completed" : "upcoming")}
                   </span>
                 </span>
               </button>

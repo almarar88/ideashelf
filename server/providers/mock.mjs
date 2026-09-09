@@ -55,7 +55,7 @@ export function searchFlights({ from, to, date, currency = "USD" }) {
           price: Math.round(offer.price * (i === 0 ? 0.94 : 1.07) * 100) / 100,
           fees: i === 0 ? 0 : 11,
           currency,
-          url: "https://www.aviasales.com/",
+          url: `https://www.aviasales.com/search/${from}${date.slice(8, 10)}${date.slice(5, 7)}${to}1`,
           cancellation: i === 0 ? "free" : "paid",
           payLater: i === 0,
         },

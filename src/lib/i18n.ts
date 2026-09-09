@@ -90,6 +90,23 @@ export const STRINGS = {
 
   // booking
   bookNow: { ar: "احجز الآن", en: "Book now" },
+  continueOn: { ar: "أكمل الحجز على", en: "Continue on" },
+  continueBooking: { ar: "أكمل الحجز", en: "Continue booking" },
+  via: { ar: "عبر", en: "via" },
+  handoffTitle: { ar: "الحجز يتم على موقع الشريك", en: "Booking happens on the partner site" },
+  handoffBody: {
+    ar: "نحن نقارن الأسعار ونحوّلك إلى الموقع الذي يبيع الرحلة ليتم الدفع وإصدار التذكرة لديه. لا نحتفظ ببيانات بطاقتك.",
+    en: "We compare the prices and hand you to the site that sells the trip; payment and ticketing happen there. We never see your card.",
+  },
+  saveToTrips: { ar: "احفظ في رحلاتي", en: "Save to my trips" },
+  savedTrip: { ar: "رحلة محفوظة", en: "Saved trip" },
+  savedTripNote: {
+    ar: "حفظنا تفاصيل الرحلة والسعر وقت البحث. أكمل الحجز على موقع الشريك للحصول على التذكرة.",
+    en: "We saved the trip and the price we found. Finish the booking on the partner site to get your ticket.",
+  },
+  priceAtSearch: { ar: "السعر وقت البحث", en: "Price when found" },
+  notATicket: { ar: "هذه ليست تذكرة", en: "This is not a ticket" },
+  openPartner: { ar: "فتح موقع الشريك", en: "Open partner site" },
   continue: { ar: "متابعة", en: "Continue" },
   confirmBooking: { ar: "تأكيد الحجز", en: "Confirm booking" },
   bookingConfirmed: { ar: "تم تأكيد الحجز", en: "Booking confirmed" },

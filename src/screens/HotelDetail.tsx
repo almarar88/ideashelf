@@ -1,14 +1,16 @@
-import { Bath, Car, Coffee, Dumbbell, MapPin, Plane, ShieldCheck, Star, Waves, Wifi } from "lucide-react";
+import { Bath, Car, Coffee, Dumbbell, ExternalLink, MapPin, Plane, ShieldCheck, Star, Waves, Wifi } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { DestinationArt } from "@/components/Art";
 import Photo, { PhotoCredit } from "@/components/Photo";
 import PriceCompare from "@/components/PriceCompare";
 import { BackButton, Stars } from "@/components/ui";
 import { cityById } from "@/data/catalog";
 import { quoteTotal, searchHotels } from "@/lib/aggregator";
-import { addDays, formatDate, iso, money, todayISO } from "@/lib/format";
-import type { Booking, Hotel } from "@/lib/types";
+import { hotelBookingUrl, openBookingSite, savedBooking } from "@/lib/booking";
+import { addDays, iso, money, todayISO } from "@/lib/format";
+import { providerById } from "@/data/catalog";
+import type { Hotel } from "@/lib/types";
 import { useStore } from "@/state/store";
 
 const AMENITY_ICONS: Record<string, typeof Wifi> = {
@@ -24,7 +26,6 @@ const AMENITY_ICONS: Record<string, typeof Wifi> = {
 
 export default function HotelDetail() {
   const { hotelId } = useParams();
-  const navigate = useNavigate();
   const location = useLocation() as { state?: { hotel?: Hotel; nights?: number } };
   const { t, locale, currency, profile, dispatch } = useStore();
   const [selected, setSelected] = useState<string | null>(null);
@@ -52,21 +53,26 @@ export default function HotelDetail() {
   const quote = hotel.quotes.find((q) => q.providerId === selected) ?? hotel.quotes[0];
   const total = quoteTotal(quote) * nights;
 
+  const checkOut = addDays(checkIn, nights);
+  const providerName = providerById(quote.providerId, quote.providerName).name;
+  const bookingUrl = hotelBookingUrl(hotel, checkIn, checkOut, 2);
+
   const book = () => {
-    const booking: Booking = {
-      id: `bk-${Date.now()}`,
-      kind: "hotel",
-      refId: hotel.id,
-      title: locale === "ar" ? hotel.nameAr : hotel.name,
-      subtitle: `${locale === "ar" ? city.nameAr : city.name} · ${nights} ${t("nights")}`,
-      dateISO: `${checkIn}T14:00:00`,
-      price: total,
-      status: "upcoming",
-      passenger: profile.name,
-      code: `HT${hotel.id.length}${String(Math.abs(hotel.rating * 1000)).slice(0, 5)}`,
-    };
-    dispatch({ type: "addBooking", booking });
-    navigate("/trips", { replace: true });
+    dispatch({
+      type: "addBooking",
+      booking: savedBooking({
+        kind: "hotel",
+        refId: hotel.id,
+        title: locale === "ar" ? hotel.nameAr : hotel.name,
+        subtitle: `${locale === "ar" ? city.nameAr : city.name} · ${iso(nights)} ${t("nights")}`,
+        dateISO: `${checkIn}T14:00:00`,
+        price: total,
+        passenger: profile.name,
+        bookingUrl,
+        provider: providerName,
+      }),
+    });
+    openBookingSite(bookingUrl);
   };
 
   return (
@@ -137,19 +143,23 @@ export default function HotelDetail() {
 
       <section className="mt-5 px-5">
         <h2 className="mb-3 text-[17px] font-bold">{t("comparePrices")}</h2>
+        <p className="mb-3 rounded-2xl bg-white px-4 py-3 text-[11.5px] leading-relaxed text-ink-muted shadow-soft">
+          <span className="font-bold text-ink-soft">{t("handoffTitle")}.</span> {t("handoffBody")}
+        </p>
         <PriceCompare quotes={hotel.quotes} unitLabel={t("perNight")} selectedId={quote.providerId} onSelect={(q) => setSelected(q.providerId)} />
       </section>
 
       <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-[440px] border-t border-canvas-deep/60 bg-white/95 px-5 pb-safe pt-3 backdrop-blur">
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] text-ink-muted">
-              {iso(nights)} {t("nights")} · {formatDate(checkIn, locale, "short")}
+            <p className="truncate text-[11px] text-ink-muted">
+              {iso(nights)} {t("nights")} · {t("via")} {providerName}
             </p>
             <p className="text-[20px] font-extrabold leading-tight">{money(total, currency)}</p>
           </div>
-          <button type="button" onClick={book} className="btn-dark px-8 py-4 text-[15px]">
-            {t("bookNow")}
+          <button type="button" onClick={book} className="btn-dark shrink-0 gap-2 px-5 py-4 text-[14px]">
+            <ExternalLink size={16} />
+            {t("continueBooking")}
           </button>
         </div>
       </div>

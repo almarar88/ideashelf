@@ -1,12 +1,13 @@
-import { Briefcase, CalendarDays, Gauge, MapPin, Settings2, Star, Users } from "lucide-react";
+import { Briefcase, CalendarDays, ExternalLink, Gauge, MapPin, Settings2, Star, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { CarArt } from "@/components/Art";
 import PriceCompare from "@/components/PriceCompare";
 import { BackButton, Sheet, cx } from "@/components/ui";
 import { CITIES, cityById } from "@/data/catalog";
 import { quoteTotal, savingsOf, searchCars } from "@/lib/aggregator";
-import { addDays, formatDate, iso, money, todayISO } from "@/lib/format";
-import type { Booking, CarRental } from "@/lib/types";
+import { carSearchUrl, openBookingSite, savedBooking } from "@/lib/booking";
+import { addDays, formatDate, money, todayISO } from "@/lib/format";
+import type { CarRental } from "@/lib/types";
 import { useStore } from "@/state/store";
 
 const CATEGORIES = [
@@ -38,20 +39,23 @@ export default function Cars() {
   const city = cityById(cityId);
 
   const book = (car: CarRental) => {
-    const booking: Booking = {
-      id: `bk-${Date.now()}`,
-      kind: "car",
-      refId: car.id,
-      title: `${car.brand} ${car.model}`,
-      subtitle: `${locale === "ar" ? city.nameAr : city.name} · ${iso(days)} ${t("days")}`,
-      dateISO: `${pickup}T10:00:00`,
-      price: Math.min(...car.quotes.map(quoteTotal)),
-      status: "upcoming",
-      passenger: profile.name,
-      code: `CR${car.id.length}${car.seats}${car.bags}00`,
-    };
-    dispatch({ type: "addBooking", booking });
+    const bookingUrl = carSearchUrl({ city: city.name, pickUp: pickup, days });
+    dispatch({
+      type: "addBooking",
+      booking: savedBooking({
+        kind: "car",
+        refId: car.id,
+        title: `${car.brand} ${car.model}`,
+        subtitle: `${locale === "ar" ? city.nameAr : city.name} · ${days} ${t("days")}`,
+        dateISO: `${pickup}T10:00:00`,
+        price: Math.min(...car.quotes.map(quoteTotal)),
+        passenger: profile.name,
+        bookingUrl,
+        provider: car.supplier,
+      }),
+    });
     setActive(null);
+    openBookingSite(bookingUrl);
   };
 
   return (
@@ -154,8 +158,8 @@ export default function Cars() {
         title={active ? `${active.brand} ${active.model}` : ""}
         footer={
           active && (
-            <button type="button" onClick={() => book(active)} className="btn-dark w-full py-4">
-              {t("bookNow")} · {money(Math.min(...active.quotes.map(quoteTotal)), currency)}
+            <button type="button" onClick={() => book(active)} className="btn-dark w-full gap-2 py-4">
+              <ExternalLink size={16} /> {t("continueOn")} {active.supplier}
             </button>
           )
         }

@@ -1,0 +1,43 @@
+{
+  "data": {
+    "id": "orq_test_1",
+    "offers": [
+      {
+        "id": "off_test_abc123",
+        "total_amount": "412.30",
+        "total_currency": "USD",
+        "expires_at": "2026-10-01T09:15:00Z",
+        "owner": { "iata_code": "EK", "name": "Emirates" },
+        "conditions": {
+          "change_before_departure": { "allowed": true, "penalty_amount": "75.00" },
+          "refund_before_departure": { "allowed": false }
+        },
+        "slices": [
+          {
+            "duration": "PT4H25M",
+            "segments": [
+              {
+                "origin": { "iata_code": "DXB" },
+                "destination": { "iata_code": "IST" },
+                "origin_terminal": "3",
+                "destination_terminal": "1",
+                "departing_at": "2026-10-01T08:45:00",
+                "arriving_at": "2026-10-01T12:10:00",
+                "duration": "PT4H25M",
+                "marketing_carrier": { "iata_code": "EK", "name": "Emirates" },
+                "marketing_carrier_flight_number": "121",
+                "aircraft": { "name": "Boeing 777-300ER" },
+                "passengers": [
+                  {
+                    "cabin_class": "economy",
+                    "baggages": [{ "type": "checked", "quantity": 2 }]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -4,6 +4,9 @@ import { mapFlightOffers } from "./providers/amadeus.mjs";
 import * as amadeus from "./providers/amadeus.mjs";
 import * as travelpayouts from "./providers/travelpayouts.mjs";
 import * as commons from "./providers/commons.mjs";
+import * as duffel from "./providers/duffel.mjs";
+import * as affiliate from "./lib/affiliate.mjs";
+import * as places from "./providers/places.mjs";
 import { fetchRates } from "./providers/rates.mjs";
 import { mergeOffers } from "./lib/merge.mjs";
 
@@ -68,6 +71,31 @@ await check("multi-provider merge", () => {
   return "same flight from two sites merges into one comparison";
 });
 
+await check("duffel offer mapping", () => {
+  const payload = JSON.parse(
+    readFileSync(fileURLToPath(new URL("./fixtures/duffel-offers.json", import.meta.url)), "utf8"),
+  );
+  const [offer] = duffel.mapOffers(payload.data.offers, "USD");
+  if (!offer) throw new Error("no offer mapped");
+  if (!offer.offerId) throw new Error("offer id dropped — an order could not be placed against it");
+  if (offer.durationMin !== 265) throw new Error(`duration ${offer.durationMin} != 265`);
+  if (offer.segments[0].flightNumber !== "EK121") throw new Error("flight number not assembled");
+  if (offer.conditions.refundable !== false) throw new Error("fare conditions lost");
+  return "offer id, conditions and segments preserved for ordering";
+});
+
+await check("booking hand-off links", () => {
+  const f = affiliate.flightSearchUrl({ from: "DXB", to: "IST", date: "2026-10-15", passengers: 1 });
+  if (f !== "https://www.aviasales.com/search/DXB1510IST1" && !f.includes("DXB1510IST1")) {
+    throw new Error(`unexpected flight URL: ${f}`);
+  }
+  const rt = affiliate.flightSearchUrl({ from: "DXB", to: "IST", date: "2026-10-15", returnDate: "2026-10-22", passengers: 2 });
+  if (!rt.includes("DXB1510IST22102")) throw new Error(`return leg not encoded: ${rt}`);
+  const h = affiliate.hotelSearchUrl({ city: "Dubai", checkIn: "2026-11-10", checkOut: "2026-11-13", adults: 2 });
+  if (!h.includes("checkIn=2026-11-10")) throw new Error(`unexpected hotel URL: ${h}`);
+  return affiliate.markerConfigured() ? "built, affiliate marker attached" : "built (no marker set — links earn nothing)";
+});
+
 console.log("\nNo-credential providers");
 await check("exchange rates", async () => {
   const r = await fetchRates("USD");
@@ -81,6 +109,19 @@ await check("destination photos", async () => {
   if (d.photos.length === 0) throw new Error("no photos returned");
   if (!d.photos[0].licence) throw new Error("photo returned without a licence — attribution would be impossible");
   return `${d.photos.length} photos, first: ${d.photos[0].title.slice(0, 40)}`;
+});
+
+await check("global place search", async () => {
+  const list = await places.searchPlaces("London");
+  const airports = list.filter((p) => p.type === "airport");
+  if (airports.length === 0) throw new Error("no airports returned for London");
+  return `${list.length} results including ${airports.length} airports`;
+});
+
+await check("airline names", async () => {
+  const name = await places.airlineName("EK");
+  if (name !== "Emirates") throw new Error(`EK resolved to "${name}"`);
+  return "IATA codes resolve to airline names";
 });
 
 console.log("\nPartner providers");
@@ -109,6 +150,25 @@ if (travelpayouts.isConfigured()) {
   });
 } else {
   skip("travelpayouts", "TRAVELPAYOUTS_TOKEN not set");
+}
+
+if (duffel.isConfigured()) {
+  await check("duffel search", async () => {
+    const offers = await duffel.searchFlights({ from: "LHR", to: "JFK", date: tomorrow(), adults: 1 });
+    if (offers.length === 0) throw new Error("token accepted but no offers — try another route or date");
+    return `${offers.length} bookable offers, cheapest ${offers[0].price} ${offers[0].currency} (${duffel.isLiveMode() ? "LIVE" : "test"} mode)`;
+  });
+  await check("duffel price confirmation", async () => {
+    const offers = await duffel.searchFlights({ from: "LHR", to: "JFK", date: tomorrow(), adults: 1 });
+    if (offers.length === 0) throw new Error("no offer to confirm");
+    const priced = await duffel.confirmPrice(offers[0].offerId);
+    return `re-priced at ${priced.total} ${priced.currency}, expires ${priced.expiresISO}`;
+  });
+  if (duffel.isLiveMode()) {
+    console.log("  NOTE  DUFFEL_TOKEN is a LIVE token — orders created with it charge real money.");
+  }
+} else {
+  skip("duffel (in-app booking)", "DUFFEL_TOKEN not set");
 }
 
 console.log(

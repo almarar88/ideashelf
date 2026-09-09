@@ -1,9 +1,10 @@
-import { CheckCircle2, Download, Share2 } from "lucide-react";
+import { CheckCircle2, Download, ExternalLink, Info, Share2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BackButton, Toast } from "@/components/ui";
+import { BackButton, Toast, cx } from "@/components/ui";
 import { clock, formatDate, money } from "@/lib/format";
 import { makeRng } from "@/lib/rng";
+import { openBookingSite } from "@/lib/booking";
 import { useStore } from "@/state/store";
 
 /** Code 128-style bar pattern, drawn from the booking code so it is stable. */
@@ -37,6 +38,7 @@ export default function Ticket() {
   const [toast, setToast] = useState<string | null>(null);
 
   const booking = bookings.find((b) => b.id === bookingId);
+  const isSaved = booking?.status === "saved";
 
   if (!booking) {
     return (
@@ -101,10 +103,21 @@ export default function Ticket() {
         </div>
       </header>
 
-      <div className="mx-5 mt-4 flex items-center gap-2.5 rounded-3xl bg-white/70 px-4 py-3">
-        <CheckCircle2 size={20} className="text-mint-600" />
-        <p className="text-[13px] font-bold text-mint-600">{t("bookingConfirmed")}</p>
-      </div>
+      {/* A trip the traveller went off to buy is not a confirmed booking, and
+          this screen must never imply otherwise. */}
+      {isSaved ? (
+        <div className="mx-5 mt-4 flex items-start gap-2.5 rounded-3xl bg-white/70 px-4 py-3">
+          <Info size={18} className="mt-0.5 shrink-0 text-brand" />
+          <p className="text-[12px] leading-relaxed text-ink-soft">
+            <span className="font-bold">{t("savedTrip")}.</span> {t("savedTripNote")}
+          </p>
+        </div>
+      ) : (
+        <div className="mx-5 mt-4 flex items-center gap-2.5 rounded-3xl bg-white/70 px-4 py-3">
+          <CheckCircle2 size={20} className="text-mint-600" />
+          <p className="text-[13px] font-bold text-mint-600">{t("bookingConfirmed")}</p>
+        </div>
+      )}
 
       <div className="mx-5 mt-4 overflow-hidden rounded-[30px] bg-white shadow-card">
         <div className="p-5">
@@ -113,7 +126,7 @@ export default function Ticket() {
               AL
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-medium text-ink-muted">{t("boardingPass")}</p>
+              <p className="text-[11px] font-medium text-ink-muted">{isSaved ? t("savedTrip") : t("boardingPass")}</p>
               <p className="truncate text-[16px] font-extrabold leading-tight">{booking.subtitle}</p>
             </div>
           </div>
@@ -129,16 +142,27 @@ export default function Ticket() {
             </div>
             <div className="text-end">
               <p className="text-[22px] font-extrabold leading-none">{booking.title.split("→")[1]?.trim() ?? "—"}</p>
-              <p className="mt-1 text-[12px] text-ink-muted">{t("gate")} {booking.gate}</p>
+              {/* A saved trip has no gate — the flight has not been bought. */}
+              {!isSaved && booking.gate && (
+                <p className="mt-1 text-[12px] text-ink-muted">
+                  {t("gate")} {booking.gate}
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-2">
-            {[
-              { label: t("gate"), value: booking.gate ?? "—" },
-              { label: t("seat"), value: booking.seat ?? "—" },
-              { label: t("total"), value: money(booking.price, currency) },
-            ].map((f) => (
+          <div className={cx("mt-5 grid gap-2", isSaved ? "grid-cols-2" : "grid-cols-3")}>
+            {(isSaved
+              ? [
+                  { label: t("priceAtSearch"), value: money(booking.price, currency) },
+                  { label: t("bookOn"), value: booking.provider ?? "—" },
+                ]
+              : [
+                  { label: t("gate"), value: booking.gate ?? "—" },
+                  { label: t("seat"), value: booking.seat ?? "—" },
+                  { label: t("total"), value: money(booking.price, currency) },
+                ]
+            ).map((f) => (
               <div key={f.label} className="rounded-2xl bg-canvas px-3 py-2.5 text-center">
                 <p className="text-[10px] text-ink-muted">{f.label}</p>
                 <p className="mt-0.5 text-[15px] font-extrabold">{f.value}</p>
@@ -160,15 +184,33 @@ export default function Ticket() {
         </div>
 
         <div className="px-5 pb-6 pt-1">
-          <Barcode code={booking.code} />
-          <p className="mt-2 text-center text-[12px] font-semibold tracking-[0.3em] text-ink-soft">{booking.code}</p>
+          {isSaved ? (
+            <p className="text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+              {t("notATicket")}
+            </p>
+          ) : (
+            <>
+              <Barcode code={booking.code} />
+              <p className="mt-2 text-center text-[12px] font-semibold tracking-[0.3em] text-ink-soft">{booking.code}</p>
+            </>
+          )}
         </div>
       </div>
 
       <div className="mx-5 mt-5">
-        <button type="button" onClick={download} className="btn-dark w-full gap-2 py-4 text-[15px]">
-          <Download size={18} /> {t("downloadTicket")}
-        </button>
+        {isSaved && booking.bookingUrl ? (
+          <button
+            type="button"
+            onClick={() => openBookingSite(booking.bookingUrl!)}
+            className="btn-dark w-full gap-2 py-4 text-[15px]"
+          >
+            <ExternalLink size={17} /> {t("continueOn")} {booking.provider}
+          </button>
+        ) : (
+          <button type="button" onClick={download} className="btn-dark w-full gap-2 py-4 text-[15px]">
+            <Download size={18} /> {t("downloadTicket")}
+          </button>
+        )}
       </div>
 
       <Toast message={toast} onDone={() => setToast(null)} />

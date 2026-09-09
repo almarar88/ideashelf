@@ -165,6 +165,23 @@ exercised without credentials. Everything it returns is flagged and appears
 under an amber "development fixtures — not real prices" badge. Never enable it
 in production.
 
+## Booking
+
+The app hands the traveller to the site that sells the trip — the partner takes
+the payment and issues the ticket, which is how every meta-search works. That
+flow is built and working: the button on each offer opens the partner's real
+booking page, and the trip is recorded as a *saved trip*, never as a ticket the
+app did not issue.
+
+Add `VITE_AFFILIATE_MARKER` (app) and `TRAVELPAYOUTS_MARKER` (server) to earn
+commission on those hand-offs. Without them the links still work.
+
+Booking *inside* the app is a different undertaking — a travel licence, card
+handling and 24/7 support, not just code. The provider for it
+(`server/providers/duffel.mjs`) is implemented and tested, and the endpoints
+are guarded behind `ENABLE_BOOKING`. **[BOOKING.md](BOOKING.md) compares both
+paths and lists exactly what each one needs.**
+
 ## The AI layer
 
 `src/lib/ai.ts` runs in one of two modes, and the UI always labels which:

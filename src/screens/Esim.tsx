@@ -4,8 +4,9 @@ import { SimArt } from "@/components/Art";
 import PriceCompare from "@/components/PriceCompare";
 import { BackButton, Sheet, cx } from "@/components/ui";
 import { esimCountries, isLiveData, quoteTotal, savingsOf, searchEsim } from "@/lib/aggregator";
+import { esimUrl, openBookingSite, savedBooking } from "@/lib/booking";
 import { iso, money } from "@/lib/format";
-import type { Booking, EsimPlan } from "@/lib/types";
+import type { EsimPlan } from "@/lib/types";
 import { useStore } from "@/state/store";
 
 export default function Esim() {
@@ -31,20 +32,23 @@ export default function Esim() {
   const selected = countries.find((c) => c.countryCode === country);
 
   const buy = (plan: EsimPlan) => {
-    const booking: Booking = {
-      id: `bk-${Date.now()}`,
-      kind: "esim",
-      refId: plan.id,
-      title: `eSIM ${locale === "ar" ? plan.countryAr : plan.country}`,
-      subtitle: `${plan.dataGb === "unlimited" ? t("unlimited") : `${plan.dataGb} GB`} · ${plan.days} ${t("days")}`,
-      dateISO: new Date().toISOString(),
-      price: quoteTotal(plan.quotes[0]),
-      status: "confirmed",
-      passenger: profile.name,
-      code: `SM${plan.countryCode}${plan.days}${plan.dataGb === "unlimited" ? "UL" : plan.dataGb}`,
-    };
-    dispatch({ type: "addBooking", booking });
+    const bookingUrl = esimUrl(plan.countryCode);
+    dispatch({
+      type: "addBooking",
+      booking: savedBooking({
+        kind: "esim",
+        refId: plan.id,
+        title: `eSIM ${locale === "ar" ? plan.countryAr : plan.country}`,
+        subtitle: `${plan.dataGb === "unlimited" ? t("unlimited") : `${plan.dataGb} GB`} · ${plan.days} ${t("days")}`,
+        dateISO: new Date().toISOString(),
+        price: quoteTotal(plan.quotes[0]),
+        passenger: profile.name,
+        bookingUrl,
+        provider: plan.operator,
+      }),
+    });
     setActive(null);
+    openBookingSite(bookingUrl);
   };
 
   return (
@@ -149,7 +153,7 @@ export default function Esim() {
         footer={
           active && (
             <button type="button" onClick={() => buy(active)} className="btn-dark w-full gap-2 py-4">
-              <QrCode size={17} /> {t("buyEsim")} · {money(quoteTotal(active.quotes[0]), currency, { decimals: 2 })}
+              <QrCode size={17} /> {t("continueOn")} {active.operator}
             </button>
           )
         }
