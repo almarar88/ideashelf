@@ -1,0 +1,181 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Noto+Naskh+Arabic:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Theme tokens ──────────────────────────────────────────────────────────
+   light  = "Daylight Lavender"  (the soft lavender canvas of the reference)
+   dark   = "Midnight Obsidian"  (the OLED surface described in the spec)
+   Values are raw RGB triplets so Tailwind can apply <alpha-value>.
+   ------------------------------------------------------------------------ */
+:root,
+[data-theme="light"] {
+  --canvas: 196 199 218;
+  --surface: 255 255 255;
+  --raised: 244 243 252;
+  --ink: 24 24 40;
+  --muted: 122 124 148;
+  --line: 226 226 240;
+  --rose: 255 108 186;
+  --iris: 76 99 255;
+  --mint: 52 199 166;
+  --amber: 255 176 70;
+  --shadow-float: 0 22px 60px -28px rgb(30 24 70 / 0.45);
+  --shadow-lift: 0 10px 30px -14px rgb(30 24 70 / 0.35);
+  --glass: 255 255 255;
+  --glass-alpha: 0.62;
+  --scrim: 18 16 40;
+}
+
+[data-theme="dark"] {
+  --canvas: 6 7 12;
+  --surface: 17 18 28;
+  --raised: 25 26 40;
+  --ink: 238 239 250;
+  --muted: 146 149 176;
+  --line: 44 46 66;
+  --rose: 255 95 176;
+  --iris: 124 92 255;
+  --mint: 60 214 176;
+  --amber: 255 186 92;
+  --shadow-float: 0 24px 70px -30px rgb(0 0 0 / 0.9);
+  --shadow-lift: 0 12px 34px -16px rgb(0 0 0 / 0.8);
+  --glass: 40 42 64;
+  --glass-alpha: 0.5;
+  --scrim: 0 0 0;
+}
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    margin: 0;
+    transition: background-color 0.5s ease, color 0.3s ease;
+  }
+  /* Ambient light that shifts with the hour of the day (Cognitive Minimalism) */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(60vw 50vh at 15% 10%, rgb(var(--iris) / 0.13), transparent 70%),
+      radial-gradient(55vw 45vh at 85% 85%, rgb(var(--rose) / 0.13), transparent 70%);
+    transition: opacity 0.8s ease;
+  }
+  ::selection {
+    background: rgb(var(--rose) / 0.28);
+  }
+}
+
+@layer components {
+  .glass {
+    background: rgb(var(--glass) / var(--glass-alpha));
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    border: 1px solid rgb(var(--line) / 0.7);
+  }
+  .card {
+    @apply rounded-xl2 bg-surface shadow-float;
+    border: 1px solid rgb(var(--line) / 0.6);
+  }
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all duration-300;
+  }
+  .pill-idle {
+    @apply bg-surface/70 text-muted;
+    border: 1px solid rgb(var(--line) / 0.9);
+  }
+  .pill-live {
+    @apply text-ink;
+    background: linear-gradient(120deg, rgb(var(--rose) / 0.28), rgb(var(--iris) / 0.22));
+    border: 1px solid rgb(var(--rose) / 0.45);
+  }
+  .hairline {
+    border-color: rgb(var(--line) / 0.7);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  /* Spatial Canvas: surface → depth transition */
+  .depth-enter {
+    animation: riseIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--surface) / 0.55),
+      transparent
+    );
+    animation: sweep 2.2s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 8px;
+    border-radius: 9999px;
+    background: linear-gradient(
+      90deg,
+      rgb(var(--iris)),
+      rgb(var(--rose))
+    );
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 20px;
+    width: 20px;
+    border-radius: 9999px;
+    background: rgb(var(--surface));
+    border: 3px solid rgb(var(--rose));
+    box-shadow: var(--shadow-lift);
+    cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    height: 20px;
+    width: 20px;
+    border-radius: 9999px;
+    background: rgb(var(--surface));
+    border: 3px solid rgb(var(--rose));
+    cursor: pointer;
+  }
+  input[type="range"]::-moz-range-track {
+    height: 8px;
+    border-radius: 9999px;
+    background: transparent;
+  }
+}
