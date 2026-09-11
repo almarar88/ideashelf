@@ -30,6 +30,8 @@ const AR: Dict = {
   dilemma_submit: "أقفل إجاباتي",
   dilemma_submitted: "انقفلت. نشوفك عند الكشف",
   dilemma_locked_msg: "لسه ما نزل سؤال اليوم",
+  dilemma_missed: "فاتتك جولة اليوم",
+  dilemma_missed_sub: "الكشف صار بدونك. الستريك انكسر",
   dilemma_change: "تعديل",
   // Showdown
   showdown_title: "الكشف",
@@ -125,6 +127,8 @@ const EN: Dict = {
   dilemma_submit: "Lock in my answers",
   dilemma_submitted: "Locked. See you at the reveal",
   dilemma_locked_msg: "Today's dilemma hasn't dropped yet",
+  dilemma_missed: "You missed today's round",
+  dilemma_missed_sub: "The reveal happened without you. The streak broke",
   dilemma_change: "Change",
   showdown_title: "The Reveal",
   showdown_subtitle: "Where the squad actually landed",

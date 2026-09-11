@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 13+ themed icon. The system tints this, so it must be a flat
+     single-colour silhouette: the two mask halves, no gradients or shadow. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <group android:pivotX="512" android:pivotY="512" android:scaleX="0.82" android:scaleY="0.82">
+        <group android:translateY="28">
+            <!-- left half -->
+            <group android:pivotX="512" android:pivotY="500" android:rotation="-7">
+                <path
+                    android:fillType="evenOdd"
+                    android:fillColor="#FFFFFF"
+                    android:pathData="M236,462 C268,412 372,382 512,382 L512,572 C470,572 434,592 394,592 C340,592 288,566 250,522 C228,508 222,482 236,462 Z M396,435 a64,41 0 1,0 0.1,0 Z" />
+            </group>
+            <!-- right half, lifted -->
+            <group android:translateX="40" android:translateY="-22">
+                <group android:pivotX="512" android:pivotY="500" android:rotation="8">
+                    <path
+                        android:fillType="evenOdd"
+                        android:fillColor="#FFFFFF"
+                        android:pathData="M525,382 C655,383 757,413 788,462 C802,482 796,508 774,522 C736,566 684,592 630,592 C590,592 554,572 525,572 Z M628,435 a64,41 0 1,0 0.1,0 Z" />
+                </group>
+            </group>
+        </group>
+    </group>
+</vector>

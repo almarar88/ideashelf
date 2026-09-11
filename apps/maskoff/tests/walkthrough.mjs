@@ -24,7 +24,16 @@ const step = async (name, fn) => {
   catch (e) { console.log(`FAIL  ${name}: ${e.message}`); errors.push(`${name}: ${e.message}`); }
 };
 
-await page.goto("http://127.0.0.1:4174/", { waitUntil: "networkidle" });
+// Pin the clock. The game's phase is a function of wall-clock time, so
+// without this the suite passes or fails depending on the hour it is run —
+// after 21:00 the app is legitimately on the Showdown and every Vault
+// assertion below would fail for no good reason. 17:00 local sits before the
+// 20:00 drop, so a run always starts in the "locked" phase.
+const pinned = new Date();
+pinned.setHours(17, 0, 0, 0);
+await page.clock.install({ time: pinned });
+
+await page.goto("http://127.0.0.1:4174/", { waitUntil: "domcontentloaded" });
 
 await step("onboarding renders", async () => {
   await page.waitForSelector("text=مَفْضوح", { timeout: 8000 });
@@ -45,7 +54,7 @@ await step("sign in reaches the Vault", async () => {
 await step("countdown ticks on a timer element", async () => {
   const t = page.locator('[role="timer"]');
   const a = await t.textContent();
-  await page.waitForTimeout(1600);
+  await page.clock.runFor(2000);
   const b = await t.textContent();
   if (a === b) throw new Error(`countdown frozen at ${a}`);
 });
@@ -90,10 +99,11 @@ await step("staking everyone enables submit, and locks in", async () => {
 await step("sim: fill the squad and reveal", async () => {
   await page.click('[aria-label="محاكاة"]');
   await page.click("text=عبّي إجابات الباقي");
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(500);
   await page.click('[aria-label="محاكاة"]');
   await page.click("text=اكشف الآن");
-  await page.waitForTimeout(7000);
+  await page.clock.runFor(8000);
+  await page.waitForTimeout(600);
 });
 
 await step("showdown renders results and roast", async () => {
@@ -136,7 +146,7 @@ await step("no horizontal overflow at 412px", async () => {
 
 await step("English switch flips direction to LTR", async () => {
   await page.evaluate(() => localStorage.removeItem("maskoff.local.v1"));
-  await page.reload({ waitUntil: "networkidle" });
+  await page.reload({ waitUntil: "domcontentloaded" });
   await page.click("text=English");
   await page.waitForTimeout(300);
   await page.click("text=Let's go");

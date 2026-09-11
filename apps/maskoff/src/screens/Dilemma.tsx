@@ -56,17 +56,34 @@ export function Dilemma({ onNavigate }: { onNavigate: (screen: Screen) => void }
     );
   }
 
-  // Already locked in, or the reveal has opened — show the read-only state.
-  if (mySubmission || phase === "revealed") {
-    const chosen = mySubmission
-      ? round.question.options.find((option) => option.id === mySubmission.choice)
-      : null;
+  // The reveal opened and you never answered. This is NOT the same as being
+  // locked in, and saying "see you at the reveal" here would be a lie.
+  if (!mySubmission && phase === "revealed") {
+    return (
+      <Centered>
+        <IconBadge className="mb-4 text-alert">
+          <IconMask />
+        </IconBadge>
+        <p className="font-display text-xl font-extrabold">{t(lang, "dilemma_missed")}</p>
+        <p className="mt-2 text-sm text-muted">{t(lang, "dilemma_missed_sub")}</p>
+        <button type="button" onClick={() => onNavigate("showdown")} className="btn-coral btn-md mt-6">
+          {t(lang, "vault_see_results")}
+        </button>
+      </Centered>
+    );
+  }
+
+  // Locked in — read-only until the reveal.
+  if (mySubmission) {
+    const chosen = round.question.options.find((option) => option.id === mySubmission.choice);
     return (
       <Centered>
         <IconBadge className="mb-4 bg-pistachio text-ink-900">
           <IconCheck />
         </IconBadge>
-        <p className="font-display text-xl font-extrabold">{t(lang, "dilemma_submitted")}</p>
+        <p className="font-display text-xl font-extrabold">
+          {t(lang, phase === "revealed" ? "showdown_title" : "dilemma_submitted")}
+        </p>
         {chosen && (
           <p className="mt-3 text-sm text-muted">
             {t(lang, "dilemma_your_answer")}:{" "}
@@ -75,9 +92,11 @@ export function Dilemma({ onNavigate }: { onNavigate: (screen: Screen) => void }
             </span>
           </p>
         )}
-        <p className="tnum mt-5 font-display text-2xl font-extrabold text-cyber">
-          {formatCountdown(countdown(round.revealAt, now))}
-        </p>
+        {phase !== "revealed" && (
+          <p className="tnum mt-5 font-display text-2xl font-extrabold text-cyber">
+            {formatCountdown(countdown(round.revealAt, now))}
+          </p>
+        )}
         <button
           type="button"
           onClick={() => onNavigate(phase === "revealed" ? "showdown" : "vault")}
