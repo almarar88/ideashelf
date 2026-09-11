@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-void font-body text-white antialiased;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Latin numerals everywhere: countdowns and scores must stay scannable
+     even when the UI language is Arabic. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+@layer components {
+  /* ---- Surfaces -------------------------------------------------------- */
+  /* Raised charcoal-violet card on the black canvas. */
+  .surface {
+    @apply rounded-card bg-ink-800 shadow-tile;
+    border: 1px solid rgb(255 255 255 / 0.06);
+  }
+
+  .surface-2 {
+    @apply rounded-tile bg-ink-700;
+    border: 1px solid rgb(255 255 255 / 0.07);
+  }
+
+  /* Pastel accent tile — dark ink text sits on top. */
+  .tile {
+    @apply rounded-tile shadow-tile;
+    color: #17131f;
+  }
+
+  /* ---- Circular icon badge (reference: the small ringed glyph buttons) -- */
+  .badge-ring {
+    @apply grid h-12 w-12 shrink-0 place-items-center rounded-pill;
+    border: 1px solid rgb(255 255 255 / 0.14);
+  }
+
+  .badge-ring-ink {
+    border-color: rgb(23 19 31 / 0.22);
+  }
+
+  /* ---- Buttons --------------------------------------------------------- */
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-pill
+           font-display font-extrabold transition-transform duration-150 active:scale-[.96]
+           disabled:pointer-events-none disabled:opacity-40;
+  }
+
+  .btn-lg {
+    @apply h-14 px-7 text-base;
+  }
+
+  .btn-md {
+    @apply h-11 px-5 text-sm;
+  }
+
+  .btn-coral {
+    @apply btn bg-coral text-ink-900 shadow-[0_16px_34px_-16px_rgba(240,141,124,.9)];
+  }
+
+  .btn-grape {
+    @apply btn bg-grape text-white shadow-grape;
+  }
+
+  .btn-ghost {
+    @apply btn bg-white/[.06] text-white;
+    border: 1px solid rgb(255 255 255 / 0.1);
+  }
+
+  /* Circular "open" action, mirrored for RTL (reference: the ↗ corner button). */
+  .btn-arrow {
+    @apply grid h-11 w-11 place-items-center rounded-pill bg-white text-ink-900;
+  }
+
+  /* ---- Chips ----------------------------------------------------------- */
+  .chip {
+    @apply rounded-chip px-3 py-1 text-xs font-semibold;
+  }
+
+  .stat-tile {
+    @apply flex flex-1 flex-col items-center justify-center gap-0.5 rounded-chip py-3;
+    color: #17131f;
+  }
+
+  .glass-nav {
+    @apply rounded-pill bg-ink-700/85;
+    border: 1px solid rgb(255 255 255 / 0.09);
+    backdrop-filter: blur(18px);
+  }
+}
+
+@layer utilities {
+  .pad-top {
+    padding-top: calc(var(--safe-top) + 1rem);
+  }
+
+  .pad-bottom {
+    padding-bottom: calc(var(--safe-bottom) + 6.5rem);
+  }
+
+  /* RTL-aware mirroring for directional glyphs (arrows, chevrons). */
+  [dir="rtl"] .flip-rtl {
+    transform: scaleX(-1);
+  }
+
+  .no-select {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
