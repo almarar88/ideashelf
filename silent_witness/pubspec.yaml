@@ -1,0 +1,51 @@
+name: silent_witness
+description: "الشاهد الصامت — لعبة غموض وتحقيق عائلية سريعة"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  flutter_localizations:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^3.4.3
+
+  # Sound effects and the ambient investigation loop
+  audioplayers: ^6.5.4
+
+  # HTTP client for the optional Gemini integration
+  dio: ^5.9.0
+
+  # Local persistence for settings, API key and the score board
+  shared_preferences: ^2.5.5
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/cases.json
+    - assets/audio/
+
+  fonts:
+    - family: Cairo
+      fonts:
+        - asset: assets/fonts/Cairo-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Cairo-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Cairo-Black.ttf
+          weight: 900
