@@ -33,11 +33,15 @@ flutter install --release
 adb install -r build/app/outputs/flutter-apk/app-release.apk
 ```
 
-Smaller, per-architecture APKs (roughly 8–9 MB each instead of one fat file):
+The single APK carries the Flutter engine for all three ABIs. For a much
+smaller download, build one APK per architecture instead:
 
 ```bash
 flutter build apk --release --split-per-abi
 ```
+
+`app-arm64-v8a-release.apk` is the one to sideload on any phone made in the
+last several years.
 
 An App Bundle for Google Play:
 

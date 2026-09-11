@@ -26,8 +26,6 @@ dependencies:
   # Local persistence for settings, API key and the score board
   shared_preferences: ^2.5.5
 
-  cupertino_icons: ^1.0.8
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
