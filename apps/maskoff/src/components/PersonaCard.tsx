@@ -3,6 +3,7 @@ import type { Lang, Persona, Player } from "@/types/game";
 import { t } from "@/lib/i18n";
 import { pct } from "@/lib/utils";
 import { haptic } from "@/lib/haptics";
+import { saveImage, shareImage } from "@/lib/share";
 import { ACCENT_HEX } from "./ui/Primitives";
 import { IconShare, IconDownload, IconStar } from "./ui/Icons";
 
@@ -60,6 +61,14 @@ export function PersonaCard({
     canvas.height = H;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
+
+    // Canvas silently falls back to a default face if the web font has not
+    // finished loading, which would ship a story card in the wrong typeface.
+    try {
+      await document.fonts.ready;
+    } catch {
+      /* older engines: draw with whatever is available */
+    }
 
     const rtl = lang === "ar";
     ctx.direction = rtl ? "rtl" : "ltr";
@@ -156,20 +165,17 @@ export function PersonaCard({
     try {
       const blob = await render();
       if (!blob) return;
-      const file = new File([blob], `maskoff-${player.id}.png`, { type: "image/png" });
-
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: t(lang, "persona_title"), text: title });
-        setStatus(t(lang, "persona_shared"));
-      } else {
-        download(blob, `maskoff-${player.id}.png`);
-        setStatus(t(lang, "persona_saved"));
+      const outcome = await shareImage(
+        blob,
+        `maskoff-${player.id}.png`,
+        t(lang, "persona_title"),
+        title,
+      );
+      if (outcome !== "cancelled") {
+        setStatus(t(lang, outcome === "shared" ? "persona_shared" : "persona_saved"));
       }
     } catch (error) {
-      // AbortError = the user dismissed the sheet. Not a failure.
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
-        setStatus(error instanceof Error ? error.message : String(error));
-      }
+      setStatus(error instanceof Error ? error.message : String(error));
     } finally {
       busy.current = false;
       setTimeout(() => setStatus(null), 2600);
@@ -177,11 +183,16 @@ export function PersonaCard({
   }, [lang, player.id, render, title]);
 
   const save = useCallback(async () => {
-    const blob = await render();
-    if (!blob) return;
-    download(blob, `maskoff-${player.id}.png`);
-    setStatus(t(lang, "persona_saved"));
-    setTimeout(() => setStatus(null), 2600);
+    try {
+      const blob = await render();
+      if (!blob) return;
+      await saveImage(blob, `maskoff-${player.id}.png`);
+      setStatus(t(lang, "persona_saved"));
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setTimeout(() => setStatus(null), 2600);
+    }
   }, [lang, player.id, render]);
 
   return (
@@ -253,15 +264,6 @@ function Stat({ label, value, accent }: { label: string; value: string; accent: 
       </dd>
     </div>
   );
-}
-
-function download(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {

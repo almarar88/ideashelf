@@ -14,13 +14,52 @@ const PATTERNS: Record<Pattern, number | number[]> = {
   error: [60, 50, 60],
 };
 
+/**
+ * Native builds get the platform's real haptic engine, which is noticeably
+ * crisper than a raw vibrate duration. The import is dynamic so the web bundle
+ * never pulls the plugin in.
+ */
+let nativeHaptics: typeof import("@capacitor/haptics") | null = null;
+let nativeChecked = false;
+
+async function loadNativeHaptics() {
+  if (nativeChecked) return nativeHaptics;
+  nativeChecked = true;
+  try {
+    const { Capacitor } = await import("@capacitor/core");
+    if (Capacitor.isNativePlatform()) nativeHaptics = await import("@capacitor/haptics");
+  } catch {
+    nativeHaptics = null;
+  }
+  return nativeHaptics;
+}
+
+void loadNativeHaptics();
+
+const NATIVE_STYLE: Record<Pattern, "light" | "medium" | "heavy"> = {
+  tap: "light",
+  select: "light",
+  lock: "medium",
+  reveal: "heavy",
+  error: "heavy",
+};
+
 export function haptic(pattern: Pattern): void {
   try {
+    if (nativeHaptics) {
+      const { Haptics, ImpactStyle } = nativeHaptics;
+      const style = NATIVE_STYLE[pattern];
+      void Haptics.impact({
+        style:
+          style === "heavy" ? ImpactStyle.Heavy : style === "medium" ? ImpactStyle.Medium : ImpactStyle.Light,
+      });
+      return;
+    }
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
       navigator.vibrate(PATTERNS[pattern]);
     }
   } catch {
-    /* vibration is a nicety, never a failure path */
+    /* haptics are a nicety, never a failure path */
   }
 }
 
