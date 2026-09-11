@@ -43,6 +43,18 @@ flutter build apk --release --split-per-abi
 `app-arm64-v8a-release.apk` is the one to sideload on any phone made in the
 last several years.
 
+Measured on the toolchain below:
+
+| Output | Size |
+|---|---|
+| `app-release.apk` (all ABIs) | 55.4 MB |
+| `app-arm64-v8a-release.apk` | 19.9 MB |
+| `app-armeabi-v7a-release.apk` | 17.4 MB |
+| `app-x86_64-release.apk` | 21.4 MB |
+
+Almost all of that is the Flutter engine itself; the game's own code and
+assets come to under 2 MB.
+
 An App Bundle for Google Play:
 
 ```bash
@@ -189,6 +201,11 @@ The model is `gemini-2.5-flash`; change the single `model` constant in
 flutter analyze     # 0 issues
 flutter test        # 14 tests
 ```
+
+The release APK was built and inspected on this toolchain; `aapt2 dump
+badging` on the arm64 output reports `sdkVersion:'24'`,
+`targetSdkVersion:'34'`, `application-label:'الشاهد الصامت'` with an English
+alternative, and the single INTERNET permission.
 
 The suite checks that the shipped pack really has 50+ playable cases with three
 clues and three questions each, that every roster size from 3 to 10 deals
