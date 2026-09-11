@@ -17,10 +17,24 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "mine", label: "أثري" },
 ];
 
-export function FeedScreen({ onNotice }: { onNotice: (msg: string) => void }) {
+export function FeedScreen({
+  onNotice,
+  openInPane,
+  selectedId,
+}: {
+  onNotice: (msg: string) => void;
+  /** على الأجهزة القابلة للطي يُفتح العمق في اللوحة الثانية بدل لوح منزلق */
+  openInPane?: (post: Post, tab: "text" | "ask") => void;
+  selectedId?: string | null;
+}) {
   const [filter, setFilter] = useState<Filter>("all");
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [open, setOpen] = useState<{ post: Post; tab: "text" | "ask" } | null>(null);
+
+  const show = (post: Post, tab: "text" | "ask") => {
+    if (openInPane) openInPane(post, tab);
+    else setOpen({ post, tab });
+  };
 
   const visible = useMemo(() => {
     if (filter === "all") return posts;
@@ -47,8 +61,9 @@ export function FeedScreen({ onNotice }: { onNotice: (msg: string) => void }) {
             post={post}
             liked={!!liked[post.id]}
             onLike={() => setLiked((s) => ({ ...s, [post.id]: !s[post.id] }))}
-            onOpen={() => setOpen({ post, tab: "text" })}
-            onAsk={() => setOpen({ post, tab: "ask" })}
+            onOpen={() => show(post, "text")}
+            onAsk={() => show(post, "ask")}
+            selected={selectedId === post.id}
           />
         ))}
         {visible.length === 0 && (

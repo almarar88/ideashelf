@@ -40,9 +40,9 @@ export function DirectorTimeline({
         ))}
       </div>
       <div className="flex justify-between text-[10.5px] tabular-nums text-muted">
-        <span>0:00</span>
-        <span>{clips.filter((c) => c.generated).length} لقطة مولّدة (مؤشّرة بالحدود المتقطعة)</span>
-        <span>{total} ثانية</span>
+        <bdi>0:00</bdi>
+        <bdi>{clips.filter((c) => c.generated).length} لقطة مولّدة (مؤشّرة بالحدود المتقطعة)</bdi>
+        <bdi>{total} ثانية</bdi>
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ export function TopBar({
   onSearch: () => void;
 }) {
   return (
-    <header className="relative z-20 flex items-center gap-3 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+14px)] lg:pt-9">
+    <header className="relative z-20 flex items-center gap-3 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+14px)]">
       <Avatar person={me} size="lg" ring />
       <div className="min-w-0 flex-1 text-center">
         <p className="truncate text-[17px] font-semibold tracking-tight">{me.handle}</p>

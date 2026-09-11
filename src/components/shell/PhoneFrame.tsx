@@ -4,29 +4,34 @@ import { cn } from "@/lib/cn";
 export function PhoneFrame({
   children,
   className,
+  framed = false,
 }: {
   children: React.ReactNode;
   className?: string;
+  /** إطار الجهاز يظهر فقط في وضع العرض على الشاشات الواسعة */
+  framed?: boolean;
 }) {
   return (
     <div
       className={cn(
-        "relative mx-auto w-full max-w-[420px] lg:max-w-[392px]",
-        "lg:rounded-[2.9rem] lg:p-[10px]",
-        "lg:bg-[linear-gradient(160deg,rgb(var(--surface)/.9),rgb(var(--raised)/.75))]",
-        "lg:shadow-float lg:ring-1 lg:ring-[rgb(var(--line)/.8)]",
+        "relative mx-auto w-full max-w-[420px]",
+        framed &&
+          "max-w-[392px] rounded-[2.9rem] p-[10px] shadow-float ring-1 ring-[rgb(var(--line)/.8)] bg-[linear-gradient(160deg,rgb(var(--surface)/.9),rgb(var(--raised)/.75))]",
         className,
       )}
     >
       <div
         className={cn(
-          "relative flex h-[100dvh] w-full flex-col overflow-hidden bg-canvas lg:h-[812px] lg:rounded-[2.3rem]",
+          "relative flex w-full flex-col overflow-hidden bg-canvas",
           "bg-[linear-gradient(180deg,rgb(var(--raised)),rgb(var(--surface))_38%,rgb(var(--surface)))]",
+          framed ? "h-[812px] rounded-[2.3rem]" : "h-[100dvh]",
         )}
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 hidden justify-center lg:flex">
-          <div className="mt-2 h-6 w-28 rounded-full bg-[rgb(var(--scrim)/.75)]" />
-        </div>
+        {framed && (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center">
+            <div className="mt-2 h-6 w-28 rounded-full bg-[rgb(var(--scrim)/.75)]" />
+          </div>
+        )}
         {children}
       </div>
     </div>

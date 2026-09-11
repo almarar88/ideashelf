@@ -4,3 +4,14 @@ dist
 *.local
 *.tsbuildinfo
 dist-standalone
+dist-app
+
+# Android / Capacitor
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+android/.idea
+android/capacitor-cordova-android-plugins
+*.apk
+shot*.mjs

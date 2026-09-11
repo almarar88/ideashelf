@@ -16,15 +16,22 @@ export function PostCard({
   onLike,
   onOpen,
   onAsk,
+  selected,
 }: {
   post: Post;
   liked: boolean;
   onLike: () => void;
   onOpen: () => void;
   onAsk: () => void;
+  selected?: boolean;
 }) {
   return (
-    <article className="card relative mb-4 overflow-visible px-3.5 pb-3.5 pt-3.5">
+    <article
+      className={cn(
+        "card relative mb-4 overflow-visible px-3.5 pb-3.5 pt-3.5 transition-shadow",
+        selected && "ring-2 ring-[rgb(var(--rose)/.5)]",
+      )}
+    >
       <header className="flex items-start gap-2.5">
         <Avatar person={post.author} size="md" ring />
         <div className="min-w-0 flex-1">

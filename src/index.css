@@ -179,3 +179,28 @@
     background: transparent;
   }
 }
+
+/* ── فجوة المفصلة في الأجهزة القابلة للطي ────────────────────────────────────
+   حين تمتد النافذة عبر مفصلة، تُحسب الفجوة من واجهة أجزاء العرض
+   (Viewport Segments) فتقع تماماً على المفصلة الفيزيائية؛ وإن لم تكن
+   الواجهة مدعومة بقي الفاصل البصري الافتراضي.
+   ------------------------------------------------------------------------ */
+@layer components {
+  .hinge-col {
+    width: 18px;
+  }
+  .hinge-row {
+    height: 18px;
+  }
+
+  @media (horizontal-viewport-segments: 2) {
+    .hinge-col {
+      width: calc(env(viewport-segment-left 1 0) - env(viewport-segment-right 0 0));
+    }
+  }
+  @media (vertical-viewport-segments: 2) {
+    .hinge-row {
+      height: calc(env(viewport-segment-top 0 1) - env(viewport-segment-bottom 0 0));
+    }
+  }
+}

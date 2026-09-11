@@ -11,6 +11,39 @@ const ICONS = {
 };
 
 /** زر النبض: عنصر واحد يغيّر وظيفته حسب ما تفعله، بديلاً عن زر "+" الجامد. */
+export function PulseCore({
+  mode,
+  busy,
+  onPress,
+  className,
+}: {
+  mode: PulseMode;
+  busy: boolean;
+  onPress: () => void;
+  className?: string;
+}) {
+  const Icon = ICONS[mode.icon];
+  return (
+    <button
+      type="button"
+      onClick={onPress}
+      aria-label={mode.label}
+      title={mode.hint}
+      className={cn(
+        "relative grid h-14 w-14 place-items-center rounded-full text-white shadow-glow transition active:scale-95",
+        className,
+      )}
+      style={{ background: "linear-gradient(140deg, rgb(var(--rose)), rgb(var(--iris)))" }}
+    >
+      <span
+        className={cn("absolute inset-0 rounded-full", busy ? "animate-pulseRing" : "opacity-0")}
+        style={{ background: "rgb(var(--rose)/.55)" }}
+      />
+      {busy ? <Sparkles size={22} className="animate-pulse" /> : <Icon size={22} />}
+    </button>
+  );
+}
+
 export function PulseButton({
   mode,
   busy,
@@ -22,7 +55,6 @@ export function PulseButton({
   onPress: () => void;
   expanded: boolean;
 }) {
-  const Icon = ICONS[mode.icon];
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+86px)] z-30 flex flex-col items-center gap-2">
       <div
@@ -33,24 +65,7 @@ export function PulseButton({
       >
         {mode.hint}
       </div>
-      <button
-        type="button"
-        onClick={onPress}
-        aria-label={mode.label}
-        className="pointer-events-auto relative grid h-14 w-14 place-items-center rounded-full text-white shadow-glow transition active:scale-95"
-        style={{
-          background: "linear-gradient(140deg, rgb(var(--rose)), rgb(var(--iris)))",
-        }}
-      >
-        <span
-          className={cn(
-            "absolute inset-0 rounded-full",
-            busy ? "animate-pulseRing" : "opacity-0",
-          )}
-          style={{ background: "rgb(var(--rose)/.55)" }}
-        />
-        {busy ? <Sparkles size={22} className="animate-pulse" /> : <Icon size={22} />}
-      </button>
+      <PulseCore mode={mode} busy={busy} onPress={onPress} className="pointer-events-auto" />
     </div>
   );
 }
