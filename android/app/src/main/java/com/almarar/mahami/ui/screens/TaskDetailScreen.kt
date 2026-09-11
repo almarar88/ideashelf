@@ -20,7 +20,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.PushPin
@@ -34,7 +36,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.almarar.mahami.data.Task
@@ -45,8 +50,11 @@ import com.almarar.mahami.ui.components.Pill
 import com.almarar.mahami.ui.components.ProgressRing
 import com.almarar.mahami.ui.components.SoftCard
 import com.almarar.mahami.ui.components.priorityColor
+import com.almarar.mahami.ai.AiSource
+import com.almarar.mahami.ui.components.Pill as StatusPill
 import com.almarar.mahami.ui.theme.AccentGreen
 import com.almarar.mahami.ui.theme.AccentRed
+import com.almarar.mahami.ui.theme.AccentYellow
 import com.almarar.mahami.ui.theme.MahamiTheme
 import com.almarar.mahami.util.Ar
 
@@ -60,6 +68,8 @@ fun TaskDetailScreen(
     val colors = MahamiTheme.colors
     val context = LocalContext.current
     val tasks by vm.tasks.collectAsStateWithLifecycle()
+    val taskAi by vm.taskAi.collectAsStateWithLifecycle()
+    val clipboard = LocalClipboardManager.current
     val task = tasks.firstOrNull { it.id == taskId }
 
     if (task == null) {
@@ -266,6 +276,105 @@ fun TaskDetailScreen(
         }
 
         item {
+            SoftCard(Modifier.fillMaxWidth(), corner = 24.dp) {
+                Column(Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Rounded.AutoAwesome, null,
+                            tint = colors.accent, modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("أدوات ذكية", style = MaterialTheme.typography.titleMedium, color = colors.ink)
+                        if (taskAi.taskId == task.id && taskAi.source != null) {
+                            Spacer(Modifier.width(8.dp))
+                            StatusPill(
+                                taskAi.source?.label ?: "",
+                                if (taskAi.source == AiSource.CLAUDE) AccentGreen.copy(alpha = 0.14f)
+                                else colors.surfaceMuted,
+                                if (taskAi.source == AiSource.CLAUDE) AccentGreen else colors.inkMuted
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SmallAction("اقترح خطوات", Modifier.weight(1f)) { vm.suggestSteps(task) }
+                        SmallAction("رسالة رسمية", Modifier.weight(1f)) { vm.draftMessage(task, true) }
+                        SmallAction("رسالة قصيرة", Modifier.weight(1f)) { vm.draftMessage(task, false) }
+                    }
+
+                    if (taskAi.taskId == task.id && taskAi.busy) {
+                        Spacer(Modifier.height(14.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = colors.accent
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text("جارٍ التوليد...", style = MaterialTheme.typography.bodyMedium, color = colors.inkMuted)
+                        }
+                    }
+
+                    if (taskAi.taskId == task.id && taskAi.steps.isNotEmpty()) {
+                        Spacer(Modifier.height(14.dp))
+                        taskAi.steps.forEach {
+                            Text("• $it", style = MaterialTheme.typography.bodyMedium, color = colors.inkSoft)
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SmallAction("إضافتها للخطوات", Modifier.weight(1f), filled = true) {
+                                vm.applySuggestedSteps(task)
+                            }
+                            SmallAction("تجاهل", Modifier.weight(1f)) { vm.clearTaskAi() }
+                        }
+                    }
+
+                    if (taskAi.taskId == task.id && taskAi.message.isNotBlank()) {
+                        Spacer(Modifier.height(14.dp))
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(colors.surfaceMuted)
+                                .padding(14.dp)
+                        ) {
+                            Text(taskAi.message, style = MaterialTheme.typography.bodyMedium, color = colors.inkSoft)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SmallAction("نسخ", Modifier.weight(1f), icon = Icons.Rounded.ContentCopy) {
+                                clipboard.setText(AnnotatedString(taskAi.message))
+                            }
+                            SmallAction("إرسال", Modifier.weight(1f), filled = true) {
+                                shareText(context, task.title, taskAi.message)
+                            }
+                            SmallAction("إغلاق", Modifier.weight(1f)) { vm.clearTaskAi() }
+                        }
+                    }
+
+                    if (taskAi.taskId == task.id && taskAi.notice.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(taskAi.notice, style = MaterialTheme.typography.bodySmall, color = AccentYellow)
+                    }
+                }
+            }
+        }
+
+        item {
+            SoftCard(Modifier.fillMaxWidth(), corner = 24.dp) {
+                Column(Modifier.padding(18.dp)) {
+                    Text("تأجيل سريع", style = MaterialTheme.typography.titleMedium, color = colors.ink)
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SmallAction("+ يوم", Modifier.weight(1f)) { vm.postpone(task, 1) }
+                        SmallAction("+ 3 أيام", Modifier.weight(1f)) { vm.postpone(task, 3) }
+                        SmallAction("+ أسبوع", Modifier.weight(1f)) { vm.postpone(task, 7) }
+                    }
+                }
+            }
+        }
+
+        item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(
                     Modifier
@@ -317,4 +426,47 @@ private fun shareTask(context: android.content.Context, task: Task) {
         putExtra(android.content.Intent.EXTRA_TEXT, body)
     }
     context.startActivity(android.content.Intent.createChooser(intent, "مشاركة المهمة"))
+}
+
+@Composable
+private fun SmallAction(
+    label: String,
+    modifier: Modifier = Modifier,
+    filled: Boolean = false,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    onClick: () -> Unit
+) {
+    val colors = MahamiTheme.colors
+    Row(
+        modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (filled) colors.accent else colors.surfaceMuted)
+            .clickable { onClick() }
+            .padding(vertical = 11.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (icon != null) {
+            Icon(
+                icon, null,
+                tint = if (filled) Color.White else colors.inkSoft,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (filled) Color.White else colors.inkSoft
+        )
+    }
+}
+
+private fun shareText(context: android.content.Context, subject: String, body: String) {
+    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_SUBJECT, subject)
+        putExtra(android.content.Intent.EXTRA_TEXT, body)
+    }
+    context.startActivity(android.content.Intent.createChooser(intent, "إرسال"))
 }

@@ -1,6 +1,7 @@
 package com.almarar.mahami.ui
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.almarar.mahami.data.Prefs
@@ -8,7 +9,14 @@ import com.almarar.mahami.data.Settings
 import com.almarar.mahami.data.Task
 import com.almarar.mahami.data.TaskRepository
 import com.almarar.mahami.data.TaskStatus
+import com.almarar.mahami.ai.AiModel
+import com.almarar.mahami.ai.AiService
+import com.almarar.mahami.ai.AiSource
+import com.almarar.mahami.ai.ChatMessage
+import com.almarar.mahami.ai.ExtractedTask
+import com.almarar.mahami.ai.SecureKeyStore
 import com.almarar.mahami.notify.DailyDigestWorker
+import com.almarar.mahami.util.Backup
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,6 +49,8 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = TaskRepository.get(app)
     private val prefs = Prefs.get(app)
+    private val keyStore = SecureKeyStore.get(app)
+    private val ai = AiService.get(app) { AiModel.fromId(settings.value.aiModelId) }
 
     val settings: StateFlow<Settings> = prefs.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, Settings())
@@ -111,6 +121,7 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             repo.seedIfEmpty()
             repo.refreshSideEffects()
+            refreshCloudState()
             DailyDigestWorker.schedule(app, prefsHour())
         }
     }
@@ -147,4 +158,264 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
         prefs.setDigestHour(hour)
         DailyDigestWorker.schedule(getApplication(), hour)
     }
+
+    // ---------- إجراءات سريعة على المهام ----------
+
+    fun postpone(task: Task, days: Long) = viewModelScope.launch { repo.postpone(task, days) }
+
+    // ---------- المساعد الذكي ----------
+
+    private val _assistant = MutableStateFlow(AssistantState())
+    val assistant = _assistant.asStateFlow()
+
+    private val _extraction = MutableStateFlow(ExtractionState())
+    val extraction = _extraction.asStateFlow()
+
+    private val _taskAi = MutableStateFlow(TaskAiState())
+    val taskAi = _taskAi.asStateFlow()
+
+    fun refreshCloudState() {
+        _assistant.value = _assistant.value.copy(cloudReady = ai.isCloudReady())
+    }
+
+    fun ask(question: String) {
+        val text = question.trim()
+        if (text.isBlank() || _assistant.value.busy) return
+        val history = _assistant.value.messages
+        _assistant.value = _assistant.value.copy(
+            messages = history + ChatMessage(true, text) + ChatMessage(false, "", pending = true),
+            busy = true,
+            notice = ""
+        )
+        viewModelScope.launch {
+            val result = ai.chat(text, history, repo.all())
+            val withoutPending = _assistant.value.messages.dropLast(1)
+            _assistant.value = _assistant.value.copy(
+                messages = withoutPending + ChatMessage(false, result.value),
+                busy = false,
+                lastSource = result.source,
+                notice = result.note,
+                cloudReady = ai.isCloudReady()
+            )
+        }
+    }
+
+    fun clearChat() {
+        _assistant.value = _assistant.value.copy(messages = emptyList(), notice = "")
+    }
+
+    fun buildDailyPlan() {
+        if (_assistant.value.busy) return
+        _assistant.value = _assistant.value.copy(busy = true, notice = "")
+        viewModelScope.launch {
+            val result = ai.dailyPlan(repo.all())
+            _assistant.value = _assistant.value.copy(
+                plan = result.value,
+                busy = false,
+                lastSource = result.source,
+                notice = result.note,
+                cloudReady = ai.isCloudReady()
+            )
+        }
+    }
+
+    fun reviewRisks() {
+        if (_assistant.value.busy) return
+        _assistant.value = _assistant.value.copy(busy = true, notice = "")
+        viewModelScope.launch {
+            val result = ai.risks(repo.all())
+            _assistant.value = _assistant.value.copy(
+                risks = result.value,
+                busy = false,
+                lastSource = result.source,
+                notice = result.note,
+                cloudReady = ai.isCloudReady()
+            )
+        }
+    }
+
+    fun buildWeeklySummary() {
+        if (_assistant.value.busy) return
+        _assistant.value = _assistant.value.copy(busy = true, notice = "")
+        viewModelScope.launch {
+            val result = ai.weeklySummary(repo.all())
+            _assistant.value = _assistant.value.copy(
+                summary = result.value,
+                busy = false,
+                lastSource = result.source,
+                notice = result.note,
+                cloudReady = ai.isCloudReady()
+            )
+        }
+    }
+
+    // ---------- استخراج المهام من نص ----------
+
+    fun setExtractionInput(text: String) {
+        _extraction.value = _extraction.value.copy(input = text, done = false)
+    }
+
+    fun extractTasks() {
+        val text = _extraction.value.input.trim()
+        if (text.isBlank() || _extraction.value.busy) return
+        _extraction.value = _extraction.value.copy(busy = true, notice = "", done = false)
+        viewModelScope.launch {
+            val result = ai.extractTasks(text)
+            _extraction.value = _extraction.value.copy(
+                results = result.value,
+                busy = false,
+                source = result.source,
+                notice = result.note
+            )
+        }
+    }
+
+    fun toggleExtracted(index: Int) {
+        val list = _extraction.value.results.toMutableList()
+        if (index !in list.indices) return
+        list[index] = list[index].copy(selected = !list[index].selected)
+        _extraction.value = _extraction.value.copy(results = list)
+    }
+
+    fun saveExtracted(onDone: () -> Unit = {}) {
+        val chosen = _extraction.value.results.filter { it.selected }
+        if (chosen.isEmpty()) return
+        viewModelScope.launch {
+            repo.addAll(chosen.map { it.toTask() })
+            _extraction.value = ExtractionState(done = true)
+            onDone()
+        }
+    }
+
+    fun resetExtraction() { _extraction.value = ExtractionState() }
+
+    private fun ExtractedTask.toTask(): Task = Task(
+        title = title,
+        details = details,
+        category = category,
+        owner = owner,
+        dueDate = dueDate,
+        dueTime = dueTime,
+        priority = priority,
+        flexibleDeadline = !dateWasExplicit,
+        warning = if (dateWasExplicit) "" else "التاريخ مستنتج تلقائياً — يُستحسن تأكيده.",
+        subTasks = steps.map { com.almarar.mahami.data.SubTask(it) },
+        reminderOffsetsDays = listOf(1, 0)
+    )
+
+    // ---------- ذكاء على مستوى المهمة ----------
+
+    fun suggestSteps(task: Task) {
+        if (_taskAi.value.busy) return
+        _taskAi.value = TaskAiState(taskId = task.id, busy = true)
+        viewModelScope.launch {
+            val result = ai.suggestSteps(task)
+            _taskAi.value = TaskAiState(
+                taskId = task.id,
+                steps = result.value,
+                source = result.source,
+                notice = result.note
+            )
+        }
+    }
+
+    fun applySuggestedSteps(task: Task) {
+        val steps = _taskAi.value.steps
+        if (steps.isEmpty()) return
+        val existing = task.subTasks.map { it.title }
+        val merged = task.subTasks + steps
+            .filter { it !in existing }
+            .map { com.almarar.mahami.data.SubTask(it) }
+        viewModelScope.launch {
+            repo.upsert(task.copy(subTasks = merged))
+            _taskAi.value = TaskAiState()
+        }
+    }
+
+    fun draftMessage(task: Task, formal: Boolean) {
+        if (_taskAi.value.busy) return
+        _taskAi.value = TaskAiState(taskId = task.id, busy = true)
+        viewModelScope.launch {
+            val result = ai.draftMessage(task, formal)
+            _taskAi.value = TaskAiState(
+                taskId = task.id,
+                message = result.value,
+                source = result.source,
+                notice = result.note
+            )
+        }
+    }
+
+    fun clearTaskAi() { _taskAi.value = TaskAiState() }
+
+    // ---------- مفتاح Claude ----------
+
+    fun maskedApiKey(): String? = keyStore.maskedKey()
+
+    fun setApiKey(key: String) {
+        keyStore.apiKey = key
+        refreshCloudState()
+    }
+
+    fun clearApiKey() {
+        keyStore.apiKey = null
+        refreshCloudState()
+    }
+
+    fun setAiModel(model: AiModel) = viewModelScope.launch { prefs.setAiModel(model.id) }
+    fun setAiAutoReview(v: Boolean) = viewModelScope.launch { prefs.setAiAutoReview(v) }
+
+    private val _connectionTest = MutableStateFlow("")
+    val connectionTest = _connectionTest.asStateFlow()
+
+    fun testConnection() {
+        _connectionTest.value = "جارٍ الاختبار..."
+        viewModelScope.launch {
+            _connectionTest.value = try {
+                val reply = ai.testConnection()
+                "تم الاتصال بنجاح ✓ (${reply.trim()})"
+            } catch (e: Exception) {
+                e.message ?: "فشل الاتصال"
+            }
+            refreshCloudState()
+        }
+    }
+
+    fun clearConnectionTest() { _connectionTest.value = "" }
+
+    // ---------- النسخ الاحتياطي والتقويم ----------
+
+    private val _backupNotice = MutableStateFlow("")
+    val backupNotice = _backupNotice.asStateFlow()
+
+    fun exportBackup() = viewModelScope.launch {
+        runCatching {
+            val app = getApplication<Application>()
+            val uri = Backup.writeShareable(app, "mahami-backup.json", Backup.toJson(repo.all()))
+            Backup.share(app, uri, "application/json", "نسخة احتياطية من المهام")
+        }.onFailure { _backupNotice.value = "تعذّر التصدير: ${it.message}" }
+    }
+
+    fun exportCalendar() = viewModelScope.launch {
+        runCatching {
+            val app = getApplication<Application>()
+            val uri = Backup.writeShareable(app, "mahami.ics", Backup.toIcs(repo.all()))
+            Backup.share(app, uri, "text/calendar", "تصدير المهام إلى التقويم")
+        }.onFailure { _backupNotice.value = "تعذّر التصدير: ${it.message}" }
+    }
+
+    fun importBackup(uri: Uri, replace: Boolean) = viewModelScope.launch {
+        runCatching {
+            val app = getApplication<Application>()
+            val imported = Backup.fromJson(Backup.readText(app, uri))
+            if (imported.isEmpty()) {
+                _backupNotice.value = "الملف لا يحتوي مهاماً صالحة."
+            } else {
+                if (replace) repo.replaceAll(imported) else repo.addAll(imported)
+                _backupNotice.value = "تم استيراد ${imported.size} مهمة."
+            }
+        }.onFailure { _backupNotice.value = "تعذّر الاستيراد: ${it.message}" }
+    }
+
+    fun clearBackupNotice() { _backupNotice.value = "" }
 }

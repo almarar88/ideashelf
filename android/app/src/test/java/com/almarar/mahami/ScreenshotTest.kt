@@ -15,11 +15,13 @@ import androidx.work.Configuration
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.almarar.mahami.data.TaskRepository
 import com.almarar.mahami.ui.MahamiViewModel
+import com.almarar.mahami.ui.screens.AssistantScreen
 import com.almarar.mahami.ui.screens.CalendarScreen
 import com.almarar.mahami.ui.screens.HomeScreen
 import com.almarar.mahami.ui.screens.OnboardingScreen
 import com.almarar.mahami.ui.screens.ReportsScreen
 import com.almarar.mahami.ui.screens.TaskDetailScreen
+import com.almarar.mahami.ui.screens.SmartAddScreen
 import com.almarar.mahami.ui.screens.TasksScreen
 import com.almarar.mahami.ui.theme.MahamiAppTheme
 import com.almarar.mahami.ui.theme.MahamiTheme
@@ -84,6 +86,42 @@ class ScreenshotTest {
 
     @Test
     fun reports() = shot("05-reports") { ReportsScreen(vm = vm) }
+
+    @Test
+    fun assistant() {
+        vm.buildDailyPlan()
+        shadowOf(Looper.getMainLooper()).idle()
+        vm.reviewRisks()
+        shadowOf(Looper.getMainLooper()).idle()
+        vm.ask("ما الذي أبدأ به اليوم؟")
+        shadowOf(Looper.getMainLooper()).idle()
+        shot("07-assistant") {
+            AssistantScreen(vm = vm, onOpenSmartAdd = {}, onOpenSettings = {}, onOpenTask = {})
+        }
+    }
+
+    @Test
+    fun smartAdd() {
+        vm.setExtractionInput(
+            """
+            1. إعداد خطة زمنية للتواصل مع الجهات الحكومية وعرضها على رئيس القسم — 14-09-2026
+            2. حصر مناهج دورات تعليم اللغات بالتنسيق مع أ. منى الكندي — 15-09-2026
+            3. تنسيق اجتماع مع إدارة تكنولوجيا المعلومات بشأن منصة التسجيل — الأربعاء القادم
+            """.trimIndent()
+        )
+        vm.extractTasks()
+        shadowOf(Looper.getMainLooper()).idle()
+        shot("08-smart-add") { SmartAddScreen(vm = vm) {} }
+    }
+
+    @Test
+    fun settings() {
+        // شاشة أطول لالتقاط قسم المميزات الذكية كاملاً
+        org.robolectric.RuntimeEnvironment.setQualifiers("+h2400dp")
+        shot("09-settings") {
+            com.almarar.mahami.ui.screens.SettingsScreen(vm = vm) {}
+        }
+    }
 
     @Test
     fun detail() {

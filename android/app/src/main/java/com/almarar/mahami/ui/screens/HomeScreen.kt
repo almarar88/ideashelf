@@ -21,12 +21,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PriorityHigh
 import androidx.compose.material.icons.rounded.Today
+import androidx.compose.foundation.shape.RoundedCornerShape as Corner
 import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -65,7 +67,9 @@ fun HomeScreen(
     vm: MahamiViewModel,
     onOpenTask: (Long) -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenTasks: () -> Unit
+    onOpenTasks: () -> Unit,
+    onOpenAssistant: () -> Unit = {},
+    onOpenSmartAdd: () -> Unit = {}
 ) {
     val colors = MahamiTheme.colors
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -268,6 +272,78 @@ fun HomeScreen(
                         stroke = 9.dp,
                         color = AccentGreen
                     )
+                }
+            }
+        }
+
+        item {
+            SoftCard(
+                Modifier.fillMaxWidth(),
+                color = colors.ink,
+                corner = 28.dp,
+                onClick = onOpenAssistant
+            ) {
+                Column(Modifier.padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(colors.accent),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Rounded.AutoAwesome, null,
+                                tint = Color.White, modifier = Modifier.size(19.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "المساعد الذكي",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = Color.White
+                            )
+                            Text(
+                                "خطة اليوم، كشف التعارضات، صياغة الرسائل",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .clip(Corner(20.dp))
+                                .background(Color.White.copy(alpha = 0.12f))
+                                .clickable { onOpenAssistant() }
+                                .padding(vertical = 11.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "خطة اليوم",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White
+                            )
+                        }
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .clip(Corner(20.dp))
+                                .background(colors.accent)
+                                .clickable { onOpenSmartAdd() }
+                                .padding(vertical = 11.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "استخراج مهام من نص",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White
+                            )
+                        }
+                    }
                 }
             }
         }

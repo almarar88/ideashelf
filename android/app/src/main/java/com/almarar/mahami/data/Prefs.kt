@@ -17,7 +17,9 @@ data class Settings(
     val darkMode: Boolean = false,
     val notificationsEnabled: Boolean = true,
     val dailyDigest: Boolean = true,
-    val digestHour: Int = 8
+    val digestHour: Int = 8,
+    val aiModelId: String = "claude-sonnet-5",
+    val aiAutoReview: Boolean = true
 )
 
 class Prefs(private val context: Context) {
@@ -29,6 +31,8 @@ class Prefs(private val context: Context) {
         val NOTIFS = booleanPreferencesKey("notifications")
         val DIGEST = booleanPreferencesKey("daily_digest")
         val DIGEST_HOUR = intPreferencesKey("digest_hour")
+        val AI_MODEL = stringPreferencesKey("ai_model")
+        val AI_AUTO_REVIEW = booleanPreferencesKey("ai_auto_review")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { p ->
@@ -38,7 +42,9 @@ class Prefs(private val context: Context) {
             darkMode = p[Keys.DARK] ?: false,
             notificationsEnabled = p[Keys.NOTIFS] ?: true,
             dailyDigest = p[Keys.DIGEST] ?: true,
-            digestHour = p[Keys.DIGEST_HOUR] ?: 8
+            digestHour = p[Keys.DIGEST_HOUR] ?: 8,
+            aiModelId = p[Keys.AI_MODEL] ?: "claude-sonnet-5",
+            aiAutoReview = p[Keys.AI_AUTO_REVIEW] ?: true
         )
     }
 
@@ -48,6 +54,8 @@ class Prefs(private val context: Context) {
     suspend fun setNotifications(v: Boolean) = context.dataStore.edit { it[Keys.NOTIFS] = v }
     suspend fun setDailyDigest(v: Boolean) = context.dataStore.edit { it[Keys.DIGEST] = v }
     suspend fun setDigestHour(v: Int) = context.dataStore.edit { it[Keys.DIGEST_HOUR] = v }
+    suspend fun setAiModel(v: String) = context.dataStore.edit { it[Keys.AI_MODEL] = v }
+    suspend fun setAiAutoReview(v: Boolean) = context.dataStore.edit { it[Keys.AI_AUTO_REVIEW] = v }
 
     companion object {
         @Volatile private var INSTANCE: Prefs? = null

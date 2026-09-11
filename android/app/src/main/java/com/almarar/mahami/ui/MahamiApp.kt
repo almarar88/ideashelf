@@ -7,9 +7,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PieChart
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,11 +29,13 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.almarar.mahami.ui.components.BottomNavPill
 import com.almarar.mahami.ui.components.NavItem
+import com.almarar.mahami.ui.screens.AssistantScreen
 import com.almarar.mahami.ui.screens.CalendarScreen
 import com.almarar.mahami.ui.screens.HomeScreen
 import com.almarar.mahami.ui.screens.OnboardingScreen
 import com.almarar.mahami.ui.screens.ReportsScreen
 import com.almarar.mahami.ui.screens.SettingsScreen
+import com.almarar.mahami.ui.screens.SmartAddScreen
 import com.almarar.mahami.ui.screens.TaskDetailScreen
 import com.almarar.mahami.ui.screens.TaskEditScreen
 import com.almarar.mahami.ui.screens.TasksScreen
@@ -47,6 +49,8 @@ object Routes {
     const val CALENDAR = "calendar"
     const val REPORTS = "reports"
     const val SETTINGS = "settings"
+    const val ASSISTANT = "assistant"
+    const val SMART_ADD = "smart_add"
     const val DETAIL = "detail/{taskId}"
     const val EDIT = "edit?taskId={taskId}"
 
@@ -57,8 +61,8 @@ object Routes {
 private val navItems = listOf(
     NavItem(Routes.HOME, Icons.Rounded.Home, "الرئيسية"),
     NavItem(Routes.CALENDAR, Icons.Rounded.CalendarMonth, "التقويم"),
-    NavItem(Routes.REPORTS, Icons.Rounded.PieChart, "التقارير"),
-    NavItem(Routes.SETTINGS, Icons.Rounded.Person, "حسابي")
+    NavItem(Routes.ASSISTANT, Icons.Rounded.AutoAwesome, "المساعد"),
+    NavItem(Routes.REPORTS, Icons.Rounded.PieChart, "التقارير")
 )
 
 @Composable
@@ -72,7 +76,7 @@ fun MahamiApp(initialTaskId: Long? = null) {
             val backStack by navController.currentBackStackEntryAsState()
             val route = backStack?.destination?.route
             val showNav = route in setOf(
-                Routes.HOME, Routes.TASKS, Routes.CALENDAR, Routes.REPORTS, Routes.SETTINGS
+                Routes.HOME, Routes.TASKS, Routes.CALENDAR, Routes.REPORTS, Routes.ASSISTANT
             )
             val colors = MahamiTheme.colors
 
@@ -100,8 +104,21 @@ fun MahamiApp(initialTaskId: Long? = null) {
                             vm = vm,
                             onOpenTask = { navController.navigate(Routes.detail(it)) },
                             onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                            onOpenTasks = { navController.navigate(Routes.TASKS) }
+                            onOpenTasks = { navController.navigate(Routes.TASKS) },
+                            onOpenAssistant = { navController.navigate(Routes.ASSISTANT) },
+                            onOpenSmartAdd = { navController.navigate(Routes.SMART_ADD) }
                         )
+                    }
+                    composable(Routes.ASSISTANT) {
+                        AssistantScreen(
+                            vm = vm,
+                            onOpenSmartAdd = { navController.navigate(Routes.SMART_ADD) },
+                            onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                            onOpenTask = { navController.navigate(Routes.detail(it)) }
+                        )
+                    }
+                    composable(Routes.SMART_ADD) {
+                        SmartAddScreen(vm = vm) { navController.popBackStack() }
                     }
                     composable(Routes.TASKS) {
                         TasksScreen(vm) { navController.navigate(Routes.detail(it)) }

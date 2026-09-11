@@ -4,6 +4,7 @@ import android.content.Context
 import com.almarar.mahami.notify.ReminderScheduler
 import com.almarar.mahami.widget.MahamiWidget
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDate
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDateTime
@@ -51,7 +52,47 @@ class TaskRepository(private val context: Context, private val dao: TaskDao) {
             subTasks = if (done) task.subTasks.map { it.copy(done = true) } else task.subTasks
         )
         dao.update(updated)
-        if (done) ReminderScheduler.cancel(context, task.id)
+        if (done) {
+            ReminderScheduler.cancel(context, task.id)
+            spawnNextOccurrence(task)
+        }
+        refreshSideEffects()
+    }
+
+    /** ينشئ النسخة التالية من المهمة المتكررة بعد إنجازها */
+    private suspend fun spawnNextOccurrence(task: Task) {
+        val nextDate = nextOccurrence(task.dueDate, task.repeat) ?: return
+        dao.insert(
+            task.copy(
+                id = 0,
+                dueDate = nextDate,
+                status = TaskStatus.PENDING,
+                completedAt = null,
+                createdAt = LocalDateTime.now(),
+                subTasks = task.subTasks.map { it.copy(done = false) }
+            )
+        )
+    }
+
+    /** يؤجّل المهمة عدداً من الأيام مع إعادة جدولة تنبيهاتها */
+    suspend fun postpone(task: Task, days: Long) {
+        dao.update(task.copy(dueDate = task.dueDate.plusDays(days)))
+        refreshSideEffects()
+    }
+
+    /** يستبدل كل المهام بمهام مستوردة من نسخة احتياطية */
+    suspend fun replaceAll(tasks: List<Task>) {
+        dao.getAll().forEach {
+            ReminderScheduler.cancel(context, it.id)
+            dao.delete(it)
+        }
+        dao.insertAll(tasks)
+        refreshSideEffects()
+    }
+
+    /** يضيف مهاماً مستوردة أو مستخرجة دون حذف الموجود */
+    suspend fun addAll(tasks: List<Task>) {
+        dao.insertAll(tasks)
         refreshSideEffects()
     }
 
@@ -108,6 +149,14 @@ class TaskRepository(private val context: Context, private val dao: TaskDao) {
     suspend fun all(): List<Task> = dao.getAll()
 
     companion object {
+        /** التاريخ التالي لمهمة متكررة، أو null إن كانت غير متكررة */
+        fun nextOccurrence(from: LocalDate, repeat: Repeat): LocalDate? = when (repeat) {
+            Repeat.NONE -> null
+            Repeat.DAILY -> from.plusDays(1)
+            Repeat.WEEKLY -> from.plusWeeks(1)
+            Repeat.MONTHLY -> from.plusMonths(1)
+        }
+
         @Volatile private var INSTANCE: TaskRepository? = null
         fun get(context: Context): TaskRepository = INSTANCE ?: synchronized(this) {
             INSTANCE ?: TaskRepository(
