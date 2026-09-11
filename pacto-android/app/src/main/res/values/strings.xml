@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">عَقْد</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_contracts">العقود</string>
+    <string name="nav_escrow">الضمان</string>
+    <string name="nav_evidence">الأدلة</string>
+    <string name="nav_disputes">النزاعات</string>
+
+    <!-- Home -->
+    <string name="home_trust_label">مؤشر الموثوقية</string>
+    <string name="home_today_tasks">التزامات اليوم</string>
+    <string name="home_new_contract">عقد جديد</string>
+    <string name="home_wallet">محفظة الضمان</string>
+    <string name="home_tools">أدوات سريعة</string>
+    <string name="home_no_tasks">لا توجد التزامات مستحقة اليوم</string>
+    <string name="home_active_contracts">%1$d عقد نشط</string>
+    <string name="home_held_amount">مبالغ مجمّدة: %1$s</string>
+
+    <!-- Priority -->
+    <string name="priority_urgent">عاجل</string>
+    <string name="priority_medium">متوسط</string>
+    <string name="priority_normal">عادي</string>
+    <string name="priority_label">الأولوية</string>
+
+    <!-- Capture -->
+    <string name="capture_title">التقاط الاتفاق</string>
+    <string name="capture_mode_voice">تسجيل صوتي</string>
+    <string name="capture_mode_chat">نص محادثة</string>
+    <string name="capture_mode_manual">إدخال سريع</string>
+    <string name="capture_record_start">ابدأ التسجيل</string>
+    <string name="capture_record_stop">إيقاف</string>
+    <string name="capture_recording">جارٍ التسجيل… فصل المتحدثين مفعّل</string>
+    <string name="capture_paste_hint">الصق نص المحادثة (واتساب، تيليجرام، منصات البيع)</string>
+    <string name="capture_analyze">حلّل وأنشئ العقد</string>
+    <string name="capture_speaker_a">الطرف الأول</string>
+    <string name="capture_speaker_b">الطرف الثاني</string>
+    <string name="capture_transcript">نص الحوار</string>
+    <string name="capture_permission_needed">يلزم إذن الميكروفون للتسجيل</string>
+    <string name="capture_sample">تجربة بنص جاهز</string>
+
+    <!-- Draft review -->
+    <string name="draft_title">بطاقة الشروط</string>
+    <string name="draft_card_work">العمل المطلوب</string>
+    <string name="draft_card_money">القيمة والدفع</string>
+    <string name="draft_card_time">المهلة الزمنية</string>
+    <string name="draft_card_cancel">الإلغاء والاسترجاع</string>
+    <string name="draft_loopholes">ثغرات مرصودة</string>
+    <string name="draft_no_loopholes">لا توجد ثغرات جوهرية</string>
+    <string name="draft_fix">أضف البند</string>
+    <string name="draft_dismiss">تجاهل</string>
+    <string name="draft_read_aloud">استماع للملخص</string>
+    <string name="draft_stop_reading">إيقاف القراءة</string>
+    <string name="draft_continue">متابعة للتوقيع</string>
+    <string name="draft_detected_terms">بنود مستخرجة</string>
+    <string name="draft_dialect_notes">مصطلحات دارجة مفسَّرة</string>
+    <string name="draft_severity_blocking">حرج</string>
+    <string name="draft_severity_important">مهم</string>
+    <string name="draft_severity_advisory">تنبيه</string>
+
+    <!-- Signing -->
+    <string name="sign_title">التوقيع والتجميد</string>
+    <string name="sign_pad_hint">وقّع هنا</string>
+    <string name="sign_clear">مسح</string>
+    <string name="sign_biometric_title">تأكيد الهوية للتوقيع</string>
+    <string name="sign_biometric_subtitle">التوقيع مرتبط بمفتاح داخل المعالج الآمن للجهاز</string>
+    <string name="sign_confirm">وقّع وجمّد المبلغ</string>
+    <string name="sign_hash_label">بصمة العقد (SHA-256)</string>
+    <string name="sign_strongbox">مفتاح محمي بالعتاد (StrongBox)</string>
+    <string name="sign_tee">مفتاح محمي بالبيئة الآمنة (TEE)</string>
+    <string name="sign_software_key">مفتاح برمجي (الجهاز لا يدعم الحماية العتادية)</string>
+    <string name="sign_done">تم توقيع العقد وتجميد المبلغ</string>
+
+    <!-- Contracts -->
+    <string name="contracts_title">العقود</string>
+    <string name="contracts_filter_all">الكل</string>
+    <string name="contracts_filter_active">نشطة</string>
+    <string name="contracts_filter_pending">بانتظار التوقيع</string>
+    <string name="contracts_filter_closed">منتهية</string>
+    <string name="contracts_empty">لا توجد عقود بعد</string>
+
+    <!-- Contract detail -->
+    <string name="detail_parties">الأطراف</string>
+    <string name="detail_milestones">المراحل والدفعات</string>
+    <string name="detail_evidence">التوثيق المرئي</string>
+    <string name="detail_addenda">الملاحق</string>
+    <string name="detail_expenses">المصاريف</string>
+    <string name="detail_deadlines">المهل</string>
+    <string name="detail_add_addendum">ملحق صوتي</string>
+    <string name="detail_release">إفراج عن الدفعة</string>
+    <string name="detail_mark_done">تم الإنجاز</string>
+    <string name="detail_open_dispute">فتح نزاع</string>
+    <string name="detail_settle">إلغاء ودّي</string>
+    <string name="detail_geofence">تسجيل وصول للموقع</string>
+    <string name="detail_verify_identity">توثيق هوية الطرف</string>
+    <string name="detail_export">تصدير الملف</string>
+    <string name="detail_progress">نسبة الإنجاز %1$d%%</string>
+
+    <!-- Escrow -->
+    <string name="escrow_title">محفظة الضمان</string>
+    <string name="escrow_held">مجمّد</string>
+    <string name="escrow_released">مُفرج عنه</string>
+    <string name="escrow_refunded">مُسترجع</string>
+    <string name="escrow_fee">عمولة المنصة</string>
+    <string name="escrow_ledger">سجل الحركات</string>
+    <string name="escrow_deposit">إيداع للضمان</string>
+    <string name="escrow_net_payout">الصافي للمنفّذ</string>
+    <string name="escrow_milestone_locked">مرحلة غير مكتملة</string>
+
+    <!-- Evidence -->
+    <string name="evidence_title">التوثيق المرئي</string>
+    <string name="evidence_capture_before">تصوير الحالة قبل</string>
+    <string name="evidence_capture_after">تصوير الحالة بعد</string>
+    <string name="evidence_serial">قراءة الرقم التسلسلي</string>
+    <string name="evidence_collateral">خزنة الرهونات</string>
+    <string name="evidence_compare">مقارنة قبل / بعد</string>
+    <string name="evidence_stamp">ختم زمني %1$s</string>
+    <string name="evidence_hash">بصمة الصورة</string>
+    <string name="evidence_empty">لا توجد أدلة موثقة</string>
+    <string name="evidence_defect_add">تسجيل عيب أو خدش</string>
+
+    <!-- Identity -->
+    <string name="identity_title">الهوية والموثوقية</string>
+    <string name="identity_nfc">مسح الهوية عبر NFC</string>
+    <string name="identity_nfc_hint">قرّب الهوية أو الجواز من ظهر الهاتف</string>
+    <string name="identity_biometric">مطابقة البصمة الحيوية</string>
+    <string name="identity_manual">إدخال يدوي موثّق</string>
+    <string name="identity_verified">موثّق</string>
+    <string name="identity_unverified">غير موثّق</string>
+    <string name="identity_offline_handshake">تعاقد بلوتوث دون إنترنت</string>
+
+    <!-- Trust -->
+    <string name="trust_on_time">الالتزام بالمواعيد</string>
+    <string name="trust_payment">سرعة السداد</string>
+    <string name="trust_disputes">النزاعات</string>
+    <string name="trust_volume">حجم التعاملات</string>
+
+    <!-- Disputes -->
+    <string name="dispute_title">النزاعات والتحكيم</string>
+    <string name="dispute_open">فتح نزاع</string>
+    <string name="dispute_claim_hint">اشرح سبب النزاع</string>
+    <string name="dispute_run_arbitrator">تشغيل المحكّم الآلي</string>
+    <string name="dispute_report">تقرير التسوية</string>
+    <string name="dispute_accept">قبول التسوية</string>
+    <string name="dispute_reject">رفض ومتابعة قضائية</string>
+    <string name="dispute_export_court">تصدير ملف قضائي</string>
+    <string name="dispute_evidence_weight">وزن الأدلة</string>
+    <string name="dispute_empty">لا توجد نزاعات مفتوحة</string>
+    <string name="dispute_disclaimer">التقرير اقتراح تسوية مبني على بنود العقد والأدلة المسجلة، وليس حكماً قضائياً.</string>
+
+    <!-- Settings / tools -->
+    <string name="settings_title">الإعدادات</string>
+    <string name="settings_overlay">الفقاعة العائمة فوق المحادثات</string>
+    <string name="settings_overlay_hint">تلتقط تفاصيل الاتفاق من داخل أي تطبيق دردشة</string>
+    <string name="settings_overlay_permission">منح إذن العرض فوق التطبيقات</string>
+    <string name="settings_plan">الخطة</string>
+    <string name="settings_plan_free">مجانية</string>
+    <string name="settings_plan_pro">Pacto Pro</string>
+    <string name="settings_quota">العقود المتبقية هذا الشهر: %1$d</string>
+    <string name="settings_fee_policy">عمولة الضمان %1$s</string>
+    <string name="settings_upgrade">ترقية للاشتراك المهني</string>
+    <string name="settings_language">اللغة</string>
+
+    <!-- Generic -->
+    <string name="action_back">رجوع</string>
+    <string name="action_close">إغلاق</string>
+    <string name="action_save">حفظ</string>
+    <string name="action_cancel">إلغاء</string>
+    <string name="action_add">إضافة</string>
+    <string name="action_share">مشاركة</string>
+    <string name="currency_format">%1$s %2$s</string>
+    <string name="overlay_bubble_desc">فقاعة عَقْد</string>
+    <string name="notif_channel_deadlines">مهل العقود</string>
+    <string name="notif_channel_overlay">خدمة الفقاعة</string>
+    <string name="notif_overlay_running">عَقْد يعمل فوق المحادثات</string>
+    <string name="notif_deadline_title">استحقاق في عقد %1$s</string>
+</resources>

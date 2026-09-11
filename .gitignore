@@ -1,0 +1,13 @@
+# Android / Gradle
+pacto-android/local.properties
+pacto-android/.gradle/
+pacto-android/build/
+pacto-android/app/build/
+.gradle/
+build/
+*.iml
+.idea/
+captures/
+*.apk
+*.aab
+*.keystore
