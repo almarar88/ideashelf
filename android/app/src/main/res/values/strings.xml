@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">مهامي</string>
+    <string name="widget_label">مهامي — المهام القادمة</string>
+    <string name="widget_description">يعرض أقرب المهام ومواعيدها مع إمكانية إنجازها مباشرة.</string>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="mahami_background">#EFF1F5</color>
+    <color name="mahami_background_dark">#0E0F12</color>
+    <color name="mahami_ink">#14161A</color>
+    <color name="mahami_blue">#2E9BF0</color>
+</resources>
