@@ -20,7 +20,10 @@ if (hasReleaseKeystore) {
 android {
     namespace = "com.ideashelf.silent_witness"
     compileSdk = 36
-    ndkVersion = flutter.ndkVersion
+    // No ndkVersion on purpose: this app and its plugins are pure Dart/Kotlin,
+    // so pinning it would only add a ~700 MB NDK download to every clean
+    // build. Add `ndkVersion = flutter.ndkVersion` back if you ever pull in a
+    // plugin that ships native C/C++ code.
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

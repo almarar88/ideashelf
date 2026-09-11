@@ -142,7 +142,7 @@ silent_witness/
 │   │                         verdict, result, settings sheet
 │   └── widgets/              case-file scaffold, hold-to-reveal, countdown
 │                             ring, confetti, role badge
-└── test/widget_test.dart     13 tests over the pack, dealing and scoring
+└── test/widget_test.dart     14 tests over the pack, dealing and scoring
 ```
 
 ---
@@ -183,7 +183,7 @@ The model is `gemini-2.5-flash`; change the single `model` constant in
 
 ```bash
 flutter analyze     # 0 issues
-flutter test        # 13 tests
+flutter test        # 14 tests
 ```
 
 The suite checks that the shipped pack really has 50+ playable cases with three
