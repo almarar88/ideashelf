@@ -1,4 +1,4 @@
-# الشاهد الصامت — The Silent Witness
+# Guilty
 
 لعبة غموض وتحقيق عائلية سريعة، مبنية بـ Flutter وجاهزة للتحويل إلى ملف APK.
 
@@ -13,7 +13,7 @@ nobody is ever eliminated.
 
 ```bash
 # from the repository root
-cd silent_witness
+cd guilty
 
 flutter pub get
 flutter build apk --release
@@ -136,7 +136,7 @@ Score is kept across rounds: Detectives vs. Culprits.
 ## 3. What is in the box
 
 ```
-silent_witness/
+guilty/
 ├── assets/
 │   ├── cases.json            54 cases, 30 alibis, 17 silent hint cards
 │   ├── audio/                6 synthesized sounds (see §5)
@@ -204,8 +204,8 @@ flutter test        # 14 tests
 
 The release APK was built and inspected on this toolchain; `aapt2 dump
 badging` on the arm64 output reports `sdkVersion:'24'`,
-`targetSdkVersion:'34'`, `application-label:'الشاهد الصامت'` with an English
-alternative, and the single INTERNET permission.
+`targetSdkVersion:'34'`, `application-label:'Guilty'`, and the single INTERNET
+permission.
 
 The suite checks that the shipped pack really has 50+ playable cases with three
 clues and three questions each, that every roster size from 3 to 10 deals

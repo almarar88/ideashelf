@@ -10,7 +10,7 @@ class SilentWitnessApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'الشاهد الصامت',
+      title: 'Guilty',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.build(),
       // The whole game is Arabic and right-to-left, on every device.

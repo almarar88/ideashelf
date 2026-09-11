@@ -2,7 +2,7 @@
 
 ## 1.0.0
 
-First release of الشاهد الصامت (The Silent Witness).
+First release of Guilty.
 
 - Pass-and-play mystery game for 3–10 players, fully in Arabic and RTL.
 - Four roles: Detective, Silent Witness, Culprit, Innocent Suspect.

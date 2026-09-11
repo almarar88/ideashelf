@@ -1,4 +1,4 @@
-package com.ideashelf.silent_witness
+package com.ideashelf.guilty
 
 import io.flutter.embedding.android.FlutterActivity
 

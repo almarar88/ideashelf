@@ -1,5 +1,5 @@
-name: silent_witness
-description: "الشاهد الصامت — لعبة غموض وتحقيق عائلية سريعة"
+name: guilty
+description: "Guilty — لعبة غموض وتحقيق عائلية سريعة"
 publish_to: 'none'
 
 version: 1.0.0+1

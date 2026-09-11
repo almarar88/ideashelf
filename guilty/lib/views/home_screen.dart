@@ -66,10 +66,16 @@ class HomeScreen extends ConsumerWidget {
             const SizedBox(height: 12),
             const _Emblem(),
             const SizedBox(height: 22),
+            // Latin wordmark inside an RTL page: pin the direction so the
+            // letters never reorder, and space them out like a case stamp.
             Text(
-              'الشاهد الصامت',
+              'GUILTY',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.displayLarge,
+              textDirection: TextDirection.ltr,
+              style: Theme.of(context)
+                  .textTheme
+                  .displayLarge
+                  ?.copyWith(letterSpacing: 7),
             ),
             const SizedBox(height: 4),
             Text(

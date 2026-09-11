@@ -3,14 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:silent_witness/app.dart';
-import 'package:silent_witness/controllers/game_controller.dart';
-import 'package:silent_witness/core/providers.dart';
-import 'package:silent_witness/data/case_repository.dart';
-import 'package:silent_witness/models/game_role.dart';
-import 'package:silent_witness/models/game_settings.dart';
-import 'package:silent_witness/models/game_state.dart';
-import 'package:silent_witness/widgets/countdown_ring.dart';
+import 'package:guilty/app.dart';
+import 'package:guilty/controllers/game_controller.dart';
+import 'package:guilty/core/providers.dart';
+import 'package:guilty/data/case_repository.dart';
+import 'package:guilty/models/game_role.dart';
+import 'package:guilty/models/game_settings.dart';
+import 'package:guilty/models/game_state.dart';
+import 'package:guilty/widgets/countdown_ring.dart';
 
 Future<ProviderContainer> _container(CaseRepository repository) async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -202,7 +202,7 @@ void main() {
     });
   });
 
-  testWidgets('the home screen opens in Arabic and right-to-left',
+  testWidgets('the home screen shows the wordmark and lays out right-to-left',
       (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final prefs = await SharedPreferences.getInstance();
@@ -218,7 +218,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('الشاهد الصامت'), findsOneWidget);
+    // The product name is a Latin wordmark; the game around it stays Arabic.
+    expect(find.text('GUILTY'), findsOneWidget);
     expect(find.text('افتح قضية جديدة'), findsOneWidget);
     expect(
       Directionality.of(tester.element(find.text('افتح قضية جديدة'))),

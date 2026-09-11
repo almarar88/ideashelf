@@ -18,7 +18,7 @@ if (hasReleaseKeystore) {
 }
 
 android {
-    namespace = "com.ideashelf.silent_witness"
+    namespace = "com.ideashelf.guilty"
     compileSdk = 36
     // No ndkVersion on purpose: this app and its plugins are pure Dart/Kotlin,
     // so pinning it would only add a ~700 MB NDK download to every clean
@@ -31,7 +31,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.ideashelf.silent_witness"
+        applicationId = "com.ideashelf.guilty"
         minSdk = 24
         targetSdk = 34
         versionCode = flutter.versionCode
