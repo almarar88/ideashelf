@@ -62,3 +62,54 @@ export type AtlasMoment = {
 };
 
 export type ScreenId = "feed" | "studio" | "prose" | "atlas" | "vault";
+
+/* ── الحساب والملف الشخصي ────────────────────────────────────────────────── */
+
+export type Profile = {
+  name: string;
+  handle: string;
+  bio: string;
+  place: string;
+  link: string;
+  /** درجة لون الصورة الرمزية المولّدة، تُستعمل حين لا توجد صورة */
+  hue: number;
+  /** صورة شخصية اختيارية يختارها المستخدم — تُخزّن كـ data URL على الجهاز */
+  avatar?: string;
+  cover: [string, string, string];
+  private: boolean;
+  joined: string;
+};
+
+export type Notification = {
+  id: string;
+  kind: "like" | "comment" | "follow" | "mention" | "system";
+  personId?: string;
+  postId?: string;
+  text: string;
+  at: number;
+  read: boolean;
+};
+
+export type Message = {
+  id: string;
+  from: "me" | "them";
+  text: string;
+  at: number;
+};
+
+export type Conversation = {
+  id: string;
+  personId: string;
+  messages: Message[];
+  unread: number;
+};
+
+export type ReplyPolicy = "الجميع" | "من أتابعهم" | "لا أحد";
+
+export type Settings = {
+  replyPolicy: ReplyPolicy;
+  /** عتبة غربال الحوار: ما دونها يذهب إلى الصندوق المعزول */
+  signalFloor: number;
+  showProvenance: boolean;
+  localOnly: boolean;
+};
