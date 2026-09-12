@@ -1,8 +1,9 @@
-import { Clapperboard, Mic, ScanText, ShieldCheck, Sparkles, Waypoints } from "lucide-react";
+import { Clapperboard, Mic, PenLine, ScanText, ShieldCheck, Sparkles, Waypoints } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { PulseMode } from "@/lib/pulse";
 
 const ICONS = {
+  compose: PenLine,
   director: Clapperboard,
   mic: Mic,
   lens: ScanText,

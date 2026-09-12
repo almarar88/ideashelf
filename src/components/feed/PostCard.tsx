@@ -1,4 +1,4 @@
-import { Heart, MessageCircleQuestion, Play, Sparkles } from "lucide-react";
+import { Bookmark, Heart, MessageCircleQuestion, MoreHorizontal, Play, Sparkles } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { MediaCanvas } from "@/components/ui/MediaCanvas";
 import { cn } from "@/lib/cn";
@@ -13,16 +13,20 @@ const KIND_LABEL: Record<Post["kind"], string> = {
 export function PostCard({
   post,
   liked,
+  saved,
   onLike,
   onOpen,
   onAsk,
+  onMenu,
   selected,
 }: {
   post: Post;
   liked: boolean;
+  saved?: boolean;
   onLike: () => void;
   onOpen: () => void;
   onAsk: () => void;
+  onMenu?: () => void;
   selected?: boolean;
 }) {
   return (
@@ -43,18 +47,31 @@ export function PostCard({
             {KIND_LABEL[post.kind]} · <bdi>{post.place}</bdi> · <bdi>{post.at}</bdi>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onLike}
-          aria-label="إعجاب"
-          aria-pressed={liked}
-          className={cn(
-            "grid h-11 w-11 shrink-0 place-items-center rounded-full bg-raised transition active:scale-90",
-            liked ? "text-rose" : "text-muted",
+        <div className="flex shrink-0 items-center gap-1">
+          {saved && <Bookmark size={15} className="text-iris" fill="currentColor" />}
+          <button
+            type="button"
+            onClick={onLike}
+            aria-label="إعجاب"
+            aria-pressed={liked}
+            className={cn(
+              "grid h-10 w-10 place-items-center rounded-full bg-raised transition active:scale-90",
+              liked ? "text-rose" : "text-muted",
+            )}
+          >
+            <Heart size={18} fill={liked ? "currentColor" : "none"} />
+          </button>
+          {onMenu && (
+            <button
+              type="button"
+              onClick={onMenu}
+              aria-label="خيارات المنشور"
+              className="grid h-10 w-10 place-items-center rounded-full text-muted transition active:scale-90"
+            >
+              <MoreHorizontal size={18} />
+            </button>
           )}
-        >
-          <Heart size={19} fill={liked ? "currentColor" : "none"} />
-        </button>
+        </div>
       </header>
 
       <button type="button" onClick={onOpen} className="mt-2.5 block w-full text-right">
@@ -68,6 +85,7 @@ export function PostCard({
       <button type="button" onClick={onOpen} className="mt-3 block w-full">
         <MediaCanvas
           colors={post.media}
+          photo={post.photo}
           className="h-56 w-full"
           label={`وسيط بصري لمنشور: ${post.title}`}
         />
@@ -96,7 +114,7 @@ export function PostCard({
           اسأل المنشور نفسه…
         </button>
         <span className="shrink-0 rounded-full bg-raised px-3 py-2.5 text-[11.5px] tabular-nums text-muted">
-          {post.comments.length} نقاش
+          {post.reactions + (liked ? 1 : 0)} إعجاب · {post.comments.length} نقاش
         </span>
       </div>
     </article>

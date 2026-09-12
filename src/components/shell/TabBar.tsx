@@ -1,13 +1,15 @@
-import { BookOpen, Clapperboard, Layers, Lock, Map } from "lucide-react";
+import { Compass, Layers, Map, Sparkles, User } from "lucide-react";
+import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
+import { useMe } from "@/store/store";
 import type { ScreenId } from "@/lib/types";
 
 const TABS: { id: ScreenId; label: string; Icon: typeof Layers }[] = [
   { id: "feed", label: "المجرى", Icon: Layers },
-  { id: "studio", label: "الاستوديو", Icon: Clapperboard },
-  { id: "prose", label: "المقالات", Icon: BookOpen },
+  { id: "explore", label: "استكشاف", Icon: Compass },
+  { id: "create", label: "الإنشاء", Icon: Sparkles },
   { id: "atlas", label: "الأطلس", Icon: Map },
-  { id: "vault", label: "الخزنة", Icon: Lock },
+  { id: "profile", label: "حسابي", Icon: User },
 ];
 
 export function TabBar({
@@ -17,13 +19,14 @@ export function TabBar({
   screen: ScreenId;
   onChange: (s: ScreenId) => void;
 }) {
+  const me = useMe();
   return (
     <nav
       className="relative z-20 mx-3 mb-[calc(env(safe-area-inset-bottom)+10px)] flex items-center justify-between rounded-full glass px-2 py-1.5 shadow-float"
       aria-label="التنقل الرئيسي"
     >
       {TABS.map(({ id, label, Icon }) => {
-        const active = screen === id;
+        const active = screen === id || (id === "profile" && screen === "settings");
         return (
           <button
             key={id}
@@ -44,7 +47,11 @@ export function TabBar({
                 }}
               />
             )}
-            <Icon size={18} strokeWidth={active ? 2.3 : 1.8} />
+            {id === "profile" ? (
+              <Avatar person={me} size="xs" />
+            ) : (
+              <Icon size={18} strokeWidth={active ? 2.3 : 1.8} />
+            )}
             <span className="text-[10px] font-medium">{label}</span>
           </button>
         );

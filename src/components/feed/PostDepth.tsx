@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { CornerDownLeft, EyeOff, Info, ShieldCheck, Sparkles } from "lucide-react";
+import { CornerDownLeft, EyeOff, Info, Send, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { MediaCanvas } from "@/components/ui/MediaCanvas";
 import { Meter } from "@/components/ui/Meter";
 import { Pill } from "@/components/ui/Pill";
-import { askPost, gate, type Answer } from "@/lib/engine";
+import { askPost, gate, scoreComment, type Answer } from "@/lib/engine";
+import { newComment, useMe, useStore } from "@/store/store";
 import type { Post } from "@/lib/types";
 
 type Tab = "text" | "sources" | "ask" | "talk";
@@ -21,7 +22,32 @@ export function PostDepth({ post, initialTab = "text" }: { post: Post; initialTa
   const [question, setQuestion] = useState("");
   const [answers, setAnswers] = useState<{ q: string; a: Answer }[]>([]);
   const [showNoise, setShowNoise] = useState(false);
-  const { signal, noise } = useMemo(() => gate(post.comments), [post.comments]);
+  const [reply, setReply] = useState("");
+  const { state, dispatch } = useStore();
+  const me = useMe();
+  const floor = state.settings.signalFloor;
+  const { signal, noise } = useMemo(
+    () => gate(post.comments, floor),
+    [post.comments, floor],
+  );
+  const preview = reply.trim() ? scoreComment(reply) : null;
+
+  const submitReply = () => {
+    const text = reply.trim();
+    if (!text) return;
+    const { signal: s, kind } = scoreComment(text);
+    dispatch({
+      type: "comment/add",
+      postId: post.id,
+      comment: newComment(
+        { id: "me", name: me.name, handle: me.handle, hue: me.hue },
+        text,
+        s,
+        kind,
+      ),
+    });
+    setReply("");
+  };
 
   const ask = (q: string) => {
     const trimmed = q.trim();
@@ -32,7 +58,7 @@ export function PostDepth({ post, initialTab = "text" }: { post: Post; initialTa
 
   return (
     <div className="space-y-4 pb-2">
-      <MediaCanvas colors={post.media} className="h-40 w-full" label={post.title} />
+      <MediaCanvas colors={post.media} photo={post.photo} className="h-40 w-full" label={post.title} />
 
       <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
         {TABS.map((t) => (
@@ -156,6 +182,42 @@ export function PostDepth({ post, initialTab = "text" }: { post: Post; initialTa
             غربال الحوار يرتّب النقاش بدرجة الإثراء المعرفي لا بزمن النشر. الردود
             العابرة لا تُحذف، بل تُعزل.
           </p>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitReply();
+            }}
+            className="card p-3"
+          >
+            <textarea
+              value={reply}
+              onChange={(e) => setReply(e.target.value.slice(0, 600))}
+              rows={2}
+              placeholder="أضف سؤالاً أو إضافة معرفية…"
+              className="w-full resize-none bg-transparent text-[13px] leading-relaxed outline-none placeholder:text-muted"
+            />
+            <div className="mt-1.5 flex items-center gap-2">
+              {preview && (
+                <span className="text-[10.5px] text-muted">
+                  تقدير الغربال: <span className="tabular-nums">{preview.signal}</span> ·{" "}
+                  {preview.kind}
+                  {preview.signal < floor && " — سيذهب إلى الصندوق المعزول"}
+                </span>
+              )}
+              <button
+                type="submit"
+                disabled={!reply.trim()}
+                className="mr-auto inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-semibold text-white transition active:scale-95 disabled:opacity-40"
+                style={{
+                  background: "linear-gradient(140deg, rgb(var(--rose)), rgb(var(--iris)))",
+                }}
+              >
+                <Send size={13} />
+                أرسل
+              </button>
+            </div>
+          </form>
           {signal.map((c) => (
             <div key={c.id} className="card p-3.5">
               <div className="flex items-center gap-2">
@@ -167,6 +229,18 @@ export function PostDepth({ post, initialTab = "text" }: { post: Post; initialTa
                 <span className="mr-auto text-[10.5px] tabular-nums text-mint">
                   إشارة {c.signal}
                 </span>
+                {c.author.id === "me" && (
+                  <button
+                    type="button"
+                    aria-label="حذف الرد"
+                    onClick={() =>
+                      dispatch({ type: "comment/delete", postId: post.id, commentId: c.id })
+                    }
+                    className="text-muted transition hover:text-rose"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
               </div>
               <p className="mt-2 text-[13px] leading-relaxed">{c.text}</p>
               <p className="mt-1.5 text-[10.5px] text-muted">{c.at}</p>

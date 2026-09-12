@@ -1,16 +1,16 @@
 import { useMemo, useState } from "react";
 import { StoryRow } from "@/components/shell/StoryRow";
 import { PostCard } from "@/components/feed/PostCard";
-import { PostDepth } from "@/components/feed/PostDepth";
-import { Sheet } from "@/components/ui/Sheet";
 import { Pill } from "@/components/ui/Pill";
-import { posts } from "@/lib/data";
+import { Empty } from "./ProfileScreen";
+import { useActions, useStore, useVisiblePosts } from "@/store/store";
 import type { Post, PostKind } from "@/lib/types";
 
-type Filter = "all" | PostKind | "mine";
+type Filter = "all" | PostKind | "mine" | "following";
 
 const FILTERS: { id: Filter; label: string }[] = [
-  { id: "all", label: "المفضلة" },
+  { id: "all", label: "الكل" },
+  { id: "following", label: "من أتابع" },
   { id: "film", label: "أفلام" },
   { id: "essay", label: "مقالات" },
   { id: "moment", label: "لحظات" },
@@ -18,33 +18,41 @@ const FILTERS: { id: Filter; label: string }[] = [
 ];
 
 export function FeedScreen({
-  onNotice,
-  openInPane,
+  onOpenPost,
   selectedId,
+  onCompose,
+  onMenu,
+  onStory,
 }: {
-  onNotice: (msg: string) => void;
-  /** على الأجهزة القابلة للطي يُفتح العمق في اللوحة الثانية بدل لوح منزلق */
-  openInPane?: (post: Post, tab: "text" | "ask") => void;
+  /** يفتح العمق في لوح منزلق على الهاتف، وفي اللوحة الثانية على الأجهزة المطوية */
+  onOpenPost: (post: Post, tab: "text" | "ask") => void;
   selectedId?: string | null;
+  onCompose: () => void;
+  onMenu: (post: Post) => void;
+  onStory: (index: number) => void;
 }) {
+  const { state } = useStore();
+  const posts = useVisiblePosts();
+  const actions = useActions();
   const [filter, setFilter] = useState<Filter>("all");
-  const [liked, setLiked] = useState<Record<string, boolean>>({});
-  const [open, setOpen] = useState<{ post: Post; tab: "text" | "ask" } | null>(null);
-
-  const show = (post: Post, tab: "text" | "ask") => {
-    if (openInPane) openInPane(post, tab);
-    else setOpen({ post, tab });
-  };
-
   const visible = useMemo(() => {
-    if (filter === "all") return posts;
-    if (filter === "mine") return posts.filter((p) => p.author.id === "me");
-    return posts.filter((p) => p.kind === filter);
-  }, [filter]);
+    switch (filter) {
+      case "all":
+        return posts;
+      case "mine":
+        return posts.filter((p) => p.author.id === "me");
+      case "following":
+        return posts.filter(
+          (p) => p.author.id === "me" || state.following.includes(p.author.id),
+        );
+      default:
+        return posts.filter((p) => p.kind === filter);
+    }
+  }, [posts, filter, state.following]);
 
   return (
     <>
-      <StoryRow onAdd={() => onNotice("فتح الالتقاط: النبض يتحول إلى موجّه إخراجي داخل الاستوديو.")} />
+      <StoryRow onAdd={onCompose} onOpen={onStory} />
 
       <div className="flex gap-2 overflow-x-auto no-scrollbar px-5 pb-3">
         {FILTERS.map((f) => (
@@ -59,28 +67,27 @@ export function FeedScreen({
           <PostCard
             key={post.id}
             post={post}
-            liked={!!liked[post.id]}
-            onLike={() => setLiked((s) => ({ ...s, [post.id]: !s[post.id] }))}
-            onOpen={() => show(post, "text")}
-            onAsk={() => show(post, "ask")}
+            liked={state.liked.includes(post.id)}
+            saved={state.saved.includes(post.id)}
+            onLike={() => actions.like(post.id)}
+            onOpen={() => onOpenPost(post, "text")}
+            onAsk={() => onOpenPost(post, "ask")}
+            onMenu={() => onMenu(post)}
             selected={selectedId === post.id}
           />
         ))}
         {visible.length === 0 && (
-          <p className="mt-16 text-center text-[13px] text-muted">
-            لا شيء هنا بعد — جرّب مرشّحاً آخر.
-          </p>
+          <Empty
+            title="لا شيء هنا بعد"
+            hint={
+              filter === "mine"
+                ? "اضغط زر النبض لتنشر أول أثر لك."
+                : "جرّب مرشّحاً آخر، أو تابع حسابات جديدة من الاستكشاف."
+            }
+          />
         )}
       </div>
 
-      <Sheet
-        open={!!open}
-        onClose={() => setOpen(null)}
-        title={open?.post.title ?? ""}
-        subtitle={open ? `${open.post.author.name} · ${open.post.place}` : undefined}
-      >
-        {open && <PostDepth post={open.post} initialTab={open.tab} />}
-      </Sheet>
     </>
   );
 }

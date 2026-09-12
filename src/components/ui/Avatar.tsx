@@ -1,7 +1,10 @@
 import { cn } from "@/lib/cn";
 import type { Person } from "@/lib/types";
 
+type Subject = Person & { avatar?: string };
+
 const sizes = {
+  xs: "h-[19px] w-[19px] text-[9px]",
   sm: "h-8 w-8 text-[11px]",
   md: "h-11 w-11 text-[13px]",
   lg: "h-14 w-14 text-[15px]",
@@ -18,7 +21,7 @@ export function Avatar({
   ring = false,
   className,
 }: {
-  person: Person;
+  person: Subject;
   size?: keyof typeof sizes;
   ring?: boolean;
   className?: string;
@@ -38,16 +41,25 @@ export function Avatar({
           : undefined
       }
     >
-      <span
-        className={cn(
-          "grid place-items-center rounded-full font-semibold text-white shadow-lift",
-          sizes[size],
-        )}
-        style={{ background: `linear-gradient(145deg, ${a}, ${b})` }}
-        aria-hidden
-      >
-        {person.name.slice(0, 1)}
-      </span>
+      {person.avatar ? (
+        <img
+          src={person.avatar}
+          alt=""
+          className={cn("rounded-full object-cover shadow-lift", sizes[size])}
+          aria-hidden
+        />
+      ) : (
+        <span
+          className={cn(
+            "grid place-items-center rounded-full font-semibold text-white shadow-lift",
+            sizes[size],
+          )}
+          style={{ background: `linear-gradient(145deg, ${a}, ${b})` }}
+          aria-hidden
+        >
+          {person.name.slice(0, 1)}
+        </span>
+      )}
       <span className="sr-only">{person.name}</span>
     </span>
   );

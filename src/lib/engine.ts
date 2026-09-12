@@ -273,9 +273,9 @@ export function relatedPosts(m: AtlasMoment): Post[] {
 
 export const SIGNAL_FLOOR = 40;
 
-export function gate(comments: Comment[]) {
-  const signal = comments.filter((c) => c.signal >= SIGNAL_FLOOR).sort((a, b) => b.signal - a.signal);
-  const noise = comments.filter((c) => c.signal < SIGNAL_FLOOR);
+export function gate(comments: Comment[], floor: number = SIGNAL_FLOOR) {
+  const signal = comments.filter((c) => c.signal >= floor).sort((a, b) => b.signal - a.signal);
+  const noise = comments.filter((c) => c.signal < floor);
   return { signal, noise };
 }
 
@@ -330,4 +330,38 @@ export function askPost(post: Post, question: string): Answer {
     basis: "لا مصدر",
     grounded: false,
   };
+}
+
+/* ── 7) تقدير درجة الإشارة لردٍّ جديد ───────────────────────────────────── */
+
+/**
+ * تقدير قواعدي صريح لا نموذج لغوي: يكافئ الطول المعقول، والسؤال المحدّد،
+ * والإحالة إلى مصدر أو رقم، ويخصم على الردود الجوفاء والصياح.
+ */
+export function scoreComment(text: string): { signal: number; kind: Comment["kind"] } {
+  const t = text.trim();
+  const words = t.split(/\s+/).filter(Boolean).length;
+
+  let score = Math.min(45, words * 3);
+  if (/[؟?]/.test(t)) score += 22;
+  if (/(مصدر|دليل|مرجع|حسب|وفق|دراسة|كتاب)/.test(t)) score += 20;
+  if (/\d/.test(t)) score += 8;
+  if (/(لأن|بينما|غير أن|في المقابل|مع ذلك)/.test(t)) score += 10;
+
+  if (words <= 2) score -= 30;
+  if (/^[\p{Emoji_Presentation}\s]+$/u.test(t)) score -= 40;
+  if (/(!{3,}|\?{3,})/.test(t)) score -= 10;
+  if (/(أول|first|🔥{2,})/i.test(t) && words <= 3) score -= 25;
+
+  const signal = Math.max(0, Math.min(99, Math.round(score)));
+
+  const kind: Comment["kind"] = /[؟?]/.test(t)
+    ? "سؤال"
+    : signal < 40
+      ? "ضجيج"
+      : /(أضيف|إضافة|كذلك|وأيضاً|يفسّر)/.test(t)
+        ? "إضافة"
+        : "نقد";
+
+  return { signal, kind };
 }

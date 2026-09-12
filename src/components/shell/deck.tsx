@@ -27,7 +27,7 @@ export function deckItems(screen: ScreenId, busy: boolean, seals: number): DeckI
       key: "director",
       title: "المخرج الآلي",
       icon: <Clapperboard size={15} className="text-rose" />,
-      active: screen === "studio",
+      active: screen === "create",
       body: (
         <>
           <div className="flex h-12 gap-1 overflow-hidden rounded-xl">
@@ -65,7 +65,7 @@ export function deckItems(screen: ScreenId, busy: boolean, seals: number): DeckI
       key: "provenance",
       title: "سجل الأصل الرقمي",
       icon: <Fingerprint size={15} className="text-rose" />,
-      active: screen === "vault",
+      active: screen === "settings",
       body: (
         <div className="flex items-center gap-3">
           <div
@@ -108,7 +108,7 @@ export function deckItems(screen: ScreenId, busy: boolean, seals: number): DeckI
       key: "vault",
       title: "خزنة صفرية المعرفة",
       icon: <Lock size={15} className="text-mint" />,
-      active: screen === "vault",
+      active: screen === "settings",
       body: (
         <p className="text-[11px] leading-relaxed text-muted">
           المسودات مشفّرة بمفتاح على عتاد الجهاز. الخادم لا يرى ما لم تنشره.

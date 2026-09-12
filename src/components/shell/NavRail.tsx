@@ -1,19 +1,19 @@
-import { BookOpen, Clapperboard, Layers, Lock, Map, Moon, Search, Sun } from "lucide-react";
+import { Compass, Layers, Map, Moon, Settings, Sparkles, Sun, User } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Logo } from "@/components/ui/Logo";
 import { PulseCore } from "./PulseButton";
 import { cn } from "@/lib/cn";
-import { me } from "@/lib/data";
+import { useMe } from "@/store/store";
 import type { PulseMode } from "@/lib/pulse";
 import type { ScreenId } from "@/lib/types";
 import type { Theme } from "@/hooks/useTheme";
 
 const TABS: { id: ScreenId; label: string; Icon: typeof Layers }[] = [
   { id: "feed", label: "المجرى", Icon: Layers },
-  { id: "studio", label: "الاستوديو", Icon: Clapperboard },
-  { id: "prose", label: "المقالات", Icon: BookOpen },
+  { id: "explore", label: "استكشاف", Icon: Compass },
+  { id: "create", label: "الإنشاء", Icon: Sparkles },
   { id: "atlas", label: "الأطلس", Icon: Map },
-  { id: "vault", label: "الخزنة", Icon: Lock },
+  { id: "profile", label: "حسابي", Icon: User },
 ];
 
 /** شريط تنقل رأسي — يحل محل الشريط السفلي حين تتسع الشاشة (الجهاز مفتوح). */
@@ -22,7 +22,7 @@ export function NavRail({
   onChange,
   theme,
   onToggleTheme,
-  onSearch,
+  onSettings,
   pulse,
   busy,
   onPulse,
@@ -31,11 +31,12 @@ export function NavRail({
   onChange: (s: ScreenId) => void;
   theme: Theme;
   onToggleTheme: () => void;
-  onSearch: () => void;
+  onSettings: () => void;
   pulse: PulseMode;
   busy: boolean;
   onPulse: () => void;
 }) {
+  const me = useMe();
   return (
     <nav
       className="flex w-[86px] shrink-0 flex-col items-center gap-1 border-l hairline bg-surface/70 py-4"
@@ -77,11 +78,11 @@ export function NavRail({
 
       <button
         type="button"
-        onClick={onSearch}
-        aria-label="بحث"
+        onClick={onSettings}
+        aria-label="الإعدادات"
         className="grid h-10 w-10 place-items-center rounded-full bg-raised text-muted transition hover:text-ink"
       >
-        <Search size={17} />
+        <Settings size={17} />
       </button>
       <button
         type="button"

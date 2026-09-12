@@ -9,13 +9,25 @@ export function MediaCanvas({
   className,
   grain = true,
   label,
+  photo,
 }: {
   colors: [string, string, string];
   className?: string;
   grain?: boolean;
   label?: string;
+  /** صورة حقيقية من جهاز المستخدم تحل محل التدرّج حين توجد */
+  photo?: string;
 }) {
   const [a, b, c] = colors;
+
+  if (photo) {
+    return (
+      <div className={cn("relative overflow-hidden rounded-xl2", className)}>
+        <img src={photo} alt={label ?? ""} className="h-full w-full object-cover" />
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn("relative overflow-hidden rounded-xl2", className)}

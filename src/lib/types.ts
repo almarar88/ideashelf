@@ -35,6 +35,10 @@ export type Post = {
   at: string;
   /** تدرّج يمثّل الوسيط البصري — لا صور خارجية، حتى يبقى المشروع خالياً من حقوق الغير */
   media: [string, string, string];
+  /** صورة يلتقطها المستخدم، مخزّنة على جهازه وحده */
+  photo?: string;
+  /** خصوصية المنشور */
+  audience?: "عام" | "المتابِعون" | "أنا فقط";
   duration?: string;
   aiShare: number;
   humanShare: number;
@@ -61,7 +65,7 @@ export type AtlasMoment = {
   tags: string[];
 };
 
-export type ScreenId = "feed" | "studio" | "prose" | "atlas" | "vault";
+export type ScreenId = "feed" | "explore" | "create" | "atlas" | "profile" | "settings";
 
 /* ── الحساب والملف الشخصي ────────────────────────────────────────────────── */
 

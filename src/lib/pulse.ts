@@ -4,11 +4,11 @@ export type PulseMode = {
   id: string;
   label: string;
   hint: string;
-  icon: "director" | "mic" | "lens" | "map" | "shield";
+  icon: "compose" | "director" | "mic" | "lens" | "map" | "shield";
 };
 
 /** زر النبض الذكي: يستشعر الشاشة والحالة فيغيّر وظيفته بدل أن يكون زر "+" ثابتاً. */
-export function pulseFor(screen: ScreenId, busy: boolean): PulseMode {
+export function pulseFor(screen: ScreenId, busy: boolean, createTab: "film" | "essay"): PulseMode {
   if (busy) {
     return {
       id: "working",
@@ -18,25 +18,32 @@ export function pulseFor(screen: ScreenId, busy: boolean): PulseMode {
     };
   }
   switch (screen) {
-    case "studio":
-      return {
-        id: "direct",
-        label: "وجّه الإخراج",
-        hint: "الكاميرا مفتوحة — النبض يتحول إلى موجّه إخراجي",
-        icon: "director",
-      };
-    case "prose":
-      return {
-        id: "dictate",
-        label: "سجّل واصغِ",
-        hint: "أنت تتحدث — النبض يتحول إلى مسجّل تفريغ وصياغة",
-        icon: "mic",
-      };
     case "feed":
+      return {
+        id: "compose",
+        label: "أثر جديد",
+        hint: "أنت في المجرى — النبض يفتح النشر",
+        icon: "compose",
+      };
+    case "create":
+      return createTab === "film"
+        ? {
+            id: "direct",
+            label: "وجّه الإخراج",
+            hint: "الكاميرا مفتوحة — النبض يتحول إلى موجّه إخراجي",
+            icon: "director",
+          }
+        : {
+            id: "dictate",
+            label: "سجّل واصغِ",
+            hint: "أنت تكتب — النبض يتحول إلى مسجّل تفريغ وصياغة",
+            icon: "mic",
+          };
+    case "explore":
       return {
         id: "lens",
         label: "عدسة التلخيص",
-        hint: "أنت تقرأ — النبض يتحول إلى عدسة تلخيص واستخراج هوامش",
+        hint: "أنت تستكشف — النبض يلخّص ما في المجرى",
         icon: "lens",
       };
     case "atlas":
@@ -46,11 +53,12 @@ export function pulseFor(screen: ScreenId, busy: boolean): PulseMode {
         hint: "أنت في الأطلس — النبض يفتح البحث بالوصف لا بالكلمات",
         icon: "map",
       };
-    case "vault":
+    case "profile":
+    case "settings":
       return {
         id: "seal",
         label: "ختم الأصل",
-        hint: "أنت في الخزنة — النبض يوقّع سجل الأصل الرقمي",
+        hint: "النبض يوقّع سجل الأصل الرقمي لآخر عمل",
         icon: "shield",
       };
   }
