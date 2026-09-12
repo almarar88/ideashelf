@@ -1,6 +1,10 @@
 import { useRef, useState } from "react";
 import {
+  Check,
   ChevronLeft,
+  Cloud,
+  CloudOff,
+  LogOut,
   Download,
   Eye,
   Filter,
@@ -17,6 +21,9 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Pill } from "@/components/ui/Pill";
 import { cn } from "@/lib/cn";
 import { useStore } from "@/store/store";
+import { AuthSheet } from "@/server/AuthSheet";
+import { useAuth, signOut } from "@/server/auth";
+import { useSync } from "@/server/SyncBridge";
 import type { State } from "@/store/initial";
 import type { ReplyPolicy } from "@/lib/types";
 import type { Theme } from "@/hooks/useTheme";
@@ -33,8 +40,11 @@ export function SettingsScreen({
   seals: number;
 }) {
   const { state, dispatch, saveStatus } = useStore();
+  const { session } = useAuth();
+  const sync = useSync();
   const [page, setPage] = useState<"root" | "vault" | "blocked">("root");
   const [confirmReset, setConfirmReset] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   if (page === "vault") {
@@ -117,6 +127,47 @@ export function SettingsScreen({
   return (
     <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-40 pt-1">
       <h1 className="mb-3 px-1 text-[19px] font-semibold">الإعدادات</h1>
+
+      <Group title="الحساب والمزامنة">
+        {session ? (
+          <>
+            <div className="flex items-start gap-3 py-2.5">
+              <Cloud size={16} className="mt-0.5 shrink-0 text-mint" />
+              <span className="flex-1">
+                <span className="block text-[13.5px]" dir="ltr">
+                  {session.user.email}
+                </span>
+                <span className="mt-0.5 block text-[11.5px] leading-relaxed text-muted">
+                  {sync.status === "syncing" && "جارٍ الجلب من الخادم…"}
+                  {sync.status === "synced" && "متزامن — ما تنشره محفوظ على الخادم"}
+                  {sync.status === "error" && (sync.message ?? "تعذّرت المزامنة")}
+                </span>
+              </span>
+              {sync.status === "synced" && <Check size={15} className="mt-1 text-mint" />}
+            </div>
+            <Link Icon={RotateCcw} label="إعادة الجلب من الخادم" onClick={sync.refresh} />
+            <Link
+              Icon={LogOut}
+              label="خروج"
+              tone="rose"
+              onClick={() => void signOut()}
+            />
+          </>
+        ) : (
+          <>
+            <div className="flex items-start gap-3 py-2.5">
+              <CloudOff size={16} className="mt-0.5 shrink-0 text-muted" />
+              <span className="flex-1 text-[11.5px] leading-relaxed text-muted">
+                غير مسجّل. كل شيء يعمل على هذا الجهاز وحده، ولا يراه أحد غيرك.
+              </span>
+            </div>
+            <Link Icon={Cloud} label="تسجيل الدخول والمزامنة" onClick={() => setAuthOpen(true)} />
+          </>
+        )}
+        {sync.message && sync.status !== "synced" && (
+          <p className="pb-3 text-[11.5px] leading-relaxed text-amber">{sync.message}</p>
+        )}
+      </Group>
 
       <Group title="المظهر">
         <button
@@ -244,6 +295,8 @@ export function SettingsScreen({
           </div>
         )}
       </Group>
+
+      <AuthSheet open={authOpen} onClose={() => setAuthOpen(false)} />
 
       <p className="px-1 pb-4 text-[11px] leading-relaxed text-muted">
         Chrono AI · نسخة 1.1 — كل ما سبق يُحفظ في مساحة هذا الجهاز وحده.

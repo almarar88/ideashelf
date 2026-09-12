@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -38,6 +39,7 @@ export type Action =
   | { type: "dm/read"; conversationId: string }
   | { type: "settings/update"; patch: Partial<Settings> }
   | { type: "data/replace"; state: State }
+  | { type: "data/merge"; patch: Partial<State> }
   | { type: "data/reset" };
 
 const toggle = (list: string[], id: string) =>
@@ -142,6 +144,9 @@ export function reducer(state: State, action: Action): State {
     case "data/replace":
       return action.state;
 
+    case "data/merge":
+      return { ...state, ...action.patch };
+
     case "data/reset":
       return seedState();
   }
@@ -175,14 +180,23 @@ type Ctx = {
   state: State;
   dispatch: React.Dispatch<Action>;
   saveStatus: React.MutableRefObject<SaveStatus>;
+  /** يضعه جسر المزامنة ليعكس كل فعل محلي إلى الخادم بعد وقوعه */
+  mirrorRef: React.MutableRefObject<((action: Action) => void) | null>;
 };
 
 const StoreCtx = createContext<Ctx | null>(null);
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, load);
+  const [state, rawDispatch] = useReducer(reducer, undefined, load);
   const saveStatus = useRef<SaveStatus>("ok");
   const timer = useRef<number | null>(null);
+  const mirrorRef = useRef<((action: Action) => void) | null>(null);
+
+  // الواجهة تتحدّث محلياً أولاً، ثم يُعكس الفعل إلى الخادم إن وُجدت جلسة
+  const dispatch = useCallback((action: Action) => {
+    rawDispatch(action);
+    mirrorRef.current?.(action);
+  }, []);
 
   useEffect(() => {
     if (timer.current) window.clearTimeout(timer.current);
@@ -201,7 +215,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   }, [state]);
 
-  const value = useMemo(() => ({ state, dispatch, saveStatus }), [state]);
+  const value = useMemo(
+    () => ({ state, dispatch, saveStatus, mirrorRef }),
+    [state, dispatch],
+  );
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Bookmark, Link2, MapPin, Pencil, Settings, Shield } from "lucide-react";
+import { Bookmark, Cloud, CloudOff, Link2, MapPin, Pencil, Settings, Shield } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { MediaCanvas } from "@/components/ui/MediaCanvas";
 import { Pill } from "@/components/ui/Pill";
@@ -7,6 +7,8 @@ import { PostCard } from "@/components/feed/PostCard";
 import { EditProfileSheet } from "@/components/profile/EditProfileSheet";
 import { PeopleSheet } from "@/components/social/PeopleSheet";
 import { useActions, useMe, usePosts, useStore } from "@/store/store";
+import { useAuth } from "@/server/auth";
+import { useSync } from "@/server/SyncBridge";
 import type { Post } from "@/lib/types";
 
 type Tab = "posts" | "saved" | "about";
@@ -24,6 +26,8 @@ export function ProfileScreen({
   const [tab, setTab] = useState<Tab>("posts");
   const [editing, setEditing] = useState(false);
   const [list, setList] = useState<"following" | "followers" | null>(null);
+  const { session } = useAuth();
+  const sync = useSync();
 
   const { profile, saved, liked, following, followers } = state;
   const posts = usePosts();
@@ -90,6 +94,23 @@ export function ProfileScreen({
           )}
           <span>انضم {profile.joined}</span>
         </div>
+
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] ${
+            session ? "bg-mint/12 text-mint" : "bg-raised text-muted"
+          }`}
+        >
+          {session ? <Cloud size={13} /> : <CloudOff size={13} />}
+          {session
+            ? sync.status === "syncing"
+              ? "جارٍ المزامنة…"
+              : sync.status === "error"
+                ? "المزامنة متعطّلة"
+                : "متزامن مع الخادم"
+            : "محلي — سجّل الدخول للمزامنة"}
+        </button>
 
         <div className="mt-3 flex gap-5 text-[13px]">
           <Stat n={mine.length} label="منشور" />
