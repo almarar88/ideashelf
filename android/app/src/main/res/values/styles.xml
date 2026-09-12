@@ -16,7 +16,13 @@
     </style>
 
 
+    <!--
+        شاشة البدء: البندان الأولان لواجهة أندرويد 12 فأحدث،
+        والثالث للنسخ الأقدم التي ما زالت تقرأ الخلفية مباشرة.
+    -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/logo_mark</item>
         <item name="android:background">@drawable/splash</item>
     </style>
 </resources>

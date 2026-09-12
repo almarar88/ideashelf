@@ -24,7 +24,8 @@ export function PhoneFrame({
         className={cn(
           "relative flex w-full flex-col overflow-hidden bg-canvas",
           "bg-[linear-gradient(180deg,rgb(var(--raised)),rgb(var(--surface))_38%,rgb(var(--surface)))]",
-          framed ? "h-[812px] rounded-[2.3rem]" : "h-[100dvh]",
+          // مساحة إضافية أعلى الإطار حتى لا تصطدم الترويسة بنتوء الشاشة
+          framed ? "h-[812px] rounded-[2.3rem] pt-6" : "h-[100dvh]",
         )}
       >
         {framed && (

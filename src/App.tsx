@@ -13,6 +13,7 @@ import { ProseScreen } from "@/components/screens/ProseScreen";
 import { AtlasScreen } from "@/components/screens/AtlasScreen";
 import { VaultScreen } from "@/components/screens/VaultScreen";
 import { Sheet } from "@/components/ui/Sheet";
+import { Logo, Wordmark } from "@/components/ui/Logo";
 import { useHourLight, useTheme } from "@/hooks/useTheme";
 import { useWindowLayout } from "@/hooks/useWindowLayout";
 import { pulseFor } from "@/lib/pulse";
@@ -162,8 +163,8 @@ export default function App() {
         }
         primary={
           <>
-            <header className="flex items-baseline justify-between px-5 pb-2 pt-[calc(env(safe-area-inset-top)+16px)]">
-              <p className="text-[16px] font-semibold tracking-tight">أَثَـر</p>
+            <header className="flex items-center justify-between px-5 pb-2 pt-[calc(env(safe-area-inset-top)+16px)]">
+              <Wordmark size={26} />
               <p className="text-[11.5px] text-muted">
                 {light.label} · {layout.spanned ? "شاشة ممتدة عبر المفصلة" : "شاشة موسّعة"}
               </p>
@@ -215,20 +216,15 @@ function Brand() {
   return (
     <>
       <div className="pointer-events-none absolute right-8 top-7 hidden lg:block">
-        <p className="text-[13px] font-semibold tracking-tight">Chrono AI · أَثَـر</p>
-        <p className="mt-0.5 text-[11.5px] text-muted">منصة توثيق الحياة الفائقة</p>
+        <Wordmark size={30} subtitle="منصة توثيق الحياة الفائقة" />
       </div>
       <div className="pointer-events-none absolute bottom-8 right-8 hidden max-w-[240px] lg:block">
         <p className="text-[11.5px] leading-relaxed text-muted">
           نموذج واجهة تفاعلي — كل المحرّكات تعمل محلياً داخل المتصفح.
         </p>
       </div>
-      <div className="pointer-events-none absolute bottom-8 left-8 hidden lg:block" aria-hidden>
-        <svg width="54" height="30" viewBox="0 0 54 30" fill="none">
-          <path d="M8 26 L20 4" stroke="rgb(var(--ink))" strokeWidth="5" strokeLinecap="round" />
-          <path d="M22 26 L34 4" stroke="rgb(var(--ink))" strokeWidth="5" strokeLinecap="round" />
-          <circle cx="44" cy="9" r="5" fill="rgb(var(--rose))" />
-        </svg>
+      <div className="pointer-events-none absolute bottom-8 left-8 hidden opacity-70 lg:block" aria-hidden>
+        <Logo size={40} tone="mono" className="text-ink" />
       </div>
     </>
   );

@@ -1,5 +1,6 @@
 import { BookOpen, Clapperboard, Layers, Lock, Map, Moon, Search, Sun } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
+import { Logo } from "@/components/ui/Logo";
 import { PulseCore } from "./PulseButton";
 import { cn } from "@/lib/cn";
 import { me } from "@/lib/data";
@@ -40,7 +41,8 @@ export function NavRail({
       className="flex w-[86px] shrink-0 flex-col items-center gap-1 border-l hairline bg-surface/70 py-4"
       aria-label="التنقل الرئيسي"
     >
-      <Avatar person={me} size="md" ring />
+      <Logo size={30} />
+      <Avatar person={me} size="md" ring className="mt-3" />
       <div className="mt-3 flex flex-1 flex-col items-center gap-1">
         {TABS.map(({ id, label, Icon }) => {
           const active = screen === id;

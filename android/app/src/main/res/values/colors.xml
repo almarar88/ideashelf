@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ألوان الهوية: البنفسجي والوردي نفساهما المستعملان في الواجهة -->
+    <color name="colorPrimary">#4C63FF</color>
+    <color name="colorPrimaryDark">#0B0C14</color>
+    <color name="colorAccent">#FF6CBA</color>
+
+    <!-- أرضية شاشة البدء: نفس سطح الوضع النهاري، فلا تحدث قفزة لونية عند الإقلاع -->
+    <color name="splash_bg">#F4F3FC</color>
+</resources>

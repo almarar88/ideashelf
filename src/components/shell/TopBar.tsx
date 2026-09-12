@@ -1,5 +1,6 @@
 import { Moon, Search, Sun } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
+import { Logo } from "@/components/ui/Logo";
 import { me } from "@/lib/data";
 import type { Theme } from "@/hooks/useTheme";
 
@@ -17,10 +18,13 @@ export function TopBar({
   return (
     <header className="relative z-20 flex items-center gap-3 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+14px)]">
       <Avatar person={me} size="lg" ring />
-      <div className="min-w-0 flex-1 text-center">
-        <p className="truncate text-[17px] font-semibold tracking-tight">{me.handle}</p>
-        <p className="text-[11px] text-muted">
-          أثر · {light.label}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-center gap-1.5" dir="ltr">
+          <Logo size={20} />
+          <p className="truncate text-[16px] font-semibold tracking-[-0.01em]">Chrono AI</p>
+        </div>
+        <p className="mt-0.5 text-center text-[11px] text-muted">
+          {me.handle} · {light.label}
         </p>
       </div>
       <div className="flex items-center gap-2">

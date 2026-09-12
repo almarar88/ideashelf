@@ -2,7 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "com.athar.chronoai",
-  appName: "أَثَـر",
+  appName: "Chrono AI",
   // نسخة بناء بمسارات نسبية، لأن التطبيق يُقدَّم من داخل الجهاز لا من مجلد فرعي
   webDir: "dist-app",
   android: {
