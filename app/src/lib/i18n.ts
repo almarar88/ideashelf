@@ -177,6 +177,7 @@ const dict = {
   gallery: { ar: "صورة", en: "Photo" },
   document: { ar: "ملف", en: "File" },
   whatsUp: { ar: "شو الأخبار؟", en: "What's up?" },
+  workingBg: { ar: "المجلس يعمل في الخلفية…", en: "Majlis is working in the background…" },
   controlTitle: { ar: "التحكم بالجهاز", en: "Device control" },
   controlDesc: { ar: "يسمح للوكلاء بتنفيذ أوامر وقراءة/كتابة ملفات ورؤية الشاشة والتحكم بالماوس والكيبورد (على الكمبيوتر)، واستخدام مزايا الهاتف", en: "Lets agents run commands, read/write files, see the screen and control mouse/keyboard (desktop), and use phone features" },
   levelOff: { ar: "مغلق", en: "Off" },

@@ -1,7 +1,7 @@
 {
   "name": "majlis-ai",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.3.0",
   "type": "module",
   "description": "Majlis AI — your council of AI agents",
   "author": "IdeaShelf",
@@ -32,6 +32,7 @@
     "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/network": "^8.0.1",
     "@capacitor/share": "^8.0.0",
+    "@capawesome-team/capacitor-android-foreground-service": "^8.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zod": "^3.24.1"

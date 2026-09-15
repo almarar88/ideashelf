@@ -8,6 +8,7 @@ import { FileChip, FileViewer } from "../components/FileViewer";
 import { messagesDB } from "../lib/db";
 import { ingestUpload, pickCamera, pickFiles, shareText } from "../lib/files";
 import { handleUserMessage, regenerateReply } from "../lib/chat";
+import { keepAlive, notifyDone } from "../lib/background";
 import { JUDGE_ID, uid, type Agent, type FileRef, type Message, type Verdict } from "../lib/types";
 import { SESSION_EXAMPLES } from "../lib/presets";
 
@@ -78,10 +79,34 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
     upsert(m);
     setText(""); setPending([]); setReplyTo(null);
     const ac = new AbortController(); abortRef.current = ac; setRunning(true);
+    await keepAlive.start(t(lang, "workingBg"), group.name);
     try {
       await handleUserMessage({ group: getState().groups.find((g) => g.id === groupId)!, getMessages: () => msgsRef.current, upsert, remove, askPermission, signal: ac.signal }, m, council);
-    } finally { setRunning(false); abortRef.current = null; }
+      const last = msgsRef.current[msgsRef.current.length - 1];
+      if (last && last.role !== "user") notifyDone(`${group.emoji} ${group.name}`, `${nameFor(last)}: ${(last.text || last.files[0]?.name || "").slice(0, 90)}`);
+    } finally { setRunning(false); abortRef.current = null; keepAlive.stop(); }
   };
+
+  // Auto-resume replies that were cut by a network drop (e.g. app was sent to background).
+  const resumeBroken = useCallback(async () => {
+    if (abortRef.current || !getState().settings.apiKey) return;
+    const broken = msgsRef.current.filter((m) => m.role === "agent" && m.status === "error" && m.replyTo && /Connection error|network|fetch|Stopped/i.test(m.error ?? "") && Date.now() - m.createdAt < 60 * 60 * 1000);
+    if (!broken.length) return;
+    const ac = new AbortController(); abortRef.current = ac; setRunning(true);
+    await keepAlive.start(t(lang, "workingBg"), group?.name ?? "");
+    try {
+      for (const m of broken) {
+        if (ac.signal.aborted) break;
+        await regenerateReply({ group: getState().groups.find((g) => g.id === groupId)!, getMessages: () => msgsRef.current, upsert, remove, askPermission, signal: ac.signal }, m);
+      }
+    } finally { setRunning(false); abortRef.current = null; keepAlive.stop(); }
+  }, [groupId, group?.name, lang, upsert, remove, askPermission]);
+
+  useEffect(() => {
+    const h = () => { if (document.visibilityState === "visible") resumeBroken(); };
+    document.addEventListener("visibilitychange", h);
+    return () => document.removeEventListener("visibilitychange", h);
+  }, [resumeBroken]);
 
   const attach = async (kind: "camera" | "gallery" | "file") => {
     setAttachMenu(false);
@@ -103,8 +128,9 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
     setMenuMsg(null);
     if (!settings.apiKey) { alert(t(lang, "needKey")); return; }
     const ac = new AbortController(); abortRef.current = ac; setRunning(true);
+    await keepAlive.start(t(lang, "workingBg"), group?.name ?? "");
     try { await regenerateReply({ group: getState().groups.find((g) => g.id === groupId)!, getMessages: () => msgsRef.current, upsert, remove, askPermission, signal: ac.signal }, m); }
-    finally { setRunning(false); abortRef.current = null; }
+    finally { setRunning(false); abortRef.current = null; keepAlive.stop(); }
   };
   const speak = (m: Message) => {
     setMenuMsg(null);
@@ -188,7 +214,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
                   {busy && !m.text && <div className="row muted" style={{ gap: 8 }}><Dots /> <span className="small">{phaseLabel(m)}</span></div>}
                   {m.text && <Markdown text={m.text} />}
                   {busy && m.text && <div className="row muted small" style={{ gap: 6, marginTop: 4 }}><Dots />{m.phase === "writing" || !m.phase ? "" : phaseLabel(m)}</div>}
-                  {m.status === "error" && <div className="error-box">{m.error}</div>}
+                  {m.status === "error" && <div className="error-box row between" style={{ gap: 8 }}><span className="grow">{m.error}</span>{m.replyTo && !running && <button className="pill dark" style={{ flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); regen(m); }}><Icon name="refresh" size={13} /> {t(lang, "retry")}</button>}</div>}
                   {m.verdict && <VerdictCard v={m.verdict} members={members} lang={lang} />}
                   {m.files.length > 0 && <div className="stack" style={{ gap: 6, marginTop: 8 }}>{m.files.map((f) => <FileChip key={f.id} file={f} onOpen={setViewing} light={isJudge} />)}</div>}
                   {m.sources.length > 0 && <Sources sources={m.sources} lang={lang} />}

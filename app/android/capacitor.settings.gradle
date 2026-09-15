@@ -34,3 +34,6 @@ project(':capacitor-network').projectDir = new File('../node_modules/@capacitor/
 
 include ':capacitor-share'
 project(':capacitor-share').projectDir = new File('../node_modules/@capacitor/share/android')
+
+include ':capawesome-team-capacitor-android-foreground-service'
+project(':capawesome-team-capacitor-android-foreground-service').projectDir = new File('../node_modules/@capawesome-team/capacitor-android-foreground-service/android')

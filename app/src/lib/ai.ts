@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { ModelId, Source, Usage } from "./types";
 
 export function makeClient(apiKey: string): Anthropic {
-  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 2, timeout: 10 * 60 * 1000 });
+  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 4, timeout: 10 * 60 * 1000 });
 }
 
 export function webSearchTool(model: ModelId, maxUses: number): Anthropic.ToolUnion {
