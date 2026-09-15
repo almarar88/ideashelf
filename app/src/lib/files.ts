@@ -16,6 +16,17 @@ export function pickFiles(accept = "*/*", multiple = true): Promise<File[]> {
   });
 }
 
+export function pickCamera(): Promise<File[]> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file"; input.accept = "image/*"; input.setAttribute("capture", "environment");
+    input.style.display = "none";
+    input.onchange = () => { resolve(Array.from(input.files ?? [])); input.remove(); };
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
 function readAsDataURL(f: Blob): Promise<string> {
   return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = rej; r.readAsDataURL(f); });
 }

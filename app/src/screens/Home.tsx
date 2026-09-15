@@ -22,7 +22,7 @@ export default function Home({ openChat, goAgents, goSettings }: { openChat: (id
   const cost = usageLog.reduce((n, e) => n + costUSD(e.model, { input: e.input, output: e.output }), 0);
 
   const create = () => {
-    const g: Group = { id: uid(), name: gName.trim() || (lang === "ar" ? "مجموعة جديدة" : "New group"), emoji: gEmoji, memberIds: gMembers, judgeEnabled: gJudge, debate: false, createdAt: Date.now(), updatedAt: Date.now(), lastPreview: "", lastSender: "", msgCount: 0 };
+    const g: Group = { id: uid(), name: gName.trim() || (lang === "ar" ? "مجموعة جديدة" : "New group"), emoji: gEmoji, memberIds: gMembers, judgeEnabled: gJudge, debate: false, banter: true, createdAt: Date.now(), updatedAt: Date.now(), lastPreview: "", lastSender: "", msgCount: 0 };
     actions.upsertGroup(g); setCreating(false); setGName(""); openChat(g.id);
   };
 

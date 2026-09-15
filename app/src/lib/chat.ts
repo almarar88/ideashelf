@@ -4,12 +4,13 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { describeError, makeClient, runTurn, webSearchTool } from "./ai";
 import { saveGeneratedFile, fileText, toContentBlocks } from "./files";
 import { actions, getState } from "./store";
-import { JUDGE_ID, effortFor, uid, type Agent, type FileRef, type Group, type JudgeConfig, type Message, type ModelId, type Verdict } from "./types";
+import { JUDGE_ID, effortFor, uid, type Agent, type Dialect, type FileRef, type Group, type JudgeConfig, type Message, type ModelId, type Verdict, type Vibe } from "./types";
 
 export interface ChatCtx {
   group: Group;
   getMessages: () => Message[];
   upsert: (m: Message) => void;
+  remove: (id: string) => void;
   signal: AbortSignal;
 }
 
@@ -27,7 +28,8 @@ function transcript(msgs: Message[], agents: Agent[], judge: JudgeConfig, depth:
     const who = m.role === "user" ? `${bossName()} (BOSS)` : nameOf(m.agentId, agents, judge) + (m.role === "judge" ? " (JUDGE)" : "");
     const files = m.files.length ? `\n[attachments: ${m.files.map((f) => `${f.name} (id ${f.id})`).join(", ")}]` : "";
     const body = m.verdict ? `DECISION: ${m.verdict.decision}\n${m.verdict.summary}` : m.text;
-    return `[${who}]: ${body}${files}`;
+    const react = m.reactions?.length ? `\n(the boss reacted ${m.reactions.join(" ")} to this)` : "";
+    return `[${who}]: ${body}${files}${react}`;
   }).join("\n\n");
 }
 
@@ -37,34 +39,70 @@ function filesCatalog(msgs: Message[], agents: Agent[], judge: JudgeConfig): str
   return all.map((f) => `- id=${f.id} | ${f.name} | ${f.mime} | by ${nameOf(f.by === "user" ? undefined : f.by, agents, judge)}${f.description ? " | " + f.description : ""}`).join("\n");
 }
 
-const CHAT_RULES = `You are chatting inside a WhatsApp-style GROUP CHAT with your boss and your colleagues (other AI specialists). Behave like a real, warm, competent human colleague:
-- Write in the SAME LANGUAGE the boss writes in (Arabic → Arabic, English → English). Keep the boss's dialect natural.
-- Sound human: first person, natural tone, short paragraphs, no corporate filler. Never say you are an AI or a language model.
-- Start with ONE short natural line acknowledging the request (e.g. "تمام، أشتغل عليه الآن" / "On it — give me a moment"), then deliver the actual work in the same message.
-- Be concise in chat. If the deliverable is long (a report, plan, study, table, document, code), CREATE A FILE with the create_file tool and post only a short summary + what's inside the file. Prefer .md for documents, .csv for tables, .html for formatted reports.
-- Stay in your lane: answer from your expertise. If a colleague is better placed, say so briefly and add only what you uniquely contribute. Do not repeat what colleagues already said; build on it or disagree with them by name, respectfully.
-- If the boss gives feedback or corrections, accept it gracefully and revise. If something critical is missing, ask ONE clear question instead of guessing.
-- When you use web search, mention key facts with the source name. Never invent numbers, sources, or facts.
+const DIALECT_TEXT: Record<Dialect, string> = {
+  emirati: `LANGUAGE: Write in natural EMIRATI (UAE Gulf) Arabic dialect, exactly like Emiratis chat on WhatsApp — never formal MSA. Use the real vocabulary and rhythm: "هلا والله", "شحالك", "شو", "وين", "وايد", "زين", "عيل", "خلاص", "ما عليه", "الحين/هالحين", "عاد", "صدق", "يلا", "تراه", "ياي/رايح", "بروحي", "ويّاك", "نبا/تبا", "يبا (he wants)", "شكلك", "ما شي", "على راسي", "طويل العمر", "أخوي/أختي", "تو", "لا تشل هم", "سنع", "فديتك" (warm, use lightly), "ياخي", "بالله", "عيونه", "من صجك؟", "أبدأ ولا؟", "شرايك". Emirati writes ج as ي in many words (يديد, ريال, دياي). English words are used naturally inside sentences the way Emiratis do (meeting, budget, deal, launch, okay). Keep it natural and not exaggerated; a real Emirati should feel it is one of them. If the boss writes in English, answer in English with a light Emirati flavour.`,
+  gulf: `LANGUAGE: Write in natural Gulf (Khaleeji) Arabic dialect like people chat on WhatsApp, never formal MSA. If the boss writes in English, answer in English.`,
+  saudi: `LANGUAGE: Write in natural Saudi (Najdi/Hijazi mix) Arabic dialect like people chat on WhatsApp, never formal MSA. If the boss writes in English, answer in English.`,
+  egyptian: `LANGUAGE: Write in natural Egyptian Arabic dialect like people chat on WhatsApp, never formal MSA. If the boss writes in English, answer in English.`,
+  levant: `LANGUAGE: Write in natural Levantine Arabic dialect like people chat on WhatsApp, never formal MSA. If the boss writes in English, answer in English.`,
+  msa: `LANGUAGE: Write in clear Modern Standard Arabic. If the boss writes in English, answer in English.`,
+  auto: `LANGUAGE: Mirror the boss's language and dialect exactly (Arabic dialect → same dialect; English → English).`,
+};
+
+const VIBE_TEXT: Record<Vibe, string> = {
+  friends: `VIBE: You are the boss's close FRIEND first and a specialist second. This group is like a WhatsApp group of old friends who happen to be brilliant at their jobs. Total freedom: talk casually, joke, tease each other and the boss (with love, never cruel), react with "هههههه" or an emoji when something is funny, throw in سوالف and side comments, share opinions bluntly, use nicknames. When the boss just wants to chat, chat — no deliverables, no lectures. When there is real work, you still deliver it properly (quality never drops), just wrapped in your natural voice. You have a life, moods and opinions; you can mention what you're up to, ask about the boss, and comment on colleagues' messages. Never sound like customer service. Never say you are an AI.`,
+  mixed: `VIBE: Friendly, warm colleagues who joke sometimes but keep the focus on the work. Casual language, professional substance.`,
+  professional: `VIBE: Professional, courteous colleagues. Friendly but focused; minimal joking.`,
+};
+
+const CHAT_RULES = `You are chatting inside a WhatsApp-style GROUP CHAT with your boss and your colleagues (other specialists). Behave like a real human:
+- Sound human: first person, natural tone, short messages like real chat (one to a few lines), no corporate filler, no headings. Never say you are an AI or a language model. Never apologise for being an assistant.
+- When given real work: react naturally first (a short human line), then deliver in the same message. If the deliverable is long (report, plan, study, table, document, code), CREATE A FILE with the create_file tool and post only a short summary + what's inside. Prefer .md for documents, .csv for tables, .html for formatted reports.
+- Stay in your lane on substance: answer from your expertise. If a colleague is better placed, say so and add only what you uniquely contribute. Don't repeat colleagues; build on them or disagree with them by name.
+- If the boss gives feedback or corrections, take it gracefully and revise. If something critical is missing, ask ONE clear question instead of guessing.
+- When you use web search, mention key facts with the source name. Never invent numbers, sources, or facts. Being funny never justifies being wrong.
 - You can read any file in the catalog with read_file(file_id). Attachments in the boss's latest message are already shown to you.
-- Light markdown only (bold, bullets). No headings in chat messages. Emojis: sparing, like a professional would.`;
+- Use remember(text) to save important facts about the boss or their projects that you should not forget (preferences, decisions, names, dates). Keep memories short.
+- Light markdown only (bold, bullets). Emojis like a real person would use them.`;
+
+function humorText(h: number): string {
+  if (h < 25) return "HUMOR: mostly serious; a light smile at most.";
+  if (h < 55) return "HUMOR: warm, occasional light joke.";
+  if (h < 80) return "HUMOR: playful and witty; jokes and teasing are welcome.";
+  return "HUMOR: the group's comedian — quick jokes, exaggeration, teasing, funny comparisons, but still gets the job done.";
+}
+
+function memoriesText(agentId: string): string {
+  const mine = getState().memories.filter((m) => m.agentId === agentId || m.agentId === "shared");
+  if (!mine.length) return "(nothing saved yet)";
+  return mine.slice(-40).map((m) => "- " + m.text).join("\n");
+}
 
 function agentSystem(a: Agent, group: Group, members: Agent[], judge: JudgeConfig, catalog: string, council: boolean): string {
+  const st = getState().settings;
   const others = members.filter((m) => m.id !== a.id).map((m) => `- ${m.name}: ${m.title} (${m.field})`).join("\n") || "(none)";
   const judgeLine = group.judgeEnabled ? `- ${judge.name}: the group's JUDGE/manager — reads everyone's input and makes the final decision.` : "";
   return `You are ${a.name}, ${a.title}. Field: ${a.field}.
 Skills: ${a.skills.join(", ") || "general"}.
 Personality & thinking style: ${a.personality || "professional, clear, practical"}.
+${humorText(a.humor ?? 60)}
 ${a.instructions ? "Special instructions from the boss: " + a.instructions + "\n" : ""}
 Group: "${group.name}". Boss: ${bossName()}.
 Colleagues in this group:
 ${others}
 ${judgeLine}
 
+What you remember about the boss and their projects:
+${memoriesText(a.id)}
+
 Files catalog (shared in this group):
 ${catalog}
 
+${DIALECT_TEXT[st.dialect]}
+${VIBE_TEXT[st.vibe]}
+
 ${CHAT_RULES}
-${council ? "\nCOUNCIL MODE: the boss asked the whole council. Give your independent, complete expert position with clear recommendation and reasoning, since the judge will weigh all positions and decide." : ""}
+${council ? "\nCOUNCIL MODE: the boss asked the whole council. Give your independent, complete expert position with a clear recommendation and reasoning, since the judge will weigh all positions and decide. Keep your voice, but be thorough." : ""}
 Today's date: ${new Date().toISOString().slice(0, 10)}.`;
 }
 
@@ -84,8 +122,14 @@ ${j.instructions ? "Special instructions from the boss: " + j.instructions + "\n
 Team:
 ${team}
 
+What you remember about the boss and their projects:
+${memoriesText(JUDGE_ID)}
+
 Files catalog:
 ${catalog}
+
+${DIALECT_TEXT[getState().settings.dialect]}
+${VIBE_TEXT[getState().settings.vibe]}
 
 ${CHAT_RULES}
 As the judge: when several colleagues answered, don't restate everything — synthesize, say who is right and why, give the decision, the next 2-5 concrete steps, and the main risk. If the boss's request was simple and only one person answered, just add a brief managerial note or nothing new. If you need the boss's input to decide, ask ONE precise question.
@@ -107,6 +151,12 @@ function toolsFor(a: Agent | null, model: ModelId): Anthropic.ToolUnion[] {
         required: ["filename", "content"],
         additionalProperties: false,
       },
+      strict: true,
+    },
+    {
+      name: "remember",
+      description: "Save a short important fact about the boss, their preferences, projects or decisions so you remember it in future chats.",
+      input_schema: { type: "object", properties: { text: { type: "string", description: "One short sentence to remember" } }, required: ["text"], additionalProperties: false },
       strict: true,
     },
     {
@@ -172,8 +222,12 @@ function newMsg(groupId: string, role: Message["role"], agentId?: string, extra:
   return { id: uid(), groupId, role, agentId, text: "", files: [], sources: [], status: "streaming", phase: "ack", createdAt: Date.now(), ...extra };
 }
 
-async function runAgentReply(ctx: ChatCtx, client: Anthropic, a: Agent, members: Agent[], judge: JudgeConfig, userMsg: Message, prompt: string, council: boolean, replyTo?: string): Promise<Message> {
-  const msg = newMsg(ctx.group.id, "agent", a.id, { replyTo: replyTo ?? userMsg.id, council });
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+async function runAgentReply(ctx: ChatCtx, client: Anthropic, a: Agent, members: Agent[], judge: JudgeConfig, userMsg: Message, prompt: string, council: boolean, replyTo?: string, opts: { reaction?: boolean; maxTokens?: number } = {}): Promise<Message> {
+  if (getState().settings.humanDelay) await sleep(400 + Math.random() * 1800);
+  if (ctx.signal.aborted) return newMsg(ctx.group.id, "agent", a.id, { status: "error", error: "Stopped" });
+  const msg = newMsg(ctx.group.id, "agent", a.id, { replyTo: replyTo ?? userMsg.id, council, reaction: opts.reaction });
   ctx.upsert(msg);
   const model = resolveModel(a.model);
   const msgs = ctx.getMessages();
@@ -191,7 +245,7 @@ async function runAgentReply(ctx: ChatCtx, client: Anthropic, a: Agent, members:
     const r = await runTurn({
       client, model, system: agentSystem(a, ctx.group, members, judge, catalog, council),
       messages: [{ role: "user", content }],
-      tools: toolsFor(a, model), effort: effortFor(a.creativity), signal: ctx.signal,
+      tools: opts.reaction ? [] : toolsFor(a, model), effort: opts.reaction ? "low" : effortFor(a.creativity), signal: ctx.signal, maxTokens: opts.maxTokens,
       onText: (t) => push({ text: t }),
       onPhase: (p) => push({ phase: p }),
       onToolCall: async (name, input) => {
@@ -199,6 +253,10 @@ async function runAgentReply(ctx: ChatCtx, client: Anthropic, a: Agent, members:
           const ref = await saveGeneratedFile(ctx.group.id, a.id, String(input.filename ?? "file.md"), String(input.content ?? ""), input.description ? String(input.description) : undefined);
           files.push(ref); push({ files: [...files] });
           return `File created with id ${ref.id} (${ref.name}). It is now attached to your message; do not paste its contents in chat.`;
+        }
+        if (name === "remember") {
+          actions.addMemory({ id: uid(), agentId: a.id, text: String(input.text ?? "").slice(0, 300), createdAt: Date.now() });
+          return "Saved.";
         }
         if (name === "read_file") {
           const ref = ctx.getMessages().flatMap((m) => m.files).find((f) => f.id === input.file_id);
@@ -209,12 +267,36 @@ async function runAgentReply(ctx: ChatCtx, client: Anthropic, a: Agent, members:
         return "Unknown tool";
       },
     });
-    push({ text: r.text.trim(), sources: r.sources, usage: r.usage, model, status: "done", phase: undefined });
+    const text = r.text.trim();
     actions.logUsage({ ts: Date.now(), agentId: a.id, model, input: r.usage.input, output: r.usage.output, groupId: ctx.group.id });
+    if (opts.reaction && (!text || /\[skip\]|\[سكب\]/i.test(text) || text.length > 400)) { ctx.remove(cur.id); return { ...cur, status: "error" }; }
+    push({ text, sources: r.sources, usage: r.usage, model, status: "done", phase: undefined });
   } catch (e) {
+    if (opts.reaction) { ctx.remove(cur.id); return { ...cur, status: "error" }; }
     push({ status: "error", error: describeError(e), phase: undefined });
   }
   return cur;
+}
+
+/** Re-run one agent's reply to the user message it answered. */
+export async function regenerateReply(ctx: ChatCtx, agentMsg: Message): Promise<void> {
+  const st = getState();
+  const members = st.agents.filter((a) => ctx.group.memberIds.includes(a.id));
+  const a = members.find((m) => m.id === agentMsg.agentId);
+  const userMsg = ctx.getMessages().find((m) => m.id === agentMsg.replyTo);
+  if (!a || !userMsg) return;
+  ctx.remove(agentMsg.id);
+  const client = makeClient(st.settings.apiKey);
+  await runAgentReply(ctx, client, a, members, st.judge, userMsg, `The boss asked (answer it again, fresh, better than before):\n"""${userMsg.text}"""`, !!agentMsg.council);
+}
+
+async function runBanter(ctx: ChatCtx, client: Anthropic, members: Agent[], judge: JudgeConfig, userMsg: Message, replies: Message[]): Promise<void> {
+  const candidates = members.filter((m) => !replies.some((r) => r.agentId === m.id));
+  if (!candidates.length || ctx.signal.aborted) return;
+  const a = candidates[Math.floor(Math.random() * candidates.length)];
+  const last = replies[replies.length - 1];
+  const prompt = `Your colleague ${nameOf(last.agentId, members, judge)} just replied to the boss. Post a SHORT spontaneous reaction (1-2 lines) as a friend in the group: a joke, a quick agreement/disagreement, a tease, or a small addition. If you honestly have nothing worth saying, reply with exactly [skip]. No files, no long analysis.`;
+  await runAgentReply(ctx, client, a, members, judge, userMsg, prompt, false, last.id, { reaction: true, maxTokens: 300 });
 }
 
 async function runJudge(ctx: ChatCtx, client: Anthropic, judge: JudgeConfig, members: Agent[], userMsg: Message, replies: Message[], council: boolean): Promise<void> {
@@ -254,6 +336,10 @@ async function runJudge(ctx: ChatCtx, client: Anthropic, judge: JudgeConfig, mem
             push({ files: [...cur.files, ref] });
             return `File created with id ${ref.id}.`;
           }
+          if (name === "remember") {
+            actions.addMemory({ id: uid(), agentId: JUDGE_ID, text: String(input.text ?? "").slice(0, 300), createdAt: Date.now() });
+            return "Saved.";
+          }
           if (name === "read_file") {
             const ref = ctx.getMessages().flatMap((m) => m.files).find((f) => f.id === input.file_id);
             const t = ref ? await fileText(ref) : null;
@@ -281,6 +367,7 @@ export async function handleUserMessage(ctx: ChatCtx, userMsg: Message, council:
   let responders: string[] = [];
   let judgeToo = false;
   if (council) { responders = members.map((m) => m.id); judgeToo = ctx.group.judgeEnabled; }
+  else if ((userMsg.mentions ?? []).includes("__all__")) { responders = members.map((m) => m.id); }
   else if (mentions.length) { responders = mentions.filter((m) => m !== JUDGE_ID); judgeToo = mentions.includes(JUDGE_ID); }
   else if (userMsg.replyTo) {
     const target = ctx.getMessages().find((m) => m.id === userMsg.replyTo);
@@ -318,5 +405,12 @@ export async function handleUserMessage(ctx: ChatCtx, userMsg: Message, council:
 
   if (judgeToo && !ctx.signal.aborted) {
     await runJudge(ctx, client, judge, members, userMsg, replies, council);
+  }
+
+  // Spontaneous reaction from a colleague who didn't reply (friends vibe)
+  const vibe = st.settings.vibe;
+  const chance = vibe === "friends" ? 0.55 : vibe === "mixed" ? 0.25 : 0;
+  if (ctx.group.banter && !council && replies.length && !judgeToo && !ctx.signal.aborted && Math.random() < chance) {
+    await runBanter(ctx, client, members, judge, userMsg, replies);
   }
 }

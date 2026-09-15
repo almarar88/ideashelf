@@ -1,7 +1,8 @@
 import { actions, useStore } from "../lib/store";
 import { t } from "../lib/i18n";
 import { Icon } from "../components/ui";
-import { MODELS } from "../lib/types";
+import { MODELS, type Dialect, type Vibe } from "../lib/types";
+import { Toggle } from "../components/ui";
 import { filesDB, messagesDB } from "../lib/db";
 
 export default function Settings() {
@@ -24,13 +25,23 @@ export default function Settings() {
           <div className="field"><label>{t(lang, "theme")}</label><div className="seg"><button className={s.theme === "light" ? "on" : ""} onClick={() => actions.updateSettings({ theme: "light" })}>{t(lang, "light")}</button><button className={s.theme === "dark" ? "on" : ""} onClick={() => actions.updateSettings({ theme: "dark" })}>{t(lang, "dark")}</button></div></div>
         </div>
         <div className="card stack">
+          <div className="field"><label>{t(lang, "dialect")}</label>
+            <div className="chips">{([["emirati", "dEmirati"], ["gulf", "dGulf"], ["saudi", "dSaudi"], ["egyptian", "dEgyptian"], ["levant", "dLevant"], ["msa", "dMsa"], ["auto", "dAuto"]] as [Dialect, "dEmirati" | "dGulf" | "dSaudi" | "dEgyptian" | "dLevant" | "dMsa" | "dAuto"][]).map(([id, k]) => <button key={id} className={"chip" + (s.dialect === id ? " on" : "")} onClick={() => actions.updateSettings({ dialect: id })}>{t(lang, k)}</button>)}</div>
+          </div>
+          <div className="field"><label>{t(lang, "vibe")}</label>
+            <div className="seg">{([["friends", "vFriends"], ["mixed", "vMixed"], ["professional", "vPro"]] as [Vibe, "vFriends" | "vMixed" | "vPro"][]).map(([id, k]) => <button key={id} className={s.vibe === id ? "on" : ""} onClick={() => actions.updateSettings({ vibe: id })}>{t(lang, k)}</button>)}</div>
+            <span className="small muted">{t(lang, "vibeDesc")}</span>
+          </div>
+          <div className="row between"><div><div style={{ fontWeight: 600 }}>{t(lang, "humanDelay")}</div><div className="small muted">{t(lang, "humanDelayDesc")}</div></div><Toggle on={s.humanDelay} onChange={(v) => actions.updateSettings({ humanDelay: v })} /></div>
+        </div>
+        <div className="card stack">
           <div className="field"><label>{t(lang, "defaultModel")}</label>
             <div className="stack" style={{ gap: 6 }}>{MODELS.map((m) => <button key={m.id} className={"chip" + (s.defaultModel === m.id ? " on" : "")} style={{ justifyContent: "space-between" }} onClick={() => actions.updateSettings({ defaultModel: m.id })}><span>{m.label}</span><span className="small" style={{ opacity: .7 }}>{m.note[lang]} · ${m.inPrice}/${m.outPrice}</span></button>)}</div>
           </div>
           <div className="row between"><span className="muted">{t(lang, "concurrency")}</span><div className="row"><button className="round-btn" onClick={() => actions.updateSettings({ concurrency: Math.max(1, s.concurrency - 1) })}><Icon name="minus" size={16} /></button><b style={{ minWidth: 24, textAlign: "center" }}>{s.concurrency}</b><button className="round-btn" onClick={() => actions.updateSettings({ concurrency: Math.min(6, s.concurrency + 1) })}><Icon name="plus" size={16} /></button></div></div>
         </div>
         <button className="btn block" style={{ background: "var(--red)" }} onClick={async () => { if (confirm(t(lang, "confirmReset"))) { await messagesDB.clear(); await filesDB.clear(); actions.resetAll(); actions.updateSettings({ onboarded: true }); } }}><Icon name="trash" size={18} /> {t(lang, "resetAll")}</button>
-        <div className="small muted" style={{ textAlign: "center" }}>Majlis AI · {t(lang, "version")} 1.0.0</div>
+        <div className="small muted" style={{ textAlign: "center" }}>Majlis AI · {t(lang, "version")} 1.1.0</div>
       </div>
     </div>
   );

@@ -6,8 +6,8 @@ import { Dots, Gauge, Icon, Sheet, Toggle, fmtTime } from "../components/ui";
 import { Markdown } from "../components/markdown";
 import { FileChip, FileViewer } from "../components/FileViewer";
 import { messagesDB } from "../lib/db";
-import { ingestUpload, pickFiles, shareText } from "../lib/files";
-import { handleUserMessage } from "../lib/chat";
+import { ingestUpload, pickCamera, pickFiles, shareText } from "../lib/files";
+import { handleUserMessage, regenerateReply } from "../lib/chat";
 import { JUDGE_ID, uid, type Agent, type FileRef, type Message, type Verdict } from "../lib/types";
 import { SESSION_EXAMPLES } from "../lib/presets";
 
@@ -27,6 +27,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
   const [menuMsg, setMenuMsg] = useState<Message | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [attachMenu, setAttachMenu] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const msgsRef = useRef<Message[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
@@ -50,6 +51,11 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
     }
   }, [groupId, persist]);
 
+  const remove = useCallback((id: string) => {
+    const next = msgsRef.current.filter((x) => x.id !== id);
+    msgsRef.current = next; setMsgs(next); persist(next);
+  }, [persist]);
+
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }); }, [msgs.length, msgs[msgs.length - 1]?.text.length]);
 
   const members = useMemo(() => agents.filter((a) => group?.memberIds.includes(a.id)), [agents, group]);
@@ -66,12 +72,13 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
     setText(""); setPending([]); setReplyTo(null);
     const ac = new AbortController(); abortRef.current = ac; setRunning(true);
     try {
-      await handleUserMessage({ group: getState().groups.find((g) => g.id === groupId)!, getMessages: () => msgsRef.current, upsert, signal: ac.signal }, m, council);
+      await handleUserMessage({ group: getState().groups.find((g) => g.id === groupId)!, getMessages: () => msgsRef.current, upsert, remove, signal: ac.signal }, m, council);
     } finally { setRunning(false); abortRef.current = null; }
   };
 
-  const attach = async () => {
-    const files = await pickFiles("image/*,application/pdf,text/*,.md,.csv,.json,.html");
+  const attach = async (kind: "camera" | "gallery" | "file") => {
+    setAttachMenu(false);
+    const files = kind === "camera" ? await pickCamera() : await pickFiles(kind === "gallery" ? "image/*" : "application/pdf,text/*,.md,.csv,.json,.html,.txt", true);
     if (!files.length) return;
     setUploading(true);
     try { const refs = await Promise.all(files.map((f) => ingestUpload(f, groupId))); setPending((p) => [...p, ...refs]); }
@@ -79,7 +86,28 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
     finally { setUploading(false); }
   };
 
-  const deleteMsg = (m: Message) => { const next = msgsRef.current.filter((x) => x.id !== m.id); msgsRef.current = next; setMsgs(next); persist(next); setMenuMsg(null); };
+  const deleteMsg = (m: Message) => { remove(m.id); setMenuMsg(null); };
+  const reactTo = (m: Message, emoji: string) => {
+    const cur = m.reactions ?? [];
+    upsert({ ...m, reactions: cur.includes(emoji) ? cur.filter((e) => e !== emoji) : [...cur, emoji] });
+    setMenuMsg(null);
+  };
+  const regen = async (m: Message) => {
+    setMenuMsg(null);
+    if (!settings.apiKey) { alert(t(lang, "needKey")); return; }
+    const ac = new AbortController(); abortRef.current = ac; setRunning(true);
+    try { await regenerateReply({ group: getState().groups.find((g) => g.id === groupId)!, getMessages: () => msgsRef.current, upsert, remove, signal: ac.signal }, m); }
+    finally { setRunning(false); abortRef.current = null; }
+  };
+  const speak = (m: Message) => {
+    setMenuMsg(null);
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance((m.verdict ? m.verdict.decision + ". " + m.verdict.summary : m.text).replace(/[*#`_]/g, ""));
+    u.lang = lang === "ar" ? "ar-AE" : "en-US";
+    window.speechSynthesis.speak(u);
+  };
+  const canSpeak = "speechSynthesis" in window;
   const exportChat = () => {
     const lines = msgs.map((m) => `[${m.role === "user" ? settings.userName || "Me" : m.agentId === JUDGE_ID ? judge.name : agentOf(m.agentId)?.name ?? "?"}] ${m.verdict ? m.verdict.decision + "\n" + m.verdict.summary : m.text}${m.files.length ? "\n(files: " + m.files.map((f) => f.name).join(", ") + ")" : ""}`);
     shareText(group.name, lines.join("\n\n"));
@@ -125,7 +153,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
               <div key={m.id} className="fade-in" style={{ alignSelf: "flex-end", maxWidth: "82%" }} onContextMenu={(e) => { e.preventDefault(); setMenuMsg(m); }}>
                 <div style={{ background: "var(--orange)", color: "#fff", borderRadius: "20px 20px 6px 20px", padding: "10px 14px" }} onClick={() => setMenuMsg(m)}>
                   {rt && <div className="small" style={{ opacity: .8, borderInlineStart: "2px solid rgba(255,255,255,.6)", paddingInlineStart: 8, marginBottom: 6 }}>{nameFor(rt)}: {rt.text.slice(0, 60)}</div>}
-                  {m.mentions?.length ? <div className="small" style={{ opacity: .85, marginBottom: 4 }}>@{m.mentions[0] === JUDGE_ID ? judge.name : agentOf(m.mentions[0])?.name}</div> : null}
+                  {m.mentions?.length ? <div className="small" style={{ opacity: .85, marginBottom: 4 }}>@{m.mentions[0] === JUDGE_ID ? judge.name : m.mentions[0] === "__all__" ? t(lang, "allMembers") : agentOf(m.mentions[0])?.name}</div> : null}
                   {m.council && <div className="small" style={{ opacity: .85, marginBottom: 4 }}>🏛 {t(lang, "council")}</div>}
                   {m.files.length > 0 && <div className="stack" style={{ gap: 6, marginBottom: m.text ? 8 : 0 }}>{m.files.map((f) => <FileChip key={f.id} file={f} onOpen={setViewing} light />)}</div>}
                   {m.text && <div className="prose" style={{ margin: 0 }}>{m.text}</div>}
@@ -145,6 +173,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div className="row" style={{ gap: 6, marginBottom: 3 }}>
                   <span style={{ fontWeight: 600, fontSize: 13, color: isJudge ? "var(--text)" : color }}>{nameFor(m)}</span>
+                  {m.reaction && <span className="small muted">💬</span>}
                   {isJudge && <span className="pill dark" style={{ padding: "2px 8px", fontSize: 10 }}><Icon name="gavel" size={11} /> {t(lang, "judge")}</span>}
                   <span className="small muted">{a?.title}</span>
                 </div>
@@ -156,6 +185,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
                   {m.verdict && <VerdictCard v={m.verdict} members={members} lang={lang} />}
                   {m.files.length > 0 && <div className="stack" style={{ gap: 6, marginTop: 8 }}>{m.files.map((f) => <FileChip key={f.id} file={f} onOpen={setViewing} light={isJudge} />)}</div>}
                   {m.sources.length > 0 && <Sources sources={m.sources} lang={lang} />}
+                  {m.reactions?.length ? <div style={{ marginTop: 6 }}>{m.reactions.map((e) => <span key={e} className="pill" style={{ padding: "2px 8px", fontSize: 13, marginInlineEnd: 4 }}>{e}</span>)}</div> : null}
                   <div className="small" style={{ opacity: .55, textAlign: "end", marginTop: 4 }}>{fmtTime(m.createdAt, lang)}{m.usage ? ` · ${((m.usage.input + m.usage.output) / 1000).toFixed(1)}K` : ""}</div>
                 </div>
               </div>
@@ -170,11 +200,12 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
         <div className="row" style={{ overflowX: "auto", gap: 6, marginBottom: 8, paddingBottom: 2 }}>
           <button className={"chip" + (council ? " on" : "")} style={{ flexShrink: 0 }} onClick={() => { setCouncil(!council); setMention(null); }}>🏛 {t(lang, "council")}</button>
           <button className={"chip" + (!mention && !council ? " on" : "")} style={{ flexShrink: 0 }} onClick={() => { setMention(null); setCouncil(false); }}>{t(lang, "everyone")}</button>
+          <button className={"chip" + (mention === "__all__" ? " on" : "")} style={{ flexShrink: 0 }} onClick={() => { setMention("__all__"); setCouncil(false); }}>👥 {t(lang, "allMembers")}</button>
           {members.map((a) => <button key={a.id} className={"chip" + (mention === a.id ? " on" : "")} style={{ flexShrink: 0 }} onClick={() => { setMention(a.id); setCouncil(false); }}><RobotAvatar variant={a.avatar} color={a.color} size={18} /> {a.name}</button>)}
           {group.judgeEnabled && <button className={"chip" + (mention === JUDGE_ID ? " on" : "")} style={{ flexShrink: 0 }} onClick={() => { setMention(JUDGE_ID); setCouncil(false); }}><Icon name="gavel" size={14} /> {judge.name}</button>}
         </div>
         <div className="row" style={{ alignItems: "flex-end", gap: 8 }}>
-          <button className="icon-btn" onClick={attach} disabled={uploading} title={t(lang, "attachHint")}>{uploading ? <Dots /> : <Icon name="clip" />}</button>
+          <button className="icon-btn" onClick={() => setAttachMenu(true)} disabled={uploading} title={t(lang, "attachHint")}>{uploading ? <Dots /> : <Icon name="clip" />}</button>
           <textarea className="input" rows={1} value={text} onChange={(e) => setText(e.target.value)} placeholder={t(lang, "chatPlaceholder")} style={{ borderRadius: 24, minHeight: 48, maxHeight: 140, padding: "13px 16px", background: "var(--white)" }}
             onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = Math.min(140, el.scrollHeight) + "px"; }}
             onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send(); }} />
@@ -189,12 +220,24 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
       <Sheet open={!!menuMsg} onClose={() => setMenuMsg(null)}>
         {menuMsg && (
           <div className="stack">
+            {menuMsg.role !== "user" && <div className="row" style={{ justifyContent: "space-around", background: "var(--white)", borderRadius: 999, padding: 8 }}>{["👍", "❤️", "😂", "🔥", "👏", "🤔", "👎"].map((e) => <button key={e} style={{ fontSize: 26, opacity: menuMsg.reactions?.includes(e) ? 1 : .8, transform: menuMsg.reactions?.includes(e) ? "scale(1.25)" : "none" }} onClick={() => reactTo(menuMsg, e)}>{e}</button>)}</div>}
             {menuMsg.role !== "user" && <button className="list-item" onClick={() => { setReplyTo(menuMsg); setMenuMsg(null); }}><Icon name="reply" /> {t(lang, "reply") }</button>}
+            {menuMsg.role === "agent" && menuMsg.replyTo && !running && <button className="list-item" onClick={() => regen(menuMsg)}><Icon name="refresh" /> {t(lang, "regenerate")}</button>}
+            {menuMsg.role !== "user" && canSpeak && <button className="list-item" onClick={() => speak(menuMsg)}>🔊 {t(lang, "speak")}</button>}
             <button className="list-item" onClick={() => { navigator.clipboard.writeText(menuMsg.verdict ? menuMsg.verdict.decision + "\n\n" + menuMsg.verdict.summary : menuMsg.text); setMenuMsg(null); }}><Icon name="copy" /> {t(lang, "copy")}</button>
             <button className="list-item" onClick={() => { shareText(nameFor(menuMsg), menuMsg.text); setMenuMsg(null); }}><Icon name="share" /> {t(lang, "share")}</button>
             <button className="list-item" style={{ color: "var(--red)" }} onClick={() => deleteMsg(menuMsg)}><Icon name="trash" /> {t(lang, "delete")}</button>
           </div>
         )}
+      </Sheet>
+
+      <Sheet open={attachMenu} onClose={() => setAttachMenu(false)}>
+        <div className="grid2" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+          <button className="card soft" style={{ textAlign: "center" }} onClick={() => attach("camera")}><div style={{ fontSize: 30 }}>📷</div><div className="small">{t(lang, "camera")}</div></button>
+          <button className="card soft" style={{ textAlign: "center" }} onClick={() => attach("gallery")}><div style={{ fontSize: 30 }}>🖼️</div><div className="small">{t(lang, "gallery")}</div></button>
+          <button className="card soft" style={{ textAlign: "center" }} onClick={() => attach("file")}><div style={{ fontSize: 30 }}>📄</div><div className="small">{t(lang, "document")}</div></button>
+        </div>
+        <div className="small muted" style={{ textAlign: "center", marginTop: 10 }}>{t(lang, "attachHint")}</div>
       </Sheet>
 
       <Sheet open={showSettings} onClose={() => setShowSettings(false)} title={t(lang, "groupSettings")}>
@@ -204,6 +247,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
             <div className="chips">{agents.map((a) => <button key={a.id} className={"chip" + (group.memberIds.includes(a.id) ? " on" : "")} onClick={() => actions.patchGroup(groupId, { memberIds: group.memberIds.includes(a.id) ? group.memberIds.filter((x) => x !== a.id) : [...group.memberIds, a.id] })}><RobotAvatar variant={a.avatar} color={a.color} size={20} /> {a.name}</button>)}</div>
           </div>
           <div className="row between card soft" style={{ padding: "12px 16px" }}><div><div style={{ fontWeight: 600 }}>{t(lang, "judgeEnabled")}</div><div className="small muted">{t(lang, "judgeDesc")}</div></div><Toggle on={group.judgeEnabled} onChange={(v) => actions.patchGroup(groupId, { judgeEnabled: v })} /></div>
+          <div className="row between card soft" style={{ padding: "12px 16px" }}><div><div style={{ fontWeight: 600 }}>{t(lang, "banter")}</div><div className="small muted">{t(lang, "banterDesc")}</div></div><Toggle on={group.banter} onChange={(v) => actions.patchGroup(groupId, { banter: v })} /></div>
           <div className="row between card soft" style={{ padding: "12px 16px" }}><div><div style={{ fontWeight: 600 }}>{t(lang, "debateRound")}</div><div className="small muted">{t(lang, "debateDesc")}</div></div><Toggle on={group.debate} onChange={(v) => actions.patchGroup(groupId, { debate: v })} /></div>
           <button className="btn light block" onClick={exportChat}><Icon name="share" size={18} /> {t(lang, "exportChat")}</button>
           <button className="btn block" style={{ background: "var(--red)" }} onClick={() => { if (confirm(t(lang, "confirmDeleteGroup"))) { messagesDB.del(groupId); actions.deleteGroup(groupId); onBack(); } }}><Icon name="trash" size={18} /> {t(lang, "deleteGroup")}</button>

@@ -3,7 +3,7 @@ import { AVATAR_COUNT, RobotAvatar } from "../lib/avatars";
 import { actions, useStore } from "../lib/store";
 import { t } from "../lib/i18n";
 import { Gauge, Icon, Sheet, Toggle } from "../components/ui";
-import { AVATAR_COLORS, MODELS, uid, type Agent, type JudgeConfig, type JudgeStyle } from "../lib/types";
+import { AVATAR_COLORS, JUDGE_ID, MODELS, uid, type Agent, type JudgeConfig, type JudgeStyle } from "../lib/types";
 import { materialize, presetAgents } from "../lib/presets";
 
 export default function Agents() {
@@ -13,7 +13,7 @@ export default function Agents() {
   const [editJudge, setEditJudge] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
 
-  const blank = (): Agent => ({ id: uid(), name: "", title: "", field: "", skills: [], personality: "", instructions: "", avatar: Math.floor(Math.random() * AVATAR_COUNT), color: AVATAR_COLORS[agents.length % AVATAR_COLORS.length], webSearch: true, maxSearches: 5, creativity: 55, model: "default", active: true, createdAt: Date.now() });
+  const blank = (): Agent => ({ id: uid(), name: "", title: "", field: "", skills: [], personality: "", instructions: "", avatar: Math.floor(Math.random() * AVATAR_COUNT), color: AVATAR_COLORS[agents.length % AVATAR_COLORS.length], webSearch: true, maxSearches: 5, creativity: 55, humor: 60, model: "default", active: true, createdAt: Date.now() });
 
   return (
     <div className="screen">
@@ -111,6 +111,12 @@ function AgentEditor({ initial, isNew, onClose }: { initial: Agent; isNew: boole
         <div className="small" style={{ opacity: .6 }}>{t(lang, "creativityDesc")}</div>
       </div>
 
+      <div className="card soft stack" style={{ gap: 6 }}>
+        <div className="row between"><span style={{ fontWeight: 600 }}>😄 {t(lang, "humor")}</span><span className="pill dark">{a.humor ?? 60}</span></div>
+        <input type="range" min={0} max={100} step={5} value={a.humor ?? 60} onChange={(e) => set({ humor: Number(e.target.value) })} style={{ width: "100%", accentColor: "var(--orange)" }} />
+        <span className="small muted">{t(lang, "humorDesc")}</span>
+      </div>
+      <MemoryList agentId={a.id} />
       <div className="row between card soft" style={{ padding: "12px 16px" }}>
         <div><div style={{ fontWeight: 600 }}><Icon name="globe" size={15} /> {t(lang, "webSearch")}</div><div className="small muted">{t(lang, "webSearchDesc")}</div></div>
         <Toggle on={a.webSearch} onChange={(v) => set({ webSearch: v })} />
@@ -147,8 +153,24 @@ function JudgeEditor({ initial, onClose }: { initial: JudgeConfig; onClose: () =
       <div className="field"><label>{t(lang, "name")}</label><input className="input" value={j.name} onChange={(e) => set({ name: e.target.value })} /></div>
       <div className="field"><label>{t(lang, "judgeStyle")}</label><div className="chips">{styles.map((s) => <button key={s.id} className={"chip" + (j.style === s.id ? " on" : "")} onClick={() => set({ style: s.id })}>{s.label}</button>)}</div></div>
       <div className="field"><label>{t(lang, "instructions")}</label><textarea className="input" value={j.instructions} onChange={(e) => set({ instructions: e.target.value })} /></div>
+      <MemoryList agentId={JUDGE_ID} />
       <div className="field"><label>{t(lang, "model")}</label><div className="chips"><button className={"chip" + (j.model === "default" ? " on" : "")} onClick={() => set({ model: "default" })}>{t(lang, "useDefault")}</button>{MODELS.map((m) => <button key={m.id} className={"chip" + (j.model === m.id ? " on" : "")} onClick={() => set({ model: m.id })}>{m.label}</button>)}</div></div>
       <button className="btn orange block" onClick={() => { actions.setJudge({ ...j, name: j.name.trim() || initial.name }); onClose(); }}>{t(lang, "save")}</button>
+    </div>
+  );
+}
+
+function MemoryList({ agentId }: { agentId: string }) {
+  const lang = useStore((s) => s.settings.lang);
+  const memories = useStore((s) => s.memories).filter((m) => m.agentId === agentId);
+  const [txt, setTxt] = useState("");
+  const add = () => { const v = txt.trim(); if (!v) return; actions.addMemory({ id: uid(), agentId, text: v, createdAt: Date.now() }); setTxt(""); };
+  return (
+    <div className="card soft stack" style={{ gap: 8 }}>
+      <div><div style={{ fontWeight: 600 }}>🧠 {t(lang, "memory")} <span className="muted small">({memories.length})</span></div><div className="small muted">{t(lang, "memoryDesc")}</div></div>
+      {memories.length === 0 && <div className="small muted">{t(lang, "noMemory")}</div>}
+      {memories.map((m) => <div key={m.id} className="row between" style={{ background: "var(--white)", padding: "8px 12px", borderRadius: 12, fontSize: 13 }}><span className="grow">{m.text}</span><button className="muted" onClick={() => actions.deleteMemory(m.id)}><Icon name="x" size={16} /></button></div>)}
+      <div className="row"><input className="input" value={txt} onChange={(e) => setTxt(e.target.value)} placeholder={t(lang, "addMemory")} onKeyDown={(e) => { if (e.key === "Enter") add(); }} style={{ background: "var(--white)" }} /><button className="round-btn orange" onClick={add}><Icon name="plus" size={18} /></button></div>
     </div>
   );
 }

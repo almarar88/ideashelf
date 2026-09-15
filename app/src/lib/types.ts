@@ -22,10 +22,16 @@ export interface Agent {
   webSearch: boolean;
   maxSearches: number;
   creativity: number;   // 0..100 → effort
+  humor: number;        // 0..100 how playful / jokey
   model: ModelId | "default";
   active: boolean;
   createdAt: number;
 }
+
+export type Dialect = "emirati" | "gulf" | "saudi" | "egyptian" | "levant" | "msa" | "auto";
+export type Vibe = "friends" | "mixed" | "professional";
+
+export interface Memory { id: string; agentId: string; text: string; createdAt: number; }
 
 export type JudgeStyle = "balanced" | "critical" | "consensus" | "bold";
 
@@ -86,6 +92,8 @@ export interface Message {
   mentions?: string[];
   council?: boolean;
   error?: string;
+  reactions?: string[];   // emoji the boss put on this message
+  reaction?: boolean;     // short spontaneous reaction from a colleague
 }
 
 export interface Group {
@@ -95,6 +103,7 @@ export interface Group {
   memberIds: string[];
   judgeEnabled: boolean;
   debate: boolean;
+  banter: boolean;        // spontaneous reactions from other members
   createdAt: number;
   updatedAt: number;
   lastPreview: string;
@@ -114,6 +123,9 @@ export interface Settings {
   concurrency: number;
   onboarded: boolean;
   historyDepth: number;
+  dialect: Dialect;
+  vibe: Vibe;
+  humanDelay: boolean;
 }
 
 export interface AppState {
@@ -122,6 +134,7 @@ export interface AppState {
   judge: JudgeConfig;
   groups: Group[];
   usageLog: UsageEntry[];
+  memories: Memory[];
 }
 
 export const AVATAR_COLORS = ["#f47a4b", "#3aa7a3", "#8b6cf6", "#4f8ef7", "#4cb37a", "#ef6aa0", "#e9b43a", "#e35d5d", "#5a6bd8", "#7a8c99", "#c46bd6", "#2f9c8a"];

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { Agent, AppState, Group, JudgeConfig, Settings, UsageEntry } from "./types";
+import type { Agent, AppState, Group, JudgeConfig, Memory, Settings, UsageEntry } from "./types";
 import { defaultAgents, defaultJudge } from "./presets";
 
 const KEY = "majlis:state:v2";
@@ -8,6 +8,7 @@ const defaultSettings: Settings = {
   apiKey: "", userName: "", lang: "ar", theme: "light",
   defaultModel: "claude-opus-5", dispatcherModel: "claude-haiku-4-5",
   concurrency: 3, onboarded: false, historyDepth: 30,
+  dialect: "emirati", vibe: "friends", humanDelay: true,
 };
 
 function load(): AppState {
@@ -17,14 +18,15 @@ function load(): AppState {
       const s = JSON.parse(raw) as Partial<AppState>;
       return {
         settings: { ...defaultSettings, ...(s.settings ?? {}) },
-        agents: s.agents ?? [],
+        agents: (s.agents ?? []).map((a) => ({ ...a, humor: a.humor ?? 60 })),
         judge: s.judge ?? defaultJudge("ar"),
-        groups: s.groups ?? [],
+        groups: (s.groups ?? []).map((g) => ({ ...g, banter: g.banter ?? true })),
         usageLog: s.usageLog ?? [],
+        memories: s.memories ?? [],
       };
     }
   } catch { /* ignore */ }
-  return { settings: defaultSettings, agents: defaultAgents("ar"), judge: defaultJudge("ar"), groups: [], usageLog: [] };
+  return { settings: defaultSettings, agents: defaultAgents("ar"), judge: defaultJudge("ar"), groups: [], usageLog: [], memories: [] };
 }
 
 let state: AppState = load();
@@ -62,9 +64,11 @@ export const actions = {
   },
   patchGroup(id: string, p: Partial<Group>) { setState((s) => ({ groups: s.groups.map((g) => (g.id === id ? { ...g, ...p } : g)) })); },
   deleteGroup(id: string) { setState((s) => ({ groups: s.groups.filter((g) => g.id !== id) })); },
+  addMemory(m: Memory) { setState((s) => ({ memories: [...s.memories.filter((x) => !(x.agentId === m.agentId && x.text === m.text)), m].slice(-400) })); },
+  deleteMemory(id: string) { setState((s) => ({ memories: s.memories.filter((m) => m.id !== id) })); },
   logUsage(e: UsageEntry) { setState((s) => ({ usageLog: [...s.usageLog.slice(-4000), e] })); },
   resetAll() {
-    state = { settings: { ...defaultSettings, lang: state.settings.lang }, agents: defaultAgents(state.settings.lang), judge: defaultJudge(state.settings.lang), groups: [], usageLog: [] };
+    state = { settings: { ...defaultSettings, lang: state.settings.lang }, agents: defaultAgents(state.settings.lang), judge: defaultJudge(state.settings.lang), groups: [], usageLog: [], memories: [] };
     persist(); listeners.forEach((l) => l());
   },
 };
