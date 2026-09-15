@@ -141,6 +141,8 @@ export async function shareFile(ref: FileRef, text?: string): Promise<void> {
     return;
   }
   const blob = f.text ? new Blob([f.data], { type: ref.mime }) : b64ToBlob(f.data, ref.mime);
+  const file = new File([blob], ref.name, { type: ref.mime });
+  if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: ref.name, text }); return; } catch { /* user cancelled or unsupported → fall through */ } }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url; a.download = ref.name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
