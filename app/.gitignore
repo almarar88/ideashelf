@@ -9,3 +9,4 @@ android/*.iml
 android/app/*.iml
 android/capacitor-cordova-android-plugins/build
 *.log
+android/.kotlin
