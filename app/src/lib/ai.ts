@@ -34,6 +34,48 @@ export interface TurnOpts {
 
 export interface TurnResult { text: string; sources: Source[]; searches: number; usage: Usage; stopReason: string; }
 
+const isAbort = (e: unknown) => (e instanceof Error && e.name === "AbortError") || e instanceof Anthropic.APIUserAbortError;
+/** True for errors worth retrying: dropped streams ("network error" / "Failed to fetch" from the browser), connection errors, 5xx, 429, overloaded. */
+export function isTransient(e: unknown): boolean {
+  if (isAbort(e)) return false;
+  if (e instanceof Anthropic.APIConnectionError || e instanceof Anthropic.RateLimitError || e instanceof Anthropic.InternalServerError) return true;
+  if (e instanceof Anthropic.APIError) return (e.status ?? 0) >= 500 || e.status === 429 || e.status === 529;
+  if (e instanceof Error) return /network|fetch|socket|ECONN|ETIMEDOUT|reset|closed|watchdog|stream/i.test(e.message);
+  return false;
+}
+
+const STALL_MS = 150_000;
+let activityStamp = 0;
+const onActivity = () => { activityStamp = Date.now(); };
+
+/**
+ * Runs one streamed request; if the stream dies mid-way (mobile networks, app backgrounded,
+ * proxies dropping idle SSE) or stalls with no events, retries the whole request up to 4 times.
+ */
+async function withStreamRetry<T>(outer: AbortSignal | undefined, attempt: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let n = 0; n < 5; n++) {
+    if (outer?.aborted) throw new DOMException("Stopped", "AbortError");
+    const ac = new AbortController();
+    const onOuter = () => ac.abort();
+    outer?.addEventListener("abort", onOuter, { once: true });
+    activityStamp = Date.now();
+    let stalled = false;
+    const watchdog = window.setInterval(() => { if (Date.now() - activityStamp > STALL_MS) { stalled = true; ac.abort(); } }, 5000);
+    try {
+      return await attempt(ac.signal);
+    } catch (e) {
+      lastErr = stalled ? new Error("stream stalled (watchdog)") : e;
+      if (outer?.aborted || !isTransient(lastErr)) throw lastErr;
+      await new Promise((r) => setTimeout(r, Math.min(8000, 1000 * 2 ** n)));
+    } finally {
+      window.clearInterval(watchdog);
+      outer?.removeEventListener("abort", onOuter);
+    }
+  }
+  throw lastErr;
+}
+
 /** Streams one agent turn, executing client tools and resuming paused server-tool turns. */
 export async function runTurn(o: TurnOpts): Promise<TurnResult> {
   const messages = [...o.messages];
@@ -52,20 +94,27 @@ export async function runTurn(o: TurnOpts): Promise<TurnResult> {
       ...(o.tools && o.tools.length ? { tools: o.tools } : {}),
       ...(o.effort && supportsEffort(o.model) ? { output_config: { effort: o.effort } } : {}),
     };
-    const stream = o.client.messages.stream(params, { signal: o.signal });
-    let sawText = false;
-    for await (const ev of stream) {
-      if (ev.type === "content_block_start") {
-        const b = ev.content_block;
-        if (b.type === "server_tool_use") { searches++; o.onPhase?.("searching"); }
-        else if (b.type === "tool_use") o.onPhase?.("working");
-        else if (b.type === "text") { o.onPhase?.("writing"); if (sawText && text && !text.endsWith("\n")) text += "\n\n"; sawText = true; }
-      } else if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
-        text += ev.delta.text;
-        o.onText?.(text);
+    if (supportsEffort(o.model)) params.thinking = { type: "adaptive", display: "summarized" }; // keeps bytes flowing during long thinking (mobile networks drop silent streams)
+    const textBefore = text;
+    const searchesBefore = searches;
+    const final = await withStreamRetry(o.signal, async (signal) => {
+      text = textBefore; searches = searchesBefore;
+      const stream = o.client.messages.stream(params, { signal });
+      let sawText = false;
+      for await (const ev of stream) {
+        onActivity();
+        if (ev.type === "content_block_start") {
+          const b = ev.content_block;
+          if (b.type === "server_tool_use") { searches++; o.onPhase?.("searching"); }
+          else if (b.type === "tool_use") o.onPhase?.("working");
+          else if (b.type === "text") { o.onPhase?.("writing"); if (sawText && text && !text.endsWith("\n")) text += "\n\n"; sawText = true; }
+        } else if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
+          text += ev.delta.text;
+          o.onText?.(text);
+        }
       }
-    }
-    const final = await stream.finalMessage();
+      return stream.finalMessage();
+    });
     usage.input += final.usage.input_tokens + (final.usage.cache_read_input_tokens ?? 0) + (final.usage.cache_creation_input_tokens ?? 0);
     usage.output += final.usage.output_tokens;
     stopReason = final.stop_reason ?? "end_turn";
@@ -120,6 +169,7 @@ export function describeError(e: unknown): string {
   if (e instanceof Anthropic.BadRequestError) return "Bad request: " + e.message;
   if (e instanceof Anthropic.APIConnectionError) return "Connection error — check your internet";
   if (e instanceof Anthropic.APIError) return `API error ${e.status}: ${e.message}`;
+  if (e instanceof Error && /network error|failed to fetch|stalled/i.test(e.message)) return "Connection dropped mid-reply (network) — tap retry";
   if (e instanceof Error) return e.name === "AbortError" ? "Stopped" : e.message;
   return String(e);
 }
