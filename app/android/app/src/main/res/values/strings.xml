@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Majlis AI</string>
+    <string name="title_activity_main">Majlis AI</string>
+    <string name="package_name">com.ideashelf.majlis</string>
+    <string name="custom_url_scheme">com.ideashelf.majlis</string>
+</resources>
