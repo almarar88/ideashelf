@@ -9,6 +9,7 @@ const defaultSettings: Settings = {
   defaultModel: "claude-opus-5", dispatcherModel: "claude-haiku-4-5",
   concurrency: 3, onboarded: false, historyDepth: 30,
   dialect: "emirati", vibe: "friends", humanDelay: true,
+  control: { level: "ask", shell: true, files: true, screen: true, device: true, webFetch: true },
 };
 
 function load(): AppState {
@@ -17,7 +18,7 @@ function load(): AppState {
     if (raw) {
       const s = JSON.parse(raw) as Partial<AppState>;
       return {
-        settings: { ...defaultSettings, ...(s.settings ?? {}) },
+        settings: { ...defaultSettings, ...(s.settings ?? {}), control: { ...defaultSettings.control, ...(s.settings?.control ?? {}) } },
         agents: (s.agents ?? []).map((a) => ({ ...a, humor: a.humor ?? 60 })),
         judge: s.judge ?? defaultJudge("ar"),
         groups: (s.groups ?? []).map((g) => ({ ...g, banter: g.banter ?? true })),

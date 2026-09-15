@@ -14,7 +14,8 @@ export function supportsEffort(model: ModelId): boolean {
   return model !== "claude-haiku-4-5";
 }
 
-export type Phase = "ack" | "working" | "searching" | "writing";
+export type Phase = "ack" | "working" | "searching" | "writing" | "computer" | "device";
+export type ToolOutput = string | Anthropic.ContentBlockParam[];
 
 export interface TurnOpts {
   client: Anthropic;
@@ -27,7 +28,8 @@ export interface TurnOpts {
   signal?: AbortSignal;
   onText?: (full: string) => void;
   onPhase?: (p: Phase) => void;
-  onToolCall?: (name: string, input: Record<string, unknown>) => Promise<string>;
+  /** Execute a client tool. Throw to report an error result. */
+  onToolCall?: (name: string, input: Record<string, unknown>, toolsetName?: string | null) => Promise<ToolOutput>;
 }
 
 export interface TurnResult { text: string; sources: Source[]; searches: number; usage: Usage; stopReason: string; }
@@ -80,12 +82,23 @@ export async function runTurn(o: TurnOpts): Promise<TurnResult> {
     }
     if (final.stop_reason === "tool_use") {
       const results: Anthropic.ToolResultBlockParam[] = [];
+      let computerFailed = false;
       for (const b of final.content) {
         if (b.type !== "tool_use") continue;
-        let out = "";
-        try { out = o.onToolCall ? await o.onToolCall(b.name, (b.input ?? {}) as Record<string, unknown>) : "Tool not available"; }
-        catch (e) { out = "Error: " + (e instanceof Error ? e.message : String(e)); }
-        results.push({ type: "tool_result", tool_use_id: b.id, content: out });
+        const toolset = b.toolset_name ?? null;
+        const base: Anthropic.ToolResultBlockParam = { type: "tool_result", tool_use_id: b.id, ...(toolset ? { toolset_name: toolset } : {}) };
+        if (toolset === "computer" && computerFailed) {
+          results.push({ ...base, is_error: true, content: "Not executed: an earlier computer action in this turn failed." });
+          continue;
+        }
+        if (toolset === "computer") o.onPhase?.("computer");
+        try {
+          const out = o.onToolCall ? await o.onToolCall(b.name, (b.input ?? {}) as Record<string, unknown>, toolset) : "Tool not available";
+          results.push({ ...base, content: typeof out === "string" ? out : (out as Anthropic.ToolResultBlockParam["content"]) });
+        } catch (e) {
+          if (toolset === "computer") computerFailed = true;
+          results.push({ ...base, is_error: true, content: "Error: " + (e instanceof Error ? e.message : String(e)) });
+        }
       }
       messages.push({ role: "assistant", content: final.content });
       messages.push({ role: "user", content: results });

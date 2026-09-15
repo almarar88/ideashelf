@@ -83,7 +83,7 @@ export interface Message {
   files: FileRef[];
   sources: Source[];
   status: MsgStatus;
-  phase?: "ack" | "working" | "searching" | "writing";
+  phase?: "ack" | "working" | "searching" | "writing" | "computer" | "device";
   verdict?: Verdict;
   usage?: Usage;
   model?: ModelId;
@@ -126,6 +126,17 @@ export interface Settings {
   dialect: Dialect;
   vibe: Vibe;
   humanDelay: boolean;
+  control: ControlSettings;
+}
+
+export type ControlLevel = "off" | "ask" | "full";
+export interface ControlSettings {
+  level: ControlLevel;   // off = no device/computer tools; ask = confirm each sensitive action; full = autonomous
+  shell: boolean;        // run commands (desktop)
+  files: boolean;        // read/write files (desktop)
+  screen: boolean;       // see the screen + mouse/keyboard (desktop)
+  device: boolean;       // phone features: location, apps, calls, clipboard, notifications
+  webFetch: boolean;     // agents may open and read web pages
 }
 
 export interface AppState {

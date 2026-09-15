@@ -28,6 +28,13 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
   const [showSettings, setShowSettings] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [attachMenu, setAttachMenu] = useState(false);
+  const [permReq, setPermReq] = useState<{ agent: string; desc: string; resolve: (ok: boolean) => void } | null>(null);
+  const allowAllRef = useRef(false);
+  const askPermission = useCallback((agent: string, desc: string) => new Promise<boolean>((resolve) => {
+    if (allowAllRef.current) { resolve(true); return; }
+    setPermReq({ agent, desc, resolve });
+  }), []);
+  const answerPerm = (ok: boolean, all = false) => { if (all) allowAllRef.current = true; permReq?.resolve(ok); setPermReq(null); };
   const abortRef = useRef<AbortController | null>(null);
   const msgsRef = useRef<Message[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
@@ -72,7 +79,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
     setText(""); setPending([]); setReplyTo(null);
     const ac = new AbortController(); abortRef.current = ac; setRunning(true);
     try {
-      await handleUserMessage({ group: getState().groups.find((g) => g.id === groupId)!, getMessages: () => msgsRef.current, upsert, remove, signal: ac.signal }, m, council);
+      await handleUserMessage({ group: getState().groups.find((g) => g.id === groupId)!, getMessages: () => msgsRef.current, upsert, remove, askPermission, signal: ac.signal }, m, council);
     } finally { setRunning(false); abortRef.current = null; }
   };
 
@@ -96,7 +103,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
     setMenuMsg(null);
     if (!settings.apiKey) { alert(t(lang, "needKey")); return; }
     const ac = new AbortController(); abortRef.current = ac; setRunning(true);
-    try { await regenerateReply({ group: getState().groups.find((g) => g.id === groupId)!, getMessages: () => msgsRef.current, upsert, remove, signal: ac.signal }, m); }
+    try { await regenerateReply({ group: getState().groups.find((g) => g.id === groupId)!, getMessages: () => msgsRef.current, upsert, remove, askPermission, signal: ac.signal }, m); }
     finally { setRunning(false); abortRef.current = null; }
   };
   const speak = (m: Message) => {
@@ -114,7 +121,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
   };
 
   const nameFor = (m: Message) => m.agentId === JUDGE_ID ? judge.name : agentOf(m.agentId)?.name ?? "?";
-  const phaseLabel = (m: Message) => m.phase === "searching" ? t(lang, "statusSearching") : m.phase === "working" ? t(lang, "working") : m.phase === "writing" ? t(lang, "typing") : t(lang, "statusThinking");
+  const phaseLabel = (m: Message) => m.phase === "searching" ? t(lang, "statusSearching") : m.phase === "working" ? t(lang, "working") : m.phase === "computer" ? t(lang, "statusComputer") : m.phase === "device" ? t(lang, "statusDevice") : m.phase === "writing" ? t(lang, "typing") : t(lang, "statusThinking");
   const typingNow = msgs.filter((m) => m.status === "streaming");
 
   return (
@@ -180,7 +187,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
                 <div className={"card" + (isJudge ? " dark" : "")} style={{ padding: "10px 14px", borderRadius: "6px 20px 20px 20px" }} onClick={() => !busy && setMenuMsg(m)}>
                   {busy && !m.text && <div className="row muted" style={{ gap: 8 }}><Dots /> <span className="small">{phaseLabel(m)}</span></div>}
                   {m.text && <Markdown text={m.text} />}
-                  {busy && m.text && <div className="row muted small" style={{ gap: 6, marginTop: 4 }}><Dots />{m.phase === "searching" ? t(lang, "statusSearching") : m.phase === "working" ? t(lang, "working") : ""}</div>}
+                  {busy && m.text && <div className="row muted small" style={{ gap: 6, marginTop: 4 }}><Dots />{m.phase === "writing" || !m.phase ? "" : phaseLabel(m)}</div>}
                   {m.status === "error" && <div className="error-box">{m.error}</div>}
                   {m.verdict && <VerdictCard v={m.verdict} members={members} lang={lang} />}
                   {m.files.length > 0 && <div className="stack" style={{ gap: 6, marginTop: 8 }}>{m.files.map((f) => <FileChip key={f.id} file={f} onOpen={setViewing} light={isJudge} />)}</div>}
@@ -227,6 +234,17 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
             <button className="list-item" onClick={() => { navigator.clipboard.writeText(menuMsg.verdict ? menuMsg.verdict.decision + "\n\n" + menuMsg.verdict.summary : menuMsg.text); setMenuMsg(null); }}><Icon name="copy" /> {t(lang, "copy")}</button>
             <button className="list-item" onClick={() => { shareText(nameFor(menuMsg), menuMsg.text); setMenuMsg(null); }}><Icon name="share" /> {t(lang, "share")}</button>
             <button className="list-item" style={{ color: "var(--red)" }} onClick={() => deleteMsg(menuMsg)}><Icon name="trash" /> {t(lang, "delete")}</button>
+          </div>
+        )}
+      </Sheet>
+
+      <Sheet open={!!permReq} onClose={() => answerPerm(false)} title={t(lang, "approveTitle")}>
+        {permReq && (
+          <div className="stack">
+            <div className="card soft"><b>{permReq.agent}</b> {t(lang, "wantsTo")}:<div dir="ltr" style={{ marginTop: 6, fontFamily: "monospace", fontSize: 13, wordBreak: "break-all" }}>{permReq.desc}</div></div>
+            <button className="btn orange block" onClick={() => answerPerm(true)}><Icon name="check" size={18} /> {t(lang, "approve")}</button>
+            <button className="btn light block" onClick={() => answerPerm(true, true)}>{t(lang, "approveAll")}</button>
+            <button className="btn block" style={{ background: "var(--red)" }} onClick={() => answerPerm(false)}><Icon name="x" size={18} /> {t(lang, "deny")}</button>
           </div>
         )}
       </Sheet>

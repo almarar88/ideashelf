@@ -1,7 +1,10 @@
 import { actions, useStore } from "../lib/store";
 import { t } from "../lib/i18n";
 import { Icon } from "../components/ui";
-import { MODELS, type Dialect, type Vibe } from "../lib/types";
+import { MODELS, type ControlLevel, type Dialect, type Vibe } from "../lib/types";
+import { detectPlatform } from "../lib/platform";
+
+const platform = detectPlatform();
 import { Toggle } from "../components/ui";
 import { filesDB, messagesDB } from "../lib/db";
 
@@ -35,13 +38,26 @@ export default function Settings() {
           <div className="row between"><div><div style={{ fontWeight: 600 }}>{t(lang, "humanDelay")}</div><div className="small muted">{t(lang, "humanDelayDesc")}</div></div><Toggle on={s.humanDelay} onChange={(v) => actions.updateSettings({ humanDelay: v })} /></div>
         </div>
         <div className="card stack">
+          <div><div className="h3">🖥️ {t(lang, "controlTitle")}</div><div className="small muted" style={{ marginTop: 4 }}>{t(lang, "controlDesc")}</div></div>
+          <div className="small muted">{t(lang, "platformNow")}: <b>{t(lang, platform === "desktop" ? "pDesktop" : platform === "android" ? "pAndroid" : platform === "ios" ? "pIos" : "pWeb")}</b></div>
+          <div className="seg">{(["off", "ask", "full"] as ControlLevel[]).map((lv) => <button key={lv} className={s.control.level === lv ? "on" : ""} onClick={() => actions.updateSettings({ control: { ...s.control, level: lv } })}>{t(lang, lv === "off" ? "levelOff" : lv === "ask" ? "levelAsk" : "levelFull")}</button>)}</div>
+          {s.control.level === "full" && <div className="error-box">{t(lang, "fullWarning")}</div>}
+          {s.control.level !== "off" && (
+            <div className="stack" style={{ gap: 8 }}>
+              {([["shell", "ctlShell"], ["files", "ctlFiles"], ["screen", "ctlScreen"], ["device", "ctlDevice"], ["webFetch", "ctlWebFetch"]] as [keyof typeof s.control, "ctlShell" | "ctlFiles" | "ctlScreen" | "ctlDevice" | "ctlWebFetch"][]).map(([k, label]) => (
+                <div key={k} className="row between"><span className="small" style={{ fontWeight: 500 }}>{t(lang, label)}</span><Toggle sm on={Boolean(s.control[k])} onChange={(v) => actions.updateSettings({ control: { ...s.control, [k]: v } })} /></div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="card stack">
           <div className="field"><label>{t(lang, "defaultModel")}</label>
             <div className="stack" style={{ gap: 6 }}>{MODELS.map((m) => <button key={m.id} className={"chip" + (s.defaultModel === m.id ? " on" : "")} style={{ justifyContent: "space-between" }} onClick={() => actions.updateSettings({ defaultModel: m.id })}><span>{m.label}</span><span className="small" style={{ opacity: .7 }}>{m.note[lang]} · ${m.inPrice}/${m.outPrice}</span></button>)}</div>
           </div>
           <div className="row between"><span className="muted">{t(lang, "concurrency")}</span><div className="row"><button className="round-btn" onClick={() => actions.updateSettings({ concurrency: Math.max(1, s.concurrency - 1) })}><Icon name="minus" size={16} /></button><b style={{ minWidth: 24, textAlign: "center" }}>{s.concurrency}</b><button className="round-btn" onClick={() => actions.updateSettings({ concurrency: Math.min(6, s.concurrency + 1) })}><Icon name="plus" size={16} /></button></div></div>
         </div>
         <button className="btn block" style={{ background: "var(--red)" }} onClick={async () => { if (confirm(t(lang, "confirmReset"))) { await messagesDB.clear(); await filesDB.clear(); actions.resetAll(); actions.updateSettings({ onboarded: true }); } }}><Icon name="trash" size={18} /> {t(lang, "resetAll")}</button>
-        <div className="small muted" style={{ textAlign: "center" }}>Majlis AI · {t(lang, "version")} 1.1.0</div>
+        <div className="small muted" style={{ textAlign: "center" }}>Majlis AI · {t(lang, "version")} 1.2.0</div>
       </div>
     </div>
   );

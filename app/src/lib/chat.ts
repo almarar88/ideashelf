@@ -1,7 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod/v4";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { describeError, makeClient, runTurn, webSearchTool } from "./ai";
+import { describeError, makeClient, runTurn, webSearchTool, type ToolOutput } from "./ai";
+import { SENSITIVE, controlPromptText, describeAction, detectPlatform, isPlatformTool, platformTools, runPlatformTool } from "./platform";
 import { saveGeneratedFile, fileText, toContentBlocks } from "./files";
 import { actions, getState } from "./store";
 import { JUDGE_ID, effortFor, uid, type Agent, type Dialect, type FileRef, type Group, type JudgeConfig, type Message, type ModelId, type Verdict, type Vibe } from "./types";
@@ -12,6 +13,22 @@ export interface ChatCtx {
   upsert: (m: Message) => void;
   remove: (id: string) => void;
   signal: AbortSignal;
+  /** Ask the boss to approve a sensitive device action. Resolves true to allow. */
+  askPermission?: (agentName: string, description: string) => Promise<boolean>;
+}
+
+const platform = detectPlatform();
+
+/** Runs a device/computer tool after the permission gate. */
+async function handlePlatformCall(ctx: ChatCtx, agentName: string, name: string, input: Record<string, unknown>, toolset: string | null | undefined): Promise<ToolOutput> {
+  const ctl = getState().settings.control;
+  if (ctl.level === "off") throw new Error("Device control is turned off by the boss.");
+  const key = toolset === "computer" ? "computer" : name;
+  if (ctl.level === "ask" && SENSITIVE.has(key) && ctx.askPermission) {
+    const ok = await ctx.askPermission(agentName, describeAction(name, input, toolset));
+    if (!ok) throw new Error("The boss denied this action. Do not retry it; explain and offer an alternative.");
+  }
+  return runPlatformTool(platform, name, input, toolset);
 }
 
 const bossName = () => getState().settings.userName || (getState().settings.lang === "ar" ? "المدير" : "the boss");
@@ -102,6 +119,7 @@ ${DIALECT_TEXT[st.dialect]}
 ${VIBE_TEXT[st.vibe]}
 
 ${CHAT_RULES}
+${controlPromptText(platform, st.control)}
 ${council ? "\nCOUNCIL MODE: the boss asked the whole council. Give your independent, complete expert position with a clear recommendation and reasoning, since the judge will weigh all positions and decide. Keep your voice, but be thorough." : ""}
 Today's date: ${new Date().toISOString().slice(0, 10)}.`;
 }
@@ -132,6 +150,7 @@ ${DIALECT_TEXT[getState().settings.dialect]}
 ${VIBE_TEXT[getState().settings.vibe]}
 
 ${CHAT_RULES}
+${controlPromptText(platform, getState().settings.control)}
 As the judge: when several colleagues answered, don't restate everything — synthesize, say who is right and why, give the decision, the next 2-5 concrete steps, and the main risk. If the boss's request was simple and only one person answered, just add a brief managerial note or nothing new. If you need the boss's input to decide, ask ONE precise question.
 Today's date: ${new Date().toISOString().slice(0, 10)}.`;
 }
@@ -166,7 +185,12 @@ function toolsFor(a: Agent | null, model: ModelId): Anthropic.ToolUnion[] {
       strict: true,
     },
   ];
-  if (a?.webSearch) tools.unshift(webSearchTool(model, a.maxSearches));
+  const ctl = getState().settings.control;
+  if (a?.webSearch) {
+    tools.unshift(webSearchTool(model, a.maxSearches));
+    if (ctl.webFetch) tools.unshift(model === "claude-haiku-4-5" ? { type: "web_fetch_20250910", name: "web_fetch", max_uses: 5 } : { type: "web_fetch_20260209", name: "web_fetch", max_uses: 5 });
+  }
+  tools.push(...platformTools(platform, ctl, model));
   return tools;
 }
 
@@ -248,7 +272,7 @@ async function runAgentReply(ctx: ChatCtx, client: Anthropic, a: Agent, members:
       tools: opts.reaction ? [] : toolsFor(a, model), effort: opts.reaction ? "low" : effortFor(a.creativity), signal: ctx.signal, maxTokens: opts.maxTokens,
       onText: (t) => push({ text: t }),
       onPhase: (p) => push({ phase: p }),
-      onToolCall: async (name, input) => {
+      onToolCall: async (name, input, toolset) => {
         if (name === "create_file") {
           const ref = await saveGeneratedFile(ctx.group.id, a.id, String(input.filename ?? "file.md"), String(input.content ?? ""), input.description ? String(input.description) : undefined);
           files.push(ref); push({ files: [...files] });
@@ -263,6 +287,10 @@ async function runAgentReply(ctx: ChatCtx, client: Anthropic, a: Agent, members:
           if (!ref) return "No such file id.";
           const t = await fileText(ref);
           return t ?? "This file is binary and cannot be read as text.";
+        }
+        if (isPlatformTool(name, toolset)) {
+          push({ phase: toolset === "computer" ? "computer" : "device" });
+          return handlePlatformCall(ctx, a.name, name, input, toolset);
         }
         return "Unknown tool";
       },
@@ -330,7 +358,7 @@ async function runJudge(ctx: ChatCtx, client: Anthropic, judge: JudgeConfig, mem
         messages: [{ role: "user", content: `Chat history:\n${history}\n\nThe boss's latest message: """${userMsg.text}"""\n\nColleagues' replies to it:\n${replyText || "(none — you are answering directly)"}\n\nNow post your message as the judge/manager.` }],
         tools: toolsFor(null, model), effort: "high", signal: ctx.signal,
         onText: (t) => push({ text: t }), onPhase: (p) => push({ phase: p }),
-        onToolCall: async (name, input) => {
+        onToolCall: async (name, input, toolset) => {
           if (name === "create_file") {
             const ref = await saveGeneratedFile(ctx.group.id, JUDGE_ID, String(input.filename ?? "decision.md"), String(input.content ?? ""), input.description ? String(input.description) : undefined);
             push({ files: [...cur.files, ref] });
@@ -344,6 +372,10 @@ async function runJudge(ctx: ChatCtx, client: Anthropic, judge: JudgeConfig, mem
             const ref = ctx.getMessages().flatMap((m) => m.files).find((f) => f.id === input.file_id);
             const t = ref ? await fileText(ref) : null;
             return t ?? "Not readable.";
+          }
+          if (isPlatformTool(name, toolset)) {
+            push({ phase: toolset === "computer" ? "computer" : "device" });
+            return handlePlatformCall(ctx, judge.name, name, input, toolset);
           }
           return "Unknown tool";
         },
