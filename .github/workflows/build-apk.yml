@@ -49,7 +49,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: Majlis AI — latest APK
-          body: "آخر إصدار من تطبيق مجلس (Majlis AI). حمّل MajlisAI.apk وثبّته على أندرويد."
+          name: Majlis AI — latest builds
+          body: |
+            **Android:** MajlisAI.apk — ثبّته مباشرة.
+            **iPhone:** MajlisAI-unsigned.ipa — غير موقّع؛ ثبّته عبر Sideloadly أو AltStore بحساب Apple ID.
           files: app/MajlisAI.apk
           prerelease: false

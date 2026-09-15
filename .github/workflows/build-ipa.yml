@@ -1,0 +1,63 @@
+name: Build Majlis AI IPA (unsigned, for sideloading)
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+    paths: ["app/**", ".github/workflows/build-ipa.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)"; xcodebuild -version
+      - name: Install dependencies and build web app
+        run: npm ci && npm run build
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+      - name: Resolve Swift packages
+        working-directory: app/ios/App
+        run: xcodebuild -resolvePackageDependencies -project App.xcodeproj -scheme App
+      - name: Archive (no code signing)
+        working-directory: app/ios/App
+        run: |
+          xcodebuild archive \
+            -project App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/App.xcarchive" \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+            -skipPackagePluginValidation -skipMacroValidation | xcpretty || true
+          test -d "$PWD/build/App.xcarchive/Products/Applications/App.app"
+      - name: Package IPA
+        working-directory: app/ios/App
+        run: |
+          rm -rf Payload && mkdir Payload
+          cp -R build/App.xcarchive/Products/Applications/App.app Payload/
+          zip -qr ../../MajlisAI-unsigned.ipa Payload
+          ls -la ../../MajlisAI-unsigned.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MajlisAI-ipa
+          path: app/MajlisAI-unsigned.ipa
+      - name: Publish to "latest" release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Majlis AI — latest builds
+          body: |
+            **Android:** MajlisAI.apk — ثبّته مباشرة.
+            **iPhone:** MajlisAI-unsigned.ipa — غير موقّع؛ ثبّته عبر Sideloadly أو AltStore بحساب Apple ID.
+          files: app/MajlisAI-unsigned.ipa
