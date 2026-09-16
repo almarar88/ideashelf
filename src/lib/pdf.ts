@@ -1,59 +1,155 @@
 import * as pdfjs from "pdfjs-dist";
-import type { PDFDocumentProxy } from "pdfjs-dist";
+import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { db, uid, type Book } from "./db";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
+// Copied into public/pdfjs by the vite plugin in vite.config.ts. Needed for PDFs that use
+// predefined CMaps (CID fonts) or non-embedded standard fonts — common in Arabic books.
+const ASSETS = `${import.meta.env.BASE_URL}pdfjs/`;
+
 export async function openPdf(file: Blob): Promise<PDFDocumentProxy> {
   const data = await file.arrayBuffer();
-  return pdfjs.getDocument({ data, isEvalSupported: false }).promise;
+  return pdfjs.getDocument({
+    data,
+    isEvalSupported: false,
+    cMapUrl: `${ASSETS}cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `${ASSETS}standard_fonts/`,
+  }).promise;
 }
 
-export async function renderPageToCanvas(
+/* ---------------------------------------------------------------------------
+ * Rendering
+ * ------------------------------------------------------------------------ */
+
+/** Prepares the canvas and starts a render. The caller awaits `.promise` and may `.cancel()`. */
+export async function renderPageFitted(
   doc: PDFDocumentProxy,
   pageNumber: number,
   canvas: HTMLCanvasElement,
-  targetWidth: number,
-): Promise<void> {
+  o: { fit: "page" | "width"; zoom: number; availWidth: number; availHeight: number },
+): Promise<RenderTask | null> {
   const page = await doc.getPage(pageNumber);
   const base = page.getViewport({ scale: 1 });
-  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-  const scale = targetWidth / base.width;
-  const viewport = page.getViewport({ scale: scale * dpr });
-  canvas.width = Math.floor(viewport.width);
-  canvas.height = Math.floor(viewport.height);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const fitScale =
+    o.fit === "page"
+      ? Math.min(o.availWidth / base.width, o.availHeight / base.height)
+      : o.availWidth / base.width;
+  const cssScale = Math.max(0.05, fitScale * o.zoom);
+  const viewport = page.getViewport({ scale: cssScale * dpr });
+
+  canvas.width = Math.max(1, Math.floor(viewport.width));
+  canvas.height = Math.max(1, Math.floor(viewport.height));
   canvas.style.width = `${Math.floor(viewport.width / dpr)}px`;
   canvas.style.height = `${Math.floor(viewport.height / dpr)}px`;
+
   const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-  await page.render({ canvasContext: ctx, viewport }).promise;
+  if (!ctx) return null;
+  // The UI runs under dir="rtl". A canvas that inherits RTL makes the browser re-order the
+  // already-shaped glyphs pdf.js paints, which visibly mangles Arabic text. Force LTR.
+  canvas.dir = "ltr";
+  ctx.direction = "ltr";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return page.render({ canvasContext: ctx, viewport });
 }
 
 async function renderCover(doc: PDFDocumentProxy): Promise<string> {
   const page = await doc.getPage(1);
   const base = page.getViewport({ scale: 1 });
-  const scale = 360 / base.width;
-  const viewport = page.getViewport({ scale });
+  const viewport = page.getViewport({ scale: 360 / base.width });
   const canvas = document.createElement("canvas");
   canvas.width = Math.floor(viewport.width);
   canvas.height = Math.floor(viewport.height);
+  canvas.dir = "ltr";
   const ctx = canvas.getContext("2d");
   if (!ctx) return "";
+  ctx.direction = "ltr";
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvasContext: ctx, viewport }).promise;
   return canvas.toDataURL("image/jpeg", 0.82);
 }
 
-function normalizeText(items: { str?: string; hasEOL?: boolean }[]): string {
-  let out = "";
+/* ---------------------------------------------------------------------------
+ * Text extraction
+ *
+ * Many Arabic PDFs map glyphs to Unicode *presentation forms* (U+FB50–U+FEFF), emit one
+ * item per glyph, and lay them out in visual (right-to-left) order. Reading `item.str` in
+ * stream order therefore yields reversed, letter-by-letter gibberish. We rebuild each line
+ * from glyph positions instead: group by baseline, order by x (right-to-left for RTL lines),
+ * insert spaces from the real gaps, then fold presentation forms back to base letters.
+ * ------------------------------------------------------------------------ */
+
+interface RawItem {
+  str?: string;
+  transform?: number[];
+  width?: number;
+  height?: number;
+}
+
+interface Cell {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  str: string;
+}
+
+const RTL_RE = /[֐-ࣿיִ-﷿ﹰ-﻿]/;
+const PRESENTATION_RE = /[ﭐ-﷿ﹰ-﻿]/;
+const BIDI_MARKS_RE = /[‎‏‪-‮⁦-⁩]/g;
+
+export function itemsToText(items: RawItem[]): string {
+  const cells: Cell[] = [];
   for (const it of items) {
-    if (!it.str) continue;
-    out += it.str;
-    out += it.hasEOL ? "\n" : " ";
+    if (!it.str || !it.str.trim() || !it.transform) continue;
+    const h = it.height && it.height > 1 ? it.height : Math.abs(it.transform[3]) || 10;
+    cells.push({ x: it.transform[4], y: it.transform[5], w: it.width ?? 0, h, str: it.str });
   }
-  return out.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/ {2,}/g, " ").trim();
+  if (!cells.length) return "";
+
+  cells.sort((a, b) => b.y - a.y);
+  const lines: Cell[][] = [];
+  for (const c of cells) {
+    const line = lines[lines.length - 1];
+    if (line && Math.abs(line[0].y - c.y) <= Math.max(1.5, c.h * 0.5)) line.push(c);
+    else lines.push([c]);
+  }
+
+  const out: string[] = [];
+  for (const line of lines) {
+    const rtl = RTL_RE.test(line.map((c) => c.str).join(""));
+    line.sort((a, b) => (rtl ? b.x + b.w - (a.x + a.w) : a.x - b.x));
+
+    let text = "";
+    let prev: Cell | null = null;
+    for (const c of line) {
+      let s = c.str;
+      // Presentation forms sit in visual order inside the item too, so reverse before folding
+      // them back (reversing after would turn the لا ligature into ال).
+      if (rtl && s.length > 1 && PRESENTATION_RE.test(s)) s = [...s].reverse().join("");
+      s = s.normalize("NFKC");
+      if (prev) {
+        const gap = rtl ? prev.x - (c.x + c.w) : c.x - (prev.x + prev.w);
+        const fontSize = Math.max(prev.h, c.h, 6);
+        if (gap > fontSize * 0.18 && !/\s$/.test(text) && !/^\s/.test(s)) text += " ";
+      }
+      text += s;
+      prev = c;
+    }
+    const clean = text.replace(BIDI_MARKS_RE, "").replace(/[ \t]{2,}/g, " ").trim();
+    if (clean) out.push(clean);
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** True when the page yielded so little text that the PDF is probably scanned images. */
+export function looksScanned(text: string, pages: number): boolean {
+  return text.replace(/\s/g, "").length < pages * 20;
 }
 
 export interface ImportProgress {
@@ -108,7 +204,7 @@ export async function importPdf(file: File, onProgress?: (p: ImportProgress) => 
     for (let p = start; p <= end; p++) {
       const page = await doc.getPage(p);
       const content = await page.getTextContent();
-      rows.push({ id: `${book.id}:${p}`, bookId: book.id, page: p, text: normalizeText(content.items as { str?: string; hasEOL?: boolean }[]) });
+      rows.push({ id: `${book.id}:${p}`, bookId: book.id, page: p, text: itemsToText(content.items as RawItem[]) });
       page.cleanup();
     }
     await db.pageTexts.bulkPut(rows);

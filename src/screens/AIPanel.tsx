@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronDown, ChevronRight, Copy, Send, Square, Trash2 } from "lucide-react";
 import { db, uid, type Analysis, type Book } from "@/lib/db";
+import { looksScanned } from "@/lib/pdf";
 import { chatWithBook, describeError, runTask, scopeLabel, type Scope, type TaskKind } from "@/lib/ai";
 import type { Settings } from "@/lib/settings";
 import { Markdown } from "@/components/Markdown";
@@ -39,6 +40,11 @@ export function AIPanel({
   const scope: Scope = scopeKind === "page" ? { kind: "page", page } : scopeKind === "range" ? { kind: "range", from, to } : { kind: "book" };
 
   const analyses = useLiveQuery(() => db.analyses.where("bookId").equals(book.id).reverse().sortBy("createdAt"), [book.id]) ?? [];
+  const bookText = useLiveQuery(async () => {
+    const rows = await db.pageTexts.where("bookId").equals(book.id).toArray();
+    return rows.map((r) => r.text).join("");
+  }, [book.id]);
+  const scanned = book.textExtracted && bookText !== undefined && looksScanned(bookText, book.pages);
   const [output, setOutput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -122,6 +128,12 @@ export function AIPanel({
           </button>
         ))}
       </div>
+
+      {scanned && (
+        <div className="mx-4 mb-3 rounded-2xl bg-amber-100 px-4 py-3 text-xs leading-6 text-amber-900">
+          هذا الملف يبدو مصورًا (صفحات ممسوحة ضوئيًا بلا نص قابل للقراءة)، لذلك لن يتمكن الذكاء الاصطناعي من تحليله. يحتاج الملف إلى معالجة OCR أولاً.
+        </div>
+      )}
 
       {!settings.apiKey && (
         <div className="mx-4 mb-3 rounded-2xl bg-accent/15 px-4 py-3 text-xs leading-6 text-ink">

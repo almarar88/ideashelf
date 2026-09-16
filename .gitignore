@@ -11,3 +11,4 @@ android/local.properties
 android/.idea
 android/app/release
 *.tsbuildinfo
+public/pdfjs

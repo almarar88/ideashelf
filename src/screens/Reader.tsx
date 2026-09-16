@@ -1,9 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import type { PDFDocumentProxy } from "pdfjs-dist";
-import { BookOpenText, ChevronRight, HelpCircle, Lightbulb, ListChecks, Minus, MoreHorizontal, Plus, Sparkles } from "lucide-react";
+import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
+import {
+  BookOpenText,
+  ChevronRight,
+  HelpCircle,
+  Lightbulb,
+  ListChecks,
+  Maximize2,
+  Minimize2,
+  Minus,
+  MoreHorizontal,
+  Plus,
+  Sparkles,
+} from "lucide-react";
 import { db, logReading } from "@/lib/db";
-import { openPdf, renderPageToCanvas } from "@/lib/pdf";
+import { openPdf, renderPageFitted } from "@/lib/pdf";
 import type { Settings } from "@/lib/settings";
 import { Gauge } from "@/components/Gauge";
 import { IconButton, Toggle } from "@/components/ui";
@@ -17,72 +29,134 @@ const MODES: { id: Mode; label: string; Icon: typeof Sparkles }[] = [
   { id: "quiz", label: "اختبار", Icon: ListChecks },
 ];
 
-export function ReaderScreen({ bookId, settings, wide, onBack }: { bookId: string; settings: Settings; wide: boolean; onBack: () => void }) {
+type Fit = "page" | "width";
+
+export function ReaderScreen({
+  bookId,
+  settings,
+  wide,
+  onBack,
+}: {
+  bookId: string;
+  settings: Settings;
+  wide: boolean;
+  onBack: () => void;
+}) {
   const book = useLiveQuery(() => db.books.get(bookId), [bookId]);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(1);
   const [aiOpen, setAiOpen] = useState(wide);
   const [mode, setMode] = useState<Mode>("summary");
+  const [fit, setFit] = useState<Fit>("page");
   const [zoom, setZoom] = useState(1);
+  const [chrome, setChrome] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [showPdfMenu, setShowPdfMenu] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [error, setError] = useState("");
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const holderRef = useRef<HTMLDivElement>(null);
+  const taskRef = useRef<RenderTask | null>(null);
   const pageRef = useRef(1);
 
-  // Open the PDF once.
+  /* ---------- open ---------- */
   useEffect(() => {
     let cancelled = false;
-    let d: PDFDocumentProxy | null = null;
+    let opened: PDFDocumentProxy | null = null;
     (async () => {
-      const b = await db.books.get(bookId);
-      if (!b) return;
-      d = await openPdf(b.file);
-      if (cancelled) {
-        void d.destroy();
-        return;
+      try {
+        const b = await db.books.get(bookId);
+        if (!b) return;
+        opened = await openPdf(b.file);
+        if (cancelled) {
+          void opened.destroy();
+          return;
+        }
+        setDoc(opened);
+        const start = Math.min(Math.max(1, b.lastPage || 1), opened.numPages);
+        setPage(start);
+        pageRef.current = start;
+        void db.books.update(bookId, { lastOpenedAt: Date.now() });
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "تعذر فتح الملف");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setDoc(d);
-      setPage(b.lastPage || 1);
-      pageRef.current = b.lastPage || 1;
-      void db.books.update(bookId, { lastOpenedAt: Date.now() });
-      setLoading(false);
     })();
     return () => {
       cancelled = true;
-      if (d) void d.destroy();
+      try {
+        taskRef.current?.cancel();
+      } catch {
+        /* already finished */
+      }
+      if (opened) void opened.destroy();
     };
   }, [bookId]);
 
-  // Render current page whenever page/zoom/size changes.
+  /* ---------- render ---------- */
   const render = useCallback(async () => {
-    if (!doc || !canvasRef.current || !holderRef.current) return;
-    const width = Math.max(200, holderRef.current.clientWidth - 24) * zoom;
+    const canvas = canvasRef.current;
+    const holder = holderRef.current;
+    if (!doc || !canvas || !holder) return;
     try {
-      await renderPageToCanvas(doc, page, canvasRef.current, width);
+      taskRef.current?.cancel();
     } catch {
-      /* render can be cancelled when a new page starts */
+      /* previous task already settled */
     }
-  }, [doc, page, zoom]);
+    // clientHeight includes the padding that keeps the page clear of the floating top bar,
+    // so subtract it or "fit page" would overflow and crop the bottom of the page.
+    const cs = getComputedStyle(holder);
+    const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    const availWidth = Math.max(80, holder.clientWidth - 16);
+    const availHeight = Math.max(80, holder.clientHeight - padY - 16);
+    try {
+      const task = await renderPageFitted(doc, page, canvas, { fit, zoom, availWidth, availHeight });
+      taskRef.current = task;
+      await task?.promise;
+    } catch {
+      /* cancelled by a newer render */
+    }
+  }, [doc, page, fit, zoom]);
 
   useEffect(() => {
     void render();
-    const ro = new ResizeObserver(() => void render());
-    if (holderRef.current) ro.observe(holderRef.current);
-    return () => ro.disconnect();
+    const holder = holderRef.current;
+    if (!holder) return;
+    let last = `${holder.clientWidth}x${holder.clientHeight}`;
+    let timer = 0;
+    const ro = new ResizeObserver(() => {
+      const now = `${holder.clientWidth}x${holder.clientHeight}`;
+      if (now === last) return; // ignore no-op notifications
+      last = now;
+      // Debounce: the chrome show/hide animates the pane height, and folding/unfolding
+      // fires a burst of resizes. Render once the size settles.
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void render(), 120);
+    });
+    ro.observe(holder);
+    return () => {
+      window.clearTimeout(timer);
+      ro.disconnect();
+    };
   }, [render]);
 
-  // Persist page + reading time.
-  const go = (p: number) => {
-    if (!book) return;
-    const next = Math.max(1, Math.min(book.pages, p));
-    if (next === page) return;
-    if (next > page) void logReading(bookId, 0, next - page);
-    pageRef.current = next;
-    setPage(next);
-    void db.books.update(bookId, { lastPage: next });
-    holderRef.current?.scrollTo({ top: 0 });
-  };
+  /* ---------- navigation ---------- */
+  const go = useCallback(
+    (p: number) => {
+      if (!book) return;
+      const next = Math.max(1, Math.min(book.pages, p));
+      if (next === pageRef.current) return;
+      if (next > pageRef.current) void logReading(bookId, 0, next - pageRef.current);
+      pageRef.current = next;
+      setPage(next);
+      setZoom(1);
+      void db.books.update(bookId, { lastPage: next });
+      holderRef.current?.scrollTo({ top: 0 });
+    },
+    [book, bookId],
+  );
+
   useEffect(() => {
     const TICK = 15;
     const t = setInterval(() => {
@@ -91,27 +165,64 @@ export function ReaderScreen({ bookId, settings, wide, onBack }: { bookId: strin
     return () => clearInterval(t);
   }, [bookId]);
 
-  // Keyboard navigation for desktop / foldables with keyboards.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === "TEXTAREA" || (e.target as HTMLElement)?.tagName === "INPUT") return;
-      if (e.key === "ArrowLeft") go(pageRef.current + 1); // RTL: left = forward
-      if (e.key === "ArrowRight") go(pageRef.current - 1);
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "ArrowLeft" || e.key === "PageDown" || e.key === " ") go(pageRef.current + 1);
+      if (e.key === "ArrowRight" || e.key === "PageUp") go(pageRef.current - 1);
+      if (e.key === "Escape") setChrome(true);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book?.pages]);
+  }, [go]);
 
-  // Touch swipe.
-  const touchX = useRef<number | null>(null);
-  const onTouchStart = (e: React.TouchEvent) => (touchX.current = e.touches[0].clientX);
+  /* ---------- touch: swipe, pinch, double-tap ---------- */
+  const touch = useRef({ x: 0, y: 0, dist: 0, zoom: 1, moved: false, lastTap: 0 });
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const [a, b] = [e.touches[0], e.touches[1]];
+      touch.current.dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      touch.current.zoom = zoom;
+      touch.current.moved = true;
+      return;
+    }
+    touch.current.x = e.touches[0].clientX;
+    touch.current.y = e.touches[0].clientY;
+    touch.current.moved = false;
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length !== 2 || !touch.current.dist) return;
+    const [a, b] = [e.touches[0], e.touches[1]];
+    const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const next = Math.min(4, Math.max(1, touch.current.zoom * (d / touch.current.dist)));
+    setZoom(Math.round(next * 20) / 20);
+    touch.current.moved = true;
+  };
   const onTouchEnd = (e: React.TouchEvent) => {
-    if (touchX.current == null) return;
-    const dx = e.changedTouches[0].clientX - touchX.current;
-    touchX.current = null;
-    if (Math.abs(dx) < 60 || zoom > 1) return;
-    go(dx < 0 ? page - 1 : page + 1); // RTL: swipe left goes back
+    if (touch.current.dist) {
+      touch.current.dist = 0;
+      return;
+    }
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touch.current.x;
+    const dy = t.clientY - touch.current.y;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && zoom === 1) {
+      go(dx < 0 ? pageRef.current - 1 : pageRef.current + 1); // RTL: swipe left goes back
+      return;
+    }
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      const now = Date.now();
+      if (now - touch.current.lastTap < 300) {
+        setZoom((z) => (z > 1 ? 1 : 2));
+        touch.current.lastTap = 0;
+      } else {
+        touch.current.lastTap = now;
+        setTimeout(() => {
+          if (touch.current.lastTap === now) setChrome((v) => !v);
+        }, 300);
+      }
+    }
   };
 
   if (!book) {
@@ -123,81 +234,151 @@ export function ReaderScreen({ bookId, settings, wide, onBack }: { bookId: strin
   }
 
   const progress = book.pages > 1 ? (page - 1) / (book.pages - 1) : 1;
+  const showChrome = chrome || wide;
 
   const readerPane = (
-    <div className="flex h-full min-h-0 flex-col bg-ink text-cream">
-      <header className="flex items-center justify-between px-4 pb-2 pt-4" style={{ paddingTop: "calc(var(--safe-top) + 12px)" }}>
+    <div className="relative h-full min-h-0 overflow-hidden bg-ink text-cream">
+      {/* page surface fills the pane; controls float over it */}
+      <div
+        ref={holderRef}
+        className={cn("absolute inset-x-0 top-0 overflow-auto no-scrollbar transition-[bottom] duration-300", showChrome ? "bottom-[340px]" : "bottom-0")}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onDoubleClick={() => setZoom((z) => (z > 1 ? 1 : 2))}
+        style={{ paddingTop: showChrome ? "calc(var(--safe-top) + 64px)" : "var(--safe-top)" }}
+      >
+        <div className="flex min-h-full items-center justify-center p-2">
+          <canvas ref={canvasRef} className="block rounded-lg bg-white" />
+        </div>
+        {loading && <div className="absolute inset-0 flex items-center justify-center text-sm text-cream/60">جارٍ فتح الملف…</div>}
+        {error && <div className="absolute inset-x-6 top-1/2 rounded-2xl bg-red-100 p-4 text-center text-xs text-red-800">{error}</div>}
+      </div>
+
+      {/* top bar */}
+      <header
+        className={cn(
+          "absolute inset-x-0 top-0 z-10 flex items-start gap-3 bg-gradient-to-b from-ink via-ink/90 to-transparent px-4 pb-6 transition-opacity duration-300",
+          showChrome ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+        style={{ paddingTop: "calc(var(--safe-top) + 12px)" }}
+      >
         <IconButton tone="ghost" onClick={onBack} aria-label="رجوع">
           <ChevronRight size={20} />
         </IconButton>
+        <div className="min-w-0 flex-1 pt-2">
+          <p className="truncate text-sm font-semibold">{book.title}</p>
+          <p className="text-[11px] text-cream/50">
+            {fit === "page" ? "الصفحة كاملة" : "ملء العرض"}
+            {zoom > 1 && ` · تكبير ${Math.round(zoom * 100)}%`}
+          </p>
+        </div>
+        {!wide && (
+          <IconButton tone="ghost" onClick={() => setChrome(false)} aria-label="ملء الشاشة">
+            <Maximize2 size={18} />
+          </IconButton>
+        )}
         <div className="relative">
-          <IconButton tone="ghost" onClick={() => setShowPdfMenu((v) => !v)} aria-label="خيارات">
+          <IconButton tone="ghost" onClick={() => setMenu((v) => !v)} aria-label="خيارات">
             <MoreHorizontal size={20} />
           </IconButton>
-          {showPdfMenu && (
-            <div className="absolute end-0 top-12 z-20 w-44 overflow-hidden rounded-2xl bg-cream text-ink shadow-lift" onClick={() => setShowPdfMenu(false)}>
-              <button className="w-full px-4 py-3 text-start text-sm hover:bg-black/5" onClick={() => setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)))}>تكبير +</button>
-              <button className="w-full px-4 py-3 text-start text-sm hover:bg-black/5" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}>تصغير −</button>
-              <button className="w-full px-4 py-3 text-start text-sm hover:bg-black/5" onClick={() => setZoom(1)}>ملاءمة العرض</button>
-              <button className="w-full px-4 py-3 text-start text-sm hover:bg-black/5" onClick={() => go(1)}>الذهاب للبداية</button>
+          {menu && (
+            <div className="absolute end-0 top-12 z-20 w-48 overflow-hidden rounded-2xl bg-cream text-ink shadow-lift" onClick={() => setMenu(false)}>
+              <button className="w-full px-4 py-3 text-start text-sm hover:bg-black/5" onClick={() => { setFit("page"); setZoom(1); }}>
+                عرض الصفحة كاملة
+              </button>
+              <button className="w-full px-4 py-3 text-start text-sm hover:bg-black/5" onClick={() => { setFit("width"); setZoom(1); }}>
+                ملء عرض الشاشة
+              </button>
+              <button className="w-full px-4 py-3 text-start text-sm hover:bg-black/5" onClick={() => setZoom((z) => Math.min(4, +(z + 0.5).toFixed(2)))}>
+                تكبير +
+              </button>
+              <button className="w-full px-4 py-3 text-start text-sm hover:bg-black/5" onClick={() => setZoom((z) => Math.max(1, +(z - 0.5).toFixed(2)))}>
+                تصغير −
+              </button>
+              <button className="w-full px-4 py-3 text-start text-sm hover:bg-black/5" onClick={() => go(1)}>
+                الذهاب للبداية
+              </button>
+              <button className="w-full px-4 py-3 text-start text-sm hover:bg-black/5" onClick={() => go(book.pages)}>
+                الذهاب للنهاية
+              </button>
             </div>
           )}
         </div>
       </header>
 
-      <div className="flex items-start justify-between gap-3 px-6">
-        <h1 className="line-clamp-2 text-2xl font-bold leading-snug">{book.title}</h1>
+      {/* floating exit-fullscreen button */}
+      {!showChrome && (
+        <button
+          onClick={() => setChrome(true)}
+          className="absolute end-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-cream backdrop-blur"
+          style={{ top: "calc(var(--safe-top) + 12px)" }}
+          aria-label="إظهار الأدوات"
+        >
+          <Minimize2 size={18} />
+        </button>
+      )}
+
+      {/* bottom controls */}
+      <div
+        className={cn(
+          "absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-ink via-ink to-transparent pt-4 transition-transform duration-300",
+          showChrome ? "translate-y-0" : "translate-y-full",
+        )}
+      >
         {!wide && (
-          <div className="flex shrink-0 items-center gap-2 pt-1">
-            <span className="text-xs text-cream/60">AI</span>
+          <div className="mb-1 flex items-center justify-end gap-2 px-6">
+            <span className="text-xs text-cream/60">لوحة الذكاء الاصطناعي</span>
             <Toggle checked={aiOpen} onChange={setAiOpen} label="فتح لوحة الذكاء الاصطناعي" />
           </div>
         )}
-      </div>
 
-      {/* Page canvas */}
-      <div ref={holderRef} className="relative mx-4 mt-4 min-h-0 flex-1 overflow-auto rounded-3xl bg-cream-deep p-3 no-scrollbar" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-        {loading && <div className="absolute inset-0 flex items-center justify-center text-sm text-ink-muted">جارٍ فتح الملف…</div>}
-        <canvas ref={canvasRef} className="mx-auto block rounded-xl bg-white" />
-      </div>
-
-      {/* Dial */}
-      <div className="px-4 pb-3 pt-2">
-        <Gauge value={progress} size={230} startLabel="1" endLabel={String(book.pages)}>
+        <Gauge value={progress} size={196} startLabel="1" endLabel={String(book.pages)}>
           <div className="flex items-center gap-3">
             <IconButton tone="light" size="sm" onClick={() => go(page - 1)} disabled={page <= 1} aria-label="الصفحة السابقة">
               <Minus size={16} />
             </IconButton>
             <div className="text-center">
-              <p className="text-[11px] text-cream/60">الصفحة</p>
-              <p className="text-4xl font-bold leading-none tabular-nums">{page}</p>
-              <p className="mt-1 text-[11px] text-cream/50">من {book.pages}</p>
+              <p className="text-[10px] text-cream/60">الصفحة</p>
+              <p className="text-3xl font-bold leading-none tabular-nums">{page}</p>
+              <p className="mt-0.5 text-[10px] text-cream/50">من {book.pages}</p>
             </div>
             <IconButton tone="accent" size="sm" onClick={() => go(page + 1)} disabled={page >= book.pages} aria-label="الصفحة التالية">
               <Plus size={16} />
             </IconButton>
           </div>
         </Gauge>
-      </div>
 
-      {/* Mode chips */}
-      <div className="grid grid-cols-4 gap-2 px-4 pb-4" style={{ paddingBottom: "calc(var(--safe-bottom) + 16px)" }}>
-        {MODES.map(({ id, label, Icon }) => {
-          const active = mode === id && aiOpen;
-          return (
-            <button
-              key={id}
-              onClick={() => {
-                setMode(id);
-                setAiOpen(true);
-              }}
-              className={cn("flex flex-col items-center gap-1.5 rounded-3xl py-3 text-[11px] transition", active ? "bg-cream text-ink" : "bg-white/10 text-cream/80")}
-            >
-              <Icon size={18} className={active ? "text-accent" : ""} />
-              {label}
-            </button>
-          );
-        })}
+        <div className="px-6 pb-1">
+          <input
+            type="range"
+            min={1}
+            max={book.pages}
+            value={page}
+            onChange={(e) => go(+e.target.value)}
+            aria-label="الانتقال إلى صفحة"
+            className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-cream/20 accent-[#ee7a4b]"
+          />
+        </div>
+
+        <div className="grid grid-cols-4 gap-2 px-4 pb-4 pt-2" style={{ paddingBottom: "calc(var(--safe-bottom) + 14px)" }}>
+          {MODES.map(({ id, label, Icon }) => {
+            const active = mode === id && aiOpen;
+            return (
+              <button
+                key={id}
+                onClick={() => {
+                  setMode(id);
+                  setAiOpen(true);
+                }}
+                className={cn("flex flex-col items-center gap-1.5 rounded-3xl py-2.5 text-[11px] transition", active ? "bg-cream text-ink" : "bg-white/10 text-cream/80")}
+              >
+                <Icon size={18} className={active ? "text-accent" : ""} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -215,11 +396,6 @@ export function ReaderScreen({ bookId, settings, wide, onBack }: { bookId: strin
             <BookOpenText size={20} />
             <span className="text-[10px] [writing-mode:vertical-rl]">لوحة الذكاء الاصطناعي</span>
           </button>
-        )}
-        {wide && (
-          <div className="absolute end-4 top-4 z-10 hidden items-center gap-2 rounded-full bg-ink/80 px-3 py-1.5 text-xs text-cream backdrop-blur md:flex">
-            AI <Toggle checked={aiOpen} onChange={setAiOpen} />
-          </div>
         )}
       </div>
     );
