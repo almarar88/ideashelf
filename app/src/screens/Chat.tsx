@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RobotAvatar } from "../lib/avatars";
 import { actions, getState, useStore } from "../lib/store";
 import { t } from "../lib/i18n";
@@ -9,7 +9,7 @@ import { messagesDB } from "../lib/db";
 import { ingestUpload, pickCamera, pickFiles, shareText } from "../lib/files";
 import { handleUserMessage, regenerateReply } from "../lib/chat";
 import { keepAlive, notifyDone } from "../lib/background";
-import { JUDGE_ID, uid, type Agent, type FileRef, type Message, type Verdict } from "../lib/types";
+import { JUDGE_ID, uid, type Agent, type FileRef, type JudgeConfig, type Message, type Verdict } from "../lib/types";
 import { SESSION_EXAMPLES } from "../lib/presets";
 
 export default function Chat({ groupId, onBack }: { groupId: string; onBack: () => void }) {
@@ -67,7 +67,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }); }, [msgs.length, msgs[msgs.length - 1]?.text.length]);
 
   const members = useMemo(() => agents.filter((a) => group?.memberIds.includes(a.id)), [agents, group]);
-  const agentOf = (id?: string): Agent | null => (id ? agents.find((a) => a.id === id) ?? null : null);
+  const agentOf = useCallback((id?: string): Agent | null => (id ? agents.find((a) => a.id === id) ?? null : null), [agents]);
 
   if (!group) return <div className="empty">…</div>;
 
@@ -124,14 +124,15 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
     upsert({ ...m, reactions: cur.includes(emoji) ? cur.filter((e) => e !== emoji) : [...cur, emoji] });
     setMenuMsg(null);
   };
-  const regen = async (m: Message) => {
+  const regen = useCallback(async (m: Message) => {
     setMenuMsg(null);
-    if (!settings.apiKey) { alert(t(lang, "needKey")); return; }
+    if (!getState().settings.apiKey) { alert(t(lang, "needKey")); return; }
+    if (abortRef.current) return;
     const ac = new AbortController(); abortRef.current = ac; setRunning(true);
-    await keepAlive.start(t(lang, "workingBg"), group?.name ?? "");
+    await keepAlive.start(t(lang, "workingBg"), getState().groups.find((g) => g.id === groupId)?.name ?? "");
     try { await regenerateReply({ group: getState().groups.find((g) => g.id === groupId)!, getMessages: () => msgsRef.current, upsert, remove, askPermission, signal: ac.signal }, m); }
     finally { setRunning(false); abortRef.current = null; keepAlive.stop(); }
-  };
+  }, [groupId, lang, upsert, remove, askPermission]);
   const speak = (m: Message) => {
     setMenuMsg(null);
     if (!("speechSynthesis" in window)) return;
@@ -146,8 +147,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
     shareText(group.name, lines.join("\n\n"));
   };
 
-  const nameFor = (m: Message) => m.agentId === JUDGE_ID ? judge.name : agentOf(m.agentId)?.name ?? "?";
-  const phaseLabel = (m: Message) => m.phase === "searching" ? t(lang, "statusSearching") : m.phase === "working" ? t(lang, "working") : m.phase === "computer" ? t(lang, "statusComputer") : m.phase === "device" ? t(lang, "statusDevice") : m.phase === "retrying" ? t(lang, "statusRetrying") : m.phase === "writing" ? t(lang, "typing") : t(lang, "statusThinking");
+  const nameFor = useCallback((m: Message) => m.agentId === JUDGE_ID ? judge.name : agentOf(m.agentId)?.name ?? "?", [judge.name, agentOf]);
   const typingNow = msgs.filter((m) => m.status === "streaming");
 
   return (
@@ -179,52 +179,12 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
             </div>
           </div>
         )}
-        {msgs.map((m) => {
-          if (m.role === "user") {
-            const rt = m.replyTo ? msgs.find((x) => x.id === m.replyTo) : null;
-            return (
-              <div key={m.id} className="fade-in" style={{ alignSelf: "flex-end", maxWidth: "82%" }} onContextMenu={(e) => { e.preventDefault(); setMenuMsg(m); }}>
-                <div style={{ background: "var(--orange)", color: "#fff", borderRadius: "20px 20px 6px 20px", padding: "10px 14px" }} onClick={() => setMenuMsg(m)}>
-                  {rt && <div className="small" style={{ opacity: .8, borderInlineStart: "2px solid rgba(255,255,255,.6)", paddingInlineStart: 8, marginBottom: 6 }}>{nameFor(rt)}: {rt.text.slice(0, 60)}</div>}
-                  {m.mentions?.length ? <div className="small" style={{ opacity: .85, marginBottom: 4 }}>@{m.mentions[0] === JUDGE_ID ? judge.name : m.mentions[0] === "__all__" ? t(lang, "allMembers") : agentOf(m.mentions[0])?.name}</div> : null}
-                  {m.council && <div className="small" style={{ opacity: .85, marginBottom: 4 }}>🏛 {t(lang, "council")}</div>}
-                  {m.files.length > 0 && <div className="stack" style={{ gap: 6, marginBottom: m.text ? 8 : 0 }}>{m.files.map((f) => <FileChip key={f.id} file={f} onOpen={setViewing} light />)}</div>}
-                  {m.text && <div className="prose" style={{ margin: 0 }}>{m.text}</div>}
-                  <div className="small" style={{ opacity: .7, textAlign: "end", marginTop: 4 }}>{fmtTime(m.createdAt, lang)}</div>
-                </div>
-              </div>
-            );
-          }
-          const isJudge = m.agentId === JUDGE_ID;
-          const a = agentOf(m.agentId);
-          const color = isJudge ? judge.color : a?.color ?? "#999";
-          const avatar = isJudge ? judge.avatar : a?.avatar ?? 0;
-          const busy = m.status === "streaming";
-          return (
-            <div key={m.id} className="row fade-in" style={{ alignItems: "flex-start", alignSelf: "flex-start", maxWidth: "92%", gap: 8 }}>
-              <RobotAvatar variant={avatar} color={color} size={36} mood={busy ? "busy" : m.status === "error" ? "error" : "idle"} />
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div className="row" style={{ gap: 6, marginBottom: 3 }}>
-                  <span style={{ fontWeight: 600, fontSize: 13, color: isJudge ? "var(--text)" : color }}>{nameFor(m)}</span>
-                  {m.reaction && <span className="small muted">💬</span>}
-                  {isJudge && <span className="pill dark" style={{ padding: "2px 8px", fontSize: 10 }}><Icon name="gavel" size={11} /> {t(lang, "judge")}</span>}
-                  <span className="small muted">{a?.title}</span>
-                </div>
-                <div className={"card" + (isJudge ? " dark" : "")} style={{ padding: "10px 14px", borderRadius: "6px 20px 20px 20px" }} onClick={() => !busy && setMenuMsg(m)}>
-                  {busy && !m.text && <div className="row muted" style={{ gap: 8 }}><Dots /> <span className="small">{phaseLabel(m)}</span></div>}
-                  {m.text && <Markdown text={m.text} />}
-                  {busy && m.text && <div className="row muted small" style={{ gap: 6, marginTop: 4 }}><Dots />{m.phase === "writing" || !m.phase ? "" : phaseLabel(m)}</div>}
-                  {m.status === "error" && <div className="error-box row between" style={{ gap: 8 }}><span className="grow">{m.error}</span>{m.replyTo && !running && <button className="pill dark" style={{ flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); regen(m); }}><Icon name="refresh" size={13} /> {t(lang, "retry")}</button>}</div>}
-                  {m.verdict && <VerdictCard v={m.verdict} members={members} lang={lang} />}
-                  {m.files.length > 0 && <div className="stack" style={{ gap: 6, marginTop: 8 }}>{m.files.map((f) => <FileChip key={f.id} file={f} onOpen={setViewing} light={isJudge} />)}</div>}
-                  {m.sources.length > 0 && <Sources sources={m.sources} lang={lang} />}
-                  {m.reactions?.length ? <div style={{ marginTop: 6 }}>{m.reactions.map((e) => <span key={e} className="pill" style={{ padding: "2px 8px", fontSize: 13, marginInlineEnd: 4 }}>{e}</span>)}</div> : null}
-                  <div className="small" style={{ opacity: .55, textAlign: "end", marginTop: 4 }}>{fmtTime(m.createdAt, lang)}{m.usage ? ` · ${((m.usage.input + m.usage.output) / 1000).toFixed(1)}K` : ""}</div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        {msgs.map((m) => (
+          <MessageRow key={m.id} m={m} replyTarget={m.replyTo ? msgs.find((x) => x.id === m.replyTo) ?? null : null}
+            agent={agentOf(m.agentId)} mentionName={m.mentions?.[0] === JUDGE_ID ? judge.name : m.mentions?.[0] === "__all__" ? t(lang, "allMembers") : agentOf(m.mentions?.[0])?.name}
+            judge={judge} lang={lang} members={members} canRetry={!!m.replyTo && !running}
+            onMenu={setMenuMsg} onOpenFile={setViewing} onRetry={regen} nameFor={nameFor} />
+        ))}
       </div>
 
       <div style={{ flexShrink: 0, padding: "8px 12px calc(10px + var(--safe-bottom))", background: "var(--cream)", borderTop: "1px solid var(--line)" }}>
@@ -300,6 +260,58 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
     </div>
   );
 }
+
+interface RowProps {
+  m: Message; replyTarget: Message | null; agent: Agent | null; mentionName?: string; judge: JudgeConfig; lang: "ar" | "en"; members: Agent[]; canRetry: boolean;
+  onMenu: (m: Message) => void; onOpenFile: (f: FileRef) => void; onRetry: (m: Message) => void; nameFor: (m: Message) => string;
+}
+
+/** One chat bubble. Memoized so streaming one message does not re-render the whole list. */
+const MessageRow = memo(function MessageRow({ m, replyTarget, agent, mentionName, judge, lang, members, canRetry, onMenu, onOpenFile, onRetry, nameFor }: RowProps) {
+  const phaseLabel = (x: Message) => x.phase === "searching" ? t(lang, "statusSearching") : x.phase === "working" ? t(lang, "working") : x.phase === "computer" ? t(lang, "statusComputer") : x.phase === "device" ? t(lang, "statusDevice") : x.phase === "retrying" ? t(lang, "statusRetrying") : x.phase === "writing" ? t(lang, "typing") : t(lang, "statusThinking");
+  if (m.role === "user") {
+    return (
+      <div className="fade-in" style={{ alignSelf: "flex-end", maxWidth: "82%" }} onContextMenu={(e) => { e.preventDefault(); onMenu(m); }}>
+        <div style={{ background: "var(--orange)", color: "#fff", borderRadius: "20px 20px 6px 20px", padding: "10px 14px" }} onClick={() => onMenu(m)}>
+          {replyTarget && <div className="small" style={{ opacity: .8, borderInlineStart: "2px solid rgba(255,255,255,.6)", paddingInlineStart: 8, marginBottom: 6 }}>{nameFor(replyTarget)}: {replyTarget.text.slice(0, 60)}</div>}
+          {mentionName ? <div className="small" style={{ opacity: .85, marginBottom: 4 }}>@{mentionName}</div> : null}
+          {m.council && <div className="small" style={{ opacity: .85, marginBottom: 4 }}>🏛 {t(lang, "council")}</div>}
+          {m.files.length > 0 && <div className="stack" style={{ gap: 6, marginBottom: m.text ? 8 : 0 }}>{m.files.map((f) => <FileChip key={f.id} file={f} onOpen={onOpenFile} light />)}</div>}
+          {m.text && <div className="prose" style={{ margin: 0 }}>{m.text}</div>}
+          <div className="small" style={{ opacity: .7, textAlign: "end", marginTop: 4 }}>{fmtTime(m.createdAt, lang)}</div>
+        </div>
+      </div>
+    );
+  }
+  const isJudge = m.agentId === JUDGE_ID;
+  const color = isJudge ? judge.color : agent?.color ?? "#999";
+  const avatar = isJudge ? judge.avatar : agent?.avatar ?? 0;
+  const busy = m.status === "streaming";
+  return (
+    <div className="row fade-in" style={{ alignItems: "flex-start", alignSelf: "flex-start", maxWidth: "92%", gap: 8 }}>
+      <RobotAvatar variant={avatar} color={color} size={36} mood={busy ? "busy" : m.status === "error" ? "error" : "idle"} />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div className="row" style={{ gap: 6, marginBottom: 3 }}>
+          <span style={{ fontWeight: 600, fontSize: 13, color: isJudge ? "var(--text)" : color }}>{nameFor(m)}</span>
+          {m.reaction && <span className="small muted">💬</span>}
+          {isJudge && <span className="pill dark" style={{ padding: "2px 8px", fontSize: 10 }}><Icon name="gavel" size={11} /> {t(lang, "judge")}</span>}
+          <span className="small muted">{agent?.title}</span>
+        </div>
+        <div className={"card" + (isJudge ? " dark" : "")} style={{ padding: "10px 14px", borderRadius: "6px 20px 20px 20px" }} onClick={() => !busy && onMenu(m)}>
+          {busy && !m.text && <div className="row muted" style={{ gap: 8 }}><Dots /> <span className="small">{phaseLabel(m)}</span></div>}
+          {m.text && <Markdown text={m.text} />}
+          {busy && m.text && <div className="row muted small" style={{ gap: 6, marginTop: 4 }}><Dots />{m.phase === "writing" || !m.phase ? "" : phaseLabel(m)}</div>}
+          {m.status === "error" && <div className="error-box row between" style={{ gap: 8 }}><span className="grow">{m.error}</span>{canRetry && <button className="pill dark" style={{ flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onRetry(m); }}><Icon name="refresh" size={13} /> {t(lang, "retry")}</button>}</div>}
+          {m.verdict && <VerdictCard v={m.verdict} members={members} lang={lang} />}
+          {m.files.length > 0 && <div className="stack" style={{ gap: 6, marginTop: 8 }}>{m.files.map((f) => <FileChip key={f.id} file={f} onOpen={onOpenFile} light={isJudge} />)}</div>}
+          {m.sources.length > 0 && <Sources sources={m.sources} lang={lang} />}
+          {m.reactions?.length ? <div style={{ marginTop: 6 }}>{m.reactions.map((e) => <span key={e} className="pill" style={{ padding: "2px 8px", fontSize: 13, marginInlineEnd: 4 }}>{e}</span>)}</div> : null}
+          <div className="small" style={{ opacity: .55, textAlign: "end", marginTop: 4 }}>{fmtTime(m.createdAt, lang)}{m.usage ? ` · ${((m.usage.input + m.usage.output) / 1000).toFixed(1)}K` : ""}</div>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 function Sources({ sources, lang }: { sources: { url: string; title: string }[]; lang: "ar" | "en" }) {
   const [open, setOpen] = useState(false);

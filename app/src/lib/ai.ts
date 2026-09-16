@@ -20,7 +20,7 @@ export type ToolOutput = string | Anthropic.ContentBlockParam[];
 export interface TurnOpts {
   client: Anthropic;
   model: ModelId;
-  system: string;
+  system: string | Anthropic.TextBlockParam[];
   messages: Anthropic.MessageParam[];
   tools?: Anthropic.ToolUnion[];
   effort?: "low" | "medium" | "high" | "xhigh";
@@ -85,6 +85,14 @@ export async function runTurn(o: TurnOpts): Promise<TurnResult> {
   const sources: Source[] = [];
   let searches = 0;
   let stopReason = "end_turn";
+  // Throttle UI updates: re-rendering on every token is the main cause of lag on phones.
+  let lastEmit = 0; let emitTimer: number | undefined;
+  const emit = (final = false) => {
+    if (!o.onText) return;
+    const now = Date.now();
+    if (final || now - lastEmit >= 90) { window.clearTimeout(emitTimer); emitTimer = undefined; lastEmit = now; o.onText(text); }
+    else if (emitTimer === undefined) emitTimer = window.setTimeout(() => { emitTimer = undefined; lastEmit = Date.now(); o.onText?.(text); }, 90 - (now - lastEmit));
+  };
 
   for (let iter = 0; iter < 10; iter++) {
     const params: Anthropic.MessageStreamParams = {
@@ -111,7 +119,7 @@ export async function runTurn(o: TurnOpts): Promise<TurnResult> {
           else if (b.type === "text") { o.onPhase?.("writing"); if (sawText && text && !text.endsWith("\n")) text += "\n\n"; sawText = true; }
         } else if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
           text += ev.delta.text;
-          o.onText?.(text);
+          emit();
         }
       }
       return stream.finalMessage();
@@ -160,7 +168,7 @@ export async function runTurn(o: TurnOpts): Promise<TurnResult> {
     }
     break;
   }
-  o.onText?.(text);
+  emit(true);
   return { text, sources, searches, usage, stopReason };
 }
 

@@ -1,7 +1,7 @@
 import { actions, useStore } from "../lib/store";
 import { t } from "../lib/i18n";
 import { Icon } from "../components/ui";
-import { MODELS, type ControlLevel, type Dialect, type Vibe } from "../lib/types";
+import { MODELS, type ControlLevel, type Dialect, type Speed, type Vibe } from "../lib/types";
 import { detectPlatform } from "../lib/platform";
 
 const platform = detectPlatform();
@@ -51,13 +51,20 @@ export default function Settings() {
           )}
         </div>
         <div className="card stack">
-          <div className="field"><label>{t(lang, "defaultModel")}</label>
+          <div className="field"><label>⚡ {t(lang, "speed")}</label>
+            <div className="stack" style={{ gap: 6 }}>
+              {([["fast", "speedFast", "speedFastDesc"], ["balanced", "speedBalanced", "speedBalancedDesc"], ["quality", "speedQuality", "speedQualityDesc"]] as [Speed, "speedFast" | "speedBalanced" | "speedQuality", "speedFastDesc" | "speedBalancedDesc" | "speedQualityDesc"][]).map(([id, k, d]) => (
+                <button key={id} className={"chip" + (s.speed === id ? " on" : "")} style={{ flexDirection: "column", alignItems: "flex-start", gap: 2, padding: "10px 14px" }} onClick={() => actions.updateSettings({ speed: id })}><span style={{ fontWeight: 600 }}>{t(lang, k)}</span><span className="small" style={{ opacity: .75, textAlign: "start" }}>{t(lang, d)}</span></button>
+              ))}
+            </div>
+          </div>
+          <div className="field"><label>{t(lang, "defaultModel")} <span className="small muted">({lang === "ar" ? "يُستخدم فقط عند اختياره لوكيل بعينه" : "only for agents that pick it explicitly"})</span></label>
             <div className="stack" style={{ gap: 6 }}>{MODELS.map((m) => <button key={m.id} className={"chip" + (s.defaultModel === m.id ? " on" : "")} style={{ justifyContent: "space-between" }} onClick={() => actions.updateSettings({ defaultModel: m.id })}><span>{m.label}</span><span className="small" style={{ opacity: .7 }}>{m.note[lang]} · ${m.inPrice}/${m.outPrice}</span></button>)}</div>
           </div>
           <div className="row between"><span className="muted">{t(lang, "concurrency")}</span><div className="row"><button className="round-btn" onClick={() => actions.updateSettings({ concurrency: Math.max(1, s.concurrency - 1) })}><Icon name="minus" size={16} /></button><b style={{ minWidth: 24, textAlign: "center" }}>{s.concurrency}</b><button className="round-btn" onClick={() => actions.updateSettings({ concurrency: Math.min(6, s.concurrency + 1) })}><Icon name="plus" size={16} /></button></div></div>
         </div>
         <button className="btn block" style={{ background: "var(--red)" }} onClick={async () => { if (confirm(t(lang, "confirmReset"))) { await messagesDB.clear(); await filesDB.clear(); actions.resetAll(); actions.updateSettings({ onboarded: true }); } }}><Icon name="trash" size={18} /> {t(lang, "resetAll")}</button>
-        <div className="small muted" style={{ textAlign: "center" }}>Majlis AI · {t(lang, "version")} 1.3.2</div>
+        <div className="small muted" style={{ textAlign: "center" }}>Majlis AI · {t(lang, "version")} 1.4.0</div>
       </div>
     </div>
   );

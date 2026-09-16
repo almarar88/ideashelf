@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, memo, type ReactNode } from "react";
 
 function inline(s: string, key: number): ReactNode {
   const parts: ReactNode[] = [];
@@ -18,7 +18,7 @@ function inline(s: string, key: number): ReactNode {
 }
 
 /** Tiny markdown renderer: headings, bullets, numbered lists, code fences, bold, code, links, tables (as pre). */
-export function Markdown({ text }: { text: string }) {
+export const Markdown = memo(function Markdown({ text }: { text: string }) {
   const lines = text.split("\n");
   const out: ReactNode[] = [];
   let i = 0; let k = 0;
@@ -58,4 +58,4 @@ export function Markdown({ text }: { text: string }) {
     i++;
   }
   return <div className="prose" style={{ whiteSpace: "normal" }}>{out}</div>;
-}
+});

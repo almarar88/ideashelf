@@ -10,6 +10,7 @@ const defaultSettings: Settings = {
   concurrency: 3, onboarded: false, historyDepth: 30,
   dialect: "emirati", vibe: "friends", humanDelay: true,
   control: { level: "ask", shell: true, files: true, screen: true, device: true, webFetch: true },
+  speed: "fast",
 };
 
 function load(): AppState {

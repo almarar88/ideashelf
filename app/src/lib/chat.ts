@@ -44,7 +44,8 @@ function transcript(msgs: Message[], agents: Agent[], judge: JudgeConfig, depth:
   return slice.map((m) => {
     const who = m.role === "user" ? `${bossName()} (BOSS)` : nameOf(m.agentId, agents, judge) + (m.role === "judge" ? " (JUDGE)" : "");
     const files = m.files.length ? `\n[attachments: ${m.files.map((f) => `${f.name} (id ${f.id})`).join(", ")}]` : "";
-    const body = m.verdict ? `DECISION: ${m.verdict.decision}\n${m.verdict.summary}` : m.text;
+    const full = m.verdict ? `DECISION: ${m.verdict.decision}\n${m.verdict.summary}` : m.text;
+    const body = full.length > 1500 ? full.slice(0, 1500) + " …[truncated]" : full;
     const react = m.reactions?.length ? `\n(the boss reacted ${m.reactions.join(" ")} to this)` : "";
     return `[${who}]: ${body}${files}${react}`;
   }).join("\n\n");
@@ -77,7 +78,7 @@ const CHAT_RULES = `You are chatting inside a WhatsApp-style GROUP CHAT with you
 - When given real work: react naturally first (a short human line), then deliver in the same message. If the deliverable is long (report, plan, study, table, document, code), CREATE A FILE with the create_file tool and post only a short summary + what's inside. Prefer .md for documents, .csv for tables, .html for formatted reports.
 - Stay in your lane on substance: answer from your expertise. If a colleague is better placed, say so and add only what you uniquely contribute. Don't repeat colleagues; build on them or disagree with them by name.
 - If the boss gives feedback or corrections, take it gracefully and revise. If something critical is missing, ask ONE clear question instead of guessing.
-- When you use web search, mention key facts with the source name. Never invent numbers, sources, or facts. Being funny never justifies being wrong.
+- Web search is for facts you don't have (prices, news, laws, current data). Do NOT search for chit-chat, opinions, or things you already know — it only slows you down. When you do search, mention key facts with the source name. Never invent numbers, sources, or facts. Being funny never justifies being wrong.
 - You can read any file in the catalog with read_file(file_id). Attachments in the boss's latest message are already shown to you.
 - Use remember(text) to save important facts about the boss or their projects that you should not forget (preferences, decisions, names, dates). Keep memories short.
 - Light markdown only (bold, bullets). Emojis like a real person would use them.`;
@@ -95,11 +96,24 @@ function memoriesText(agentId: string): string {
   return mine.slice(-40).map((m) => "- " + m.text).join("\n");
 }
 
-function agentSystem(a: Agent, group: Group, members: Agent[], judge: JudgeConfig, catalog: string, council: boolean): string {
+/** Speed profile: what the "Speed vs quality" setting changes. */
+function profile() {
+  const st = getState().settings;
+  switch (st.speed) {
+    case "quality": return { agent: "claude-opus-5" as ModelId, judge: "claude-opus-5" as ModelId, dispatcher: "claude-haiku-4-5" as ModelId, effortCap: "xhigh" as const, judgeEffort: "high" as const, maxSearches: 5, delay: [400, 1800] as const, banter: 0.55, history: 30 };
+    case "balanced": return { agent: "claude-sonnet-5" as ModelId, judge: "claude-opus-5" as ModelId, dispatcher: "claude-haiku-4-5" as ModelId, effortCap: "high" as const, judgeEffort: "medium" as const, maxSearches: 3, delay: [200, 900] as const, banter: 0.4, history: 24 };
+    default: return { agent: "claude-sonnet-5" as ModelId, judge: "claude-sonnet-5" as ModelId, dispatcher: "claude-haiku-4-5" as ModelId, effortCap: "medium" as const, judgeEffort: "medium" as const, maxSearches: 2, delay: [100, 500] as const, banter: 0.3, history: 20 };
+  }
+}
+const EFFORT_RANK = { low: 0, medium: 1, high: 2, xhigh: 3 } as const;
+function capEffort(e: keyof typeof EFFORT_RANK, cap: keyof typeof EFFORT_RANK) { return EFFORT_RANK[e] <= EFFORT_RANK[cap] ? e : cap; }
+
+/** System prompt as two blocks: a stable, cached prefix (persona + rules) and a small dynamic tail. */
+function agentSystem(a: Agent, group: Group, members: Agent[], judge: JudgeConfig, catalog: string, council: boolean): Anthropic.TextBlockParam[] {
   const st = getState().settings;
   const others = members.filter((m) => m.id !== a.id).map((m) => `- ${m.name}: ${m.title} (${m.field})`).join("\n") || "(none)";
   const judgeLine = group.judgeEnabled ? `- ${judge.name}: the group's JUDGE/manager — reads everyone's input and makes the final decision.` : "";
-  return `You are ${a.name}, ${a.title}. Field: ${a.field}.
+  const stable = `You are ${a.name}, ${a.title}. Field: ${a.field}.
 Skills: ${a.skills.join(", ") || "general"}.
 Personality & thinking style: ${a.personality || "professional, clear, practical"}.
 ${humorText(a.humor ?? 60)}
@@ -109,19 +123,19 @@ Colleagues in this group:
 ${others}
 ${judgeLine}
 
-What you remember about the boss and their projects:
-${memoriesText(a.id)}
-
-Files catalog (shared in this group):
-${catalog}
-
 ${DIALECT_TEXT[st.dialect]}
 ${VIBE_TEXT[st.vibe]}
 
 ${CHAT_RULES}
-${controlPromptText(platform, st.control)}
+${controlPromptText(platform, st.control)}`;
+  const dynamic = `What you remember about the boss and their projects:
+${memoriesText(a.id)}
+
+Files catalog (shared in this group):
+${catalog}
 ${council ? "\nCOUNCIL MODE: the boss asked the whole council. Give your independent, complete expert position with a clear recommendation and reasoning, since the judge will weigh all positions and decide. Keep your voice, but be thorough." : ""}
 Today's date: ${new Date().toISOString().slice(0, 10)}.`;
+  return [{ type: "text", text: stable, cache_control: { type: "ephemeral" } }, { type: "text", text: dynamic }];
 }
 
 const STYLE_TEXT: Record<JudgeConfig["style"], string> = {
@@ -131,28 +145,30 @@ const STYLE_TEXT: Record<JudgeConfig["style"], string> = {
   bold: "Be decisive and bold: take a clear stance quickly, commit to one path, and say plainly what to do next.",
 };
 
-function judgeSystem(j: JudgeConfig, group: Group, members: Agent[], catalog: string): string {
+function judgeSystem(j: JudgeConfig, group: Group, members: Agent[], catalog: string, extra = ""): Anthropic.TextBlockParam[] {
   const team = members.map((m) => `- ${m.name}: ${m.title} (${m.field})`).join("\n") || "(no other members)";
-  return `You are ${j.name}, the JUDGE and manager of the group "${group.name}". Boss: ${bossName()}.
+  const st = getState().settings;
+  const stable = `You are ${j.name}, the JUDGE and manager of the group "${group.name}". Boss: ${bossName()}.
 Your job: read what every colleague said, analyze the quality of their reasoning and evidence, resolve disagreements, and MAKE THE FINAL DECISION for the boss. You are the one who decides; be confident, fair, and direct. Give credit or push back on colleagues BY NAME.
 Judging style: ${STYLE_TEXT[j.style]}
 ${j.instructions ? "Special instructions from the boss: " + j.instructions + "\n" : ""}
 Team:
 ${team}
 
-What you remember about the boss and their projects:
+${DIALECT_TEXT[st.dialect]}
+${VIBE_TEXT[st.vibe]}
+
+${CHAT_RULES}
+${controlPromptText(platform, st.control)}
+As the judge: when several colleagues answered, don't restate everything — synthesize, say who is right and why, give the decision, the next 2-5 concrete steps, and the main risk. If the boss's request was simple and only one person answered, just add a brief managerial note or nothing new. If you need the boss's input to decide, ask ONE precise question.`;
+  const dynamic = `What you remember about the boss and their projects:
 ${memoriesText(JUDGE_ID)}
 
 Files catalog:
 ${catalog}
-
-${DIALECT_TEXT[getState().settings.dialect]}
-${VIBE_TEXT[getState().settings.vibe]}
-
-${CHAT_RULES}
-${controlPromptText(platform, getState().settings.control)}
-As the judge: when several colleagues answered, don't restate everything — synthesize, say who is right and why, give the decision, the next 2-5 concrete steps, and the main risk. If the boss's request was simple and only one person answered, just add a brief managerial note or nothing new. If you need the boss's input to decide, ask ONE precise question.
+${extra}
 Today's date: ${new Date().toISOString().slice(0, 10)}.`;
+  return [{ type: "text", text: stable, cache_control: { type: "ephemeral" } }, { type: "text", text: dynamic }];
 }
 
 function toolsFor(a: Agent | null, model: ModelId): Anthropic.ToolUnion[] {
@@ -187,15 +203,17 @@ function toolsFor(a: Agent | null, model: ModelId): Anthropic.ToolUnion[] {
   ];
   const ctl = getState().settings.control;
   if (a?.webSearch) {
-    tools.unshift(webSearchTool(model, a.maxSearches));
+    tools.unshift(webSearchTool(model, Math.min(a.maxSearches, profile().maxSearches)));
     if (ctl.webFetch) tools.unshift(model === "claude-haiku-4-5" ? { type: "web_fetch_20250910", name: "web_fetch", max_uses: 5 } : { type: "web_fetch_20260209", name: "web_fetch", max_uses: 5 });
   }
   tools.push(...platformTools(platform, ctl, model));
   return tools;
 }
 
-function resolveModel(m: ModelId | "default"): ModelId {
-  return m === "default" ? getState().settings.defaultModel : m;
+function resolveModel(m: ModelId | "default", role: "agent" | "judge" = "agent"): ModelId {
+  if (m !== "default") return m;
+  const p = profile();
+  return role === "judge" ? p.judge : p.agent;
 }
 
 const DispatchSchema = z.object({
@@ -205,13 +223,12 @@ const DispatchSchema = z.object({
 });
 
 async function dispatch(client: Anthropic, group: Group, members: Agent[], judge: JudgeConfig, msgs: Message[], userMsg: Message): Promise<{ responders: string[]; judge: boolean }> {
-  const s = getState().settings;
-  const roster = members.map((m) => `id=${m.id} | ${m.name} — ${m.title}; skills: ${m.skills.join(", ")}`).join("\n");
-  const recent = transcript(msgs.slice(-8), members, judge, 8);
+  const roster = members.map((m) => `id=${m.id} | ${m.name} — ${m.title}; skills: ${m.skills.slice(0, 4).join(", ")}`).join("\n");
+  const recent = transcript(msgs.slice(-4), members, judge, 4).slice(-1500);
   try {
     const r = await client.messages.parse({
-      model: s.dispatcherModel,
-      max_tokens: 600,
+      model: profile().dispatcher,
+      max_tokens: 250,
       system: "You route messages in a group chat between a boss and AI specialist colleagues. Pick who should reply.",
       messages: [{ role: "user", content: `Roster:\n${roster}\n\nJudge enabled: ${group.judgeEnabled} (the judge ${judge.name} decides when there are multiple opinions or the boss asks for a decision/opinion/recommendation).\n\nRecent chat:\n${recent}\n\nNEW MESSAGE from boss: """${userMsg.text}"""${userMsg.files.length ? `\n(with attachments: ${userMsg.files.map((f) => f.name).join(", ")})` : ""}\n\nRules: pick 1 colleague for simple/specific requests, 2-3 when the topic spans fields or the boss asks for opinions/comparison. If the boss addresses someone by name, pick them. If the message is a greeting or small talk, pick 1. judge=true when a decision is needed or 2+ responders.` }],
       output_config: { format: zodOutputFormat(DispatchSchema) },
@@ -249,13 +266,13 @@ function newMsg(groupId: string, role: Message["role"], agentId?: string, extra:
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 async function runAgentReply(ctx: ChatCtx, client: Anthropic, a: Agent, members: Agent[], judge: JudgeConfig, userMsg: Message, prompt: string, council: boolean, replyTo?: string, opts: { reaction?: boolean; maxTokens?: number } = {}): Promise<Message> {
-  if (getState().settings.humanDelay) await sleep(400 + Math.random() * 1800);
+  if (getState().settings.humanDelay) { const [lo, hi] = profile().delay; await sleep(lo + Math.random() * (hi - lo)); }
   if (ctx.signal.aborted) return newMsg(ctx.group.id, "agent", a.id, { status: "error", error: "Stopped" });
   const msg = newMsg(ctx.group.id, "agent", a.id, { replyTo: replyTo ?? userMsg.id, council, reaction: opts.reaction });
   ctx.upsert(msg);
   const model = resolveModel(a.model);
   const msgs = ctx.getMessages();
-  const history = transcript(msgs.filter((m) => m.id !== userMsg.id && m.id !== msg.id), members, judge, getState().settings.historyDepth);
+  const history = transcript(msgs.filter((m) => m.id !== userMsg.id && m.id !== msg.id), members, judge, Math.min(getState().settings.historyDepth, profile().history));
   const attach = (await Promise.all(userMsg.files.map(toContentBlocks))).flat();
   const content: Anthropic.ContentBlockParam[] = [
     { type: "text", text: (history ? `Chat history so far:\n${history}\n\n` : "") + prompt },
@@ -269,7 +286,7 @@ async function runAgentReply(ctx: ChatCtx, client: Anthropic, a: Agent, members:
     const r = await runTurn({
       client, model, system: agentSystem(a, ctx.group, members, judge, catalog, council),
       messages: [{ role: "user", content }],
-      tools: opts.reaction ? [] : toolsFor(a, model), effort: opts.reaction ? "low" : effortFor(a.creativity), signal: ctx.signal, maxTokens: opts.maxTokens,
+      tools: opts.reaction ? [] : toolsFor(a, model), effort: opts.reaction ? "low" : capEffort(effortFor(a.creativity), profile().effortCap), signal: ctx.signal, maxTokens: opts.maxTokens,
       onText: (t) => push({ text: t }),
       onPhase: (p) => push({ phase: p }),
       onToolCall: async (name, input, toolset) => {
@@ -330,10 +347,10 @@ async function runBanter(ctx: ChatCtx, client: Anthropic, members: Agent[], judg
 async function runJudge(ctx: ChatCtx, client: Anthropic, judge: JudgeConfig, members: Agent[], userMsg: Message, replies: Message[], council: boolean): Promise<void> {
   const msg = newMsg(ctx.group.id, "judge", JUDGE_ID, { replyTo: userMsg.id, council });
   ctx.upsert(msg);
-  const model = resolveModel(judge.model);
+  const model = resolveModel(judge.model, "judge");
   const msgs = ctx.getMessages();
   const catalog = filesCatalog(msgs, members, judge);
-  const history = transcript(msgs.filter((m) => m.id !== msg.id), members, judge, getState().settings.historyDepth);
+  const history = transcript(msgs.filter((m) => m.id !== msg.id), members, judge, Math.min(getState().settings.historyDepth, profile().history));
   let cur = { ...msg };
   const push = (p: Partial<Message>) => { cur = { ...cur, ...p }; ctx.upsert(cur); };
   const replyText = replies.map((r) => `[${nameOf(r.agentId, members, judge)}]: ${r.text}${r.files.length ? `\n(files: ${r.files.map((f) => f.name + " id=" + f.id).join(", ")})` : ""}`).join("\n\n");
@@ -343,9 +360,9 @@ async function runJudge(ctx: ChatCtx, client: Anthropic, judge: JudgeConfig, mem
       const roster = members.map((m) => `${m.id} = ${m.name} (${m.title})`).join("; ");
       const r = await client.messages.parse({
         model, max_tokens: 16000,
-        system: judgeSystem(judge, ctx.group, members, catalog) + "\nRespond ONLY with the structured verdict. All free-text fields in the boss's language.",
+        system: judgeSystem(judge, ctx.group, members, catalog, "\nRespond ONLY with the structured verdict. All free-text fields in the boss's language."),
         messages: [{ role: "user", content: `Chat history:\n${history}\n\nThe boss asked the council: """${userMsg.text}"""\n\nCouncil positions:\n${replyText}\n\nAgent ids: ${roster}\n\nProduce the verdict.` }],
-        output_config: { format: zodOutputFormat(VerdictSchema), ...(model !== "claude-haiku-4-5" ? { effort: "high" as const } : {}) },
+        output_config: { format: zodOutputFormat(VerdictSchema), ...(model !== "claude-haiku-4-5" ? { effort: profile().judgeEffort } : {}) },
       }, { signal: ctx.signal, timeout: 300_000, maxRetries: 3 });
       const v = r.parsed_output as Verdict | null;
       const usage = { input: r.usage.input_tokens + (r.usage.cache_read_input_tokens ?? 0), output: r.usage.output_tokens };
@@ -356,7 +373,7 @@ async function runJudge(ctx: ChatCtx, client: Anthropic, judge: JudgeConfig, mem
       const r = await runTurn({
         client, model, system: judgeSystem(judge, ctx.group, members, catalog),
         messages: [{ role: "user", content: `Chat history:\n${history}\n\nThe boss's latest message: """${userMsg.text}"""\n\nColleagues' replies to it:\n${replyText || "(none — you are answering directly)"}\n\nNow post your message as the judge/manager.` }],
-        tools: toolsFor(null, model), effort: "high", signal: ctx.signal,
+        tools: toolsFor(null, model), effort: profile().judgeEffort, signal: ctx.signal,
         onText: (t) => push({ text: t }), onPhase: (p) => push({ phase: p }),
         onToolCall: async (name, input, toolset) => {
           if (name === "create_file") {
@@ -409,7 +426,13 @@ export async function handleUserMessage(ctx: ChatCtx, userMsg: Message, council:
   if (!responders.length && !judgeToo) {
     if (!members.length) judgeToo = ctx.group.judgeEnabled;
     else if (members.length === 1) { responders = [members[0].id]; }
-    else { const d = await dispatch(client, ctx.group, members, judge, ctx.getMessages(), userMsg); responders = d.responders; judgeToo = d.judge; }
+    else {
+      // Fast path: the boss named someone in the text → no dispatcher round-trip.
+      const named = members.filter((m) => m.name.length >= 2 && userMsg.text.includes(m.name));
+      const judgeNamed = judge.name.length >= 2 && userMsg.text.includes(judge.name);
+      if (named.length || judgeNamed) { responders = named.slice(0, 3).map((m) => m.id); judgeToo = judgeNamed && ctx.group.judgeEnabled; }
+      else { const d = await dispatch(client, ctx.group, members, judge, ctx.getMessages(), userMsg); responders = d.responders; judgeToo = d.judge; }
+    }
   }
   if (!responders.length && !judgeToo) return;
 
@@ -441,7 +464,7 @@ export async function handleUserMessage(ctx: ChatCtx, userMsg: Message, council:
 
   // Spontaneous reaction from a colleague who didn't reply (friends vibe)
   const vibe = st.settings.vibe;
-  const chance = vibe === "friends" ? 0.55 : vibe === "mixed" ? 0.25 : 0;
+  const chance = vibe === "friends" ? profile().banter : vibe === "mixed" ? profile().banter / 2 : 0;
   if (ctx.group.banter && !council && replies.length && !judgeToo && !ctx.signal.aborted && Math.random() < chance) {
     await runBanter(ctx, client, members, judge, userMsg, replies);
   }

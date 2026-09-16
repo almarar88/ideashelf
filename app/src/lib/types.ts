@@ -127,7 +127,10 @@ export interface Settings {
   vibe: Vibe;
   humanDelay: boolean;
   control: ControlSettings;
+  speed: Speed;
 }
+
+export type Speed = "fast" | "balanced" | "quality";
 
 export type ControlLevel = "off" | "ask" | "full";
 export interface ControlSettings {
@@ -155,9 +158,9 @@ export function uid(): string {
 }
 
 export function effortFor(creativity: number): "low" | "medium" | "high" | "xhigh" {
-  if (creativity < 25) return "low";
-  if (creativity < 50) return "medium";
-  if (creativity < 78) return "high";
+  if (creativity < 35) return "low";
+  if (creativity < 65) return "medium";
+  if (creativity < 85) return "high";
   return "xhigh";
 }
 
