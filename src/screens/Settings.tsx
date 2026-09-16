@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Check, ChevronLeft, Eye, EyeOff, KeyRound, ShieldCheck } from "lucide-react";
-import { MODELS, type Effort, type Settings } from "@/lib/settings";
+import { MODELS, type Effort, type PageEffect, type Settings } from "@/lib/settings";
 import { testApiKey } from "@/lib/ai";
 import type { Route } from "@/App";
 import { Button, Card } from "@/components/ui";
@@ -95,6 +95,24 @@ export function SettingsScreen({ settings, update, navigate }: { settings: Setti
             ))}
           </div>
           <p className="mt-2 text-[11px] text-ink-muted">لا ينطبق على Haiku 4.5. العمق الأعلى أدق لكنه أبطأ وأغلى.</p>
+        </Card>
+
+        <Card tone="white" className="p-5">
+          <p className="mb-1 text-sm font-semibold">تأثير تقليب الصفحة</p>
+          <p className="mb-3 text-[11px] text-ink-muted">شكل الانتقال بين صفحات الكتاب أثناء القراءة.</p>
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                ["flip", "كتاب حقيقي"],
+                ["slide", "انزلاق"],
+                ["none", "بدون"],
+              ] as [PageEffect, string][]
+            ).map(([k, l]) => (
+              <button key={k} onClick={() => update({ pageEffect: k })} className={cn("rounded-full py-2 text-xs font-medium", settings.pageEffect === k ? "bg-accent text-white" : "bg-cream-soft")}>
+                {l}
+              </button>
+            ))}
+          </div>
         </Card>
 
         <Card tone="white" className="p-5">

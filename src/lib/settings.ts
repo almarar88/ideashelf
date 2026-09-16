@@ -1,6 +1,7 @@
 export type ModelId = "claude-opus-5" | "claude-sonnet-5" | "claude-haiku-4-5";
 export type Effort = "low" | "medium" | "high";
 export type Lang = "ar" | "en";
+export type PageEffect = "flip" | "slide" | "none";
 
 export interface Settings {
   apiKey: string;
@@ -10,6 +11,7 @@ export interface Settings {
   lang: Lang;
   theme: "system" | "light" | "dark";
   catalogUrl: string;
+  pageEffect: PageEffect;
 }
 
 const KEY = "dcl.settings.v1";
@@ -22,6 +24,7 @@ export const DEFAULT_SETTINGS: Settings = {
   lang: "ar",
   theme: "system",
   catalogUrl: "https://almarar88.github.io/ideashelf/catalog.json",
+  pageEffect: "flip",
 };
 
 export const MODELS: { id: ModelId; label: string; hint: string }[] = [
