@@ -16,6 +16,7 @@ from .pages.device_page import DevicePage
 from .pages.install_page import InstallPage
 from .pages.logs_page import LogsPage
 from .pages.placeholder import PlaceholderPage
+from .pages.screen_page import ScreenPage
 from .pages.settings_page import SettingsPage
 
 NAV = ("device", "apps", "install", "screen", "backup", "logs", "ai", "settings")
@@ -69,7 +70,7 @@ class MainWindow(QMainWindow):
             "device": DevicePage(ctx),
             "apps": AppsPage(ctx),
             "install": InstallPage(ctx),
-            "screen": PlaceholderPage(ctx, "screen.title"),
+            "screen": ScreenPage(ctx),
             "backup": BackupPage(ctx),
             "logs": LogsPage(ctx),
             "ai": PlaceholderPage(ctx, "ai.title"),
@@ -135,6 +136,10 @@ class MainWindow(QMainWindow):
         run_in_background(self.ctx.runner.version, on_done=lambda v: self.status_adb.setText(f"{tr('status.adb')}: {v or tr('status.adb_missing')}"))
 
     def closeEvent(self, e) -> None:
+        try:
+            self.pages["screen"].shutdown()
+        except Exception:
+            pass
         try:
             self.ctx.settings.window_geometry = bytes(self.saveGeometry().toBase64()).decode()
             self.ctx.settings.save()

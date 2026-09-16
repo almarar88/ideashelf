@@ -35,6 +35,18 @@ class SettingsPage(BasePage):
         self.btn_backups = button("", slot=self._browse_backups)
         h.addWidget(self.ed_backups, 1); h.addWidget(self.btn_backups)
         f.addRow(self.lbl_backups, h)
+        self.lbl_shots = QLabel()
+        h3 = QHBoxLayout()
+        self.ed_shots = QLineEdit(self.ctx.settings.screenshots_dir)
+        self.btn_shots = button("", slot=self._browse_shots)
+        h3.addWidget(self.ed_shots, 1); h3.addWidget(self.btn_shots)
+        f.addRow(self.lbl_shots, h3)
+        self.lbl_scrcpy = QLabel()
+        h4 = QHBoxLayout()
+        self.ed_scrcpy = QLineEdit(self.ctx.settings.scrcpy_path)
+        self.btn_scrcpy = button("", slot=self._browse_scrcpy)
+        h4.addWidget(self.ed_scrcpy, 1); h4.addWidget(self.btn_scrcpy)
+        f.addRow(self.lbl_scrcpy, h4)
         self.chk_confirm = QCheckBox(); self.chk_confirm.setChecked(self.ctx.settings.confirm_destructive)
         f.addRow("", self.chk_confirm)
         self.lbl_data = QLabel()
@@ -80,6 +92,8 @@ class SettingsPage(BasePage):
         self.lbl_refresh.setText(tr("settings.refresh"))
         self.lbl_backups.setText(tr("settings.backups"))
         self.btn_backups.setText(tr("browse"))
+        self.lbl_shots.setText(tr("settings.shots_dir")); self.btn_shots.setText(tr("browse"))
+        self.lbl_scrcpy.setText(tr("settings.scrcpy_path")); self.btn_scrcpy.setText(tr("browse"))
         self.chk_confirm.setText(tr("settings.confirm"))
         self.lbl_data.setText(tr("settings.data_dir"))
         self.g_adb.setTitle(tr("settings.adb"))
@@ -95,6 +109,16 @@ class SettingsPage(BasePage):
         d = QFileDialog.getExistingDirectory(self, tr("settings.backups"), self.ed_backups.text())
         if d:
             self.ed_backups.setText(d)
+
+    def _browse_shots(self) -> None:
+        d = QFileDialog.getExistingDirectory(self, tr("settings.shots_dir"), self.ed_shots.text())
+        if d:
+            self.ed_shots.setText(d)
+
+    def _browse_scrcpy(self) -> None:
+        p, _ = QFileDialog.getOpenFileName(self, tr("settings.scrcpy_path"), "", "scrcpy (scrcpy.exe scrcpy);;All (*)")
+        if p:
+            self.ed_scrcpy.setText(p)
 
     def _browse_adb(self) -> None:
         p, _ = QFileDialog.getOpenFileName(self, tr("settings.adb_path"), "", "adb (adb.exe adb);;All (*)")
@@ -145,6 +169,8 @@ class SettingsPage(BasePage):
         s.auto_refresh_seconds = self.spin_refresh.value()
         s.backups_dir = self.ed_backups.text().strip() or s.backups_dir
         s.confirm_destructive = self.chk_confirm.isChecked()
+        s.screenshots_dir = self.ed_shots.text().strip() or s.screenshots_dir
+        s.scrcpy_path = self.ed_scrcpy.text().strip()
         adb = self.ed_adb.text().strip()
         if adb != self.ctx.adb_path:
             self.ctx.set_adb_path(adb, persist=False)

@@ -26,6 +26,7 @@ class AppContext(QObject):
     adb_changed = Signal(str)               # adb path
     language_changed = Signal(str)
     notify = Signal(str, str)               # (level, message) for status bar
+    apps_loaded = Signal(list)              # list[str] packages (for logcat filter etc.)
 
     def __init__(self, settings: Optional[Settings] = None, db: Optional[Database] = None):
         super().__init__()

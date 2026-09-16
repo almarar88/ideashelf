@@ -97,3 +97,39 @@ def test_logs_page_records_adb_calls(gui):
     _pump(app, 300)
     assert win.pages["logs"].table.rowCount() >= 3
     assert any("devices" in r.command for r in ctx.db.actions())
+
+
+def test_screen_page_screenshot_and_logcat(gui, tmp_path):
+    app, ctx, win = gui
+    t0 = time.time()
+    while (not ctx.device_info) and time.time() - t0 < 15:
+        _pump(app, 100)
+    win.nav.setCurrentRow(3)
+    page = win.pages["screen"]
+    page.ed_shot_dir.setText(str(tmp_path / "shots"))
+    page._capture()
+    t0 = time.time()
+    while page._last_shot is None and time.time() - t0 < 15:
+        _pump(app, 100)
+    assert page._last_shot and page._last_shot.exists() and page.preview.pixmap() and not page.preview.pixmap().isNull()
+
+    page.cmb_pkg.setEditText("com.spotify.music")
+    page.cmb_level.setCurrentIndex(3)  # W
+    page._start_logcat()
+    t0 = time.time()
+    while len(page.log_lines) < 30 and time.time() - t0 < 15:
+        _pump(app, 100)
+    assert len(page.log_lines) == 30
+    shown = page.lc_view.toPlainText().strip().splitlines()
+    assert len(shown) == 20 and all(" I " not in l for l in shown)  # I lines filtered out at level W
+    page.ed_filter.setText("line 1")
+    _pump(app, 300)
+    assert all("line 1" in l for l in page.lc_view.toPlainText().strip().splitlines())
+    page._stop_logcat()
+    t0 = time.time()
+    while page.streamer is not None and time.time() - t0 < 10:
+        _pump(app, 100)
+    assert page.streamer is None and page.btn_lc_start.isEnabled()
+    assert any(r.action == "logcat start" and "--pid=4242" in r.command for r in ctx.db.actions())
+    # scrcpy: not installed in the test environment -> start disabled, status warns
+    assert not page.btn_start.isEnabled()

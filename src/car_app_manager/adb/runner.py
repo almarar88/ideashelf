@@ -114,6 +114,30 @@ class AdbRunner:
                 pass
         return res
 
+    def run_raw(self, *args: str, serial: Optional[str] = None, timeout: float = 60.0, action: str = "") -> tuple[int, bytes, str]:
+        """Run adb and return raw stdout bytes (for `exec-out screencap -p`)."""
+        target = serial if serial is not None else self.serial
+        full = [self.adb_path] + (["-s", target] if target else []) + list(args)
+        t0 = time.monotonic()
+        try:
+            kwargs: dict = {}
+            if sys.platform == "win32":
+                kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            proc = subprocess.run(full, capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL, **kwargs)
+            rc, out, err = proc.returncode, proc.stdout, proc.stderr.decode("utf-8", "replace")
+        except FileNotFoundError:
+            rc, out, err = RC_ADB_NOT_FOUND, b"", f"adb executable not found: {self.adb_path}"
+        except subprocess.TimeoutExpired:
+            rc, out, err = RC_TIMEOUT, b"", f"adb timed out after {timeout:.0f}s"
+        res = AdbResult(args=full, returncode=rc, stdout=f"<{len(out)} bytes>", stderr=err,
+                        duration=time.monotonic() - t0, action=action, device=target or "")
+        if self._on_result:
+            try:
+                self._on_result(res)
+            except Exception:
+                pass
+        return rc, out, err
+
     def shell(self, cmd: str, action: str = "", timeout: float = 60.0, serial: Optional[str] = None) -> AdbResult:
         return self.run("shell", cmd, action=action, timeout=timeout, serial=serial)
 

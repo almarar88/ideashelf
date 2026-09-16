@@ -56,6 +56,12 @@ class Settings:
     language: str = "ar"
     adb_path: str = ""
     scrcpy_path: str = ""
+    screenshots_dir: str = ""
+    scrcpy_max_size: int = 1280
+    scrcpy_bitrate: int = 8
+    scrcpy_fps: int = 30
+    scrcpy_always_on_top: bool = False
+    scrcpy_no_audio: bool = True
     auto_refresh_seconds: int = 5
     backups_dir: str = ""
     last_wifi_address: str = ""
@@ -87,6 +93,8 @@ class Settings:
                 pass
         if not s.backups_dir:
             s.backups_dir = str(default_backups_dir())
+        if not s.screenshots_dir:
+            s.screenshots_dir = str(data_dir() / "screenshots")
         return s
 
     def save(self, path: Path | None = None) -> None:

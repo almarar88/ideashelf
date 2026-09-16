@@ -34,6 +34,22 @@ if a[:1] == ["uninstall"]:
     print("Success"); sys.exit(0)
 if a[:1] == ["pull"]:
     open(a[-1], "wb").write(b"fake-apk"); print("1 file pulled"); sys.exit(0)
+if a[:2] == ["exec-out", "screencap"]:
+    import base64
+    # 2x2 red PNG
+    png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAIAAAAt/+nTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAQ0lEQVRYhe3PQQ3AIADAQMAQ0lCOh4ngcVnSU9DOfe74s6UDXjWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oH1UBAHLxlkf4gAAAABJRU5ErkJggg==")
+    sys.stdout.buffer.write(png); sys.stdout.flush(); sys.exit(0)
+if "pidof" in line:
+    print("4242" if "com.spotify.music" in line else ""); sys.exit(0)
+if a[:1] == ["logcat"]:
+    if "-c" in a:
+        sys.exit(0)
+    import time
+    for i in range(30):
+        lvl = "EWI"[i % 3]
+        print(f"09-16 18:00:{i:02d}.000  4242  4242 {lvl} FakeTag: line {i} from fake logcat", flush=True)
+    time.sleep(30)
+    sys.exit(0)
 if a[:1] == ["connect"]:
     print(f"connected to {a[1]}"); sys.exit(0)
 print("")

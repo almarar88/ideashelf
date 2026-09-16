@@ -20,7 +20,13 @@ It assumes ADB debugging is **already enabled and authorized** on the head unit.
 - **Settings**: language (Arabic default / English, switchable live), adb location, auto-refresh interval, backups folder.
 - Dark minimal theme, full RTL Arabic. All device work runs in background threads.
 
-Phase 2 (scrcpy mirroring, screenshots, logcat viewer, wireless helper), Phase 3 (app catalog, VirusTotal), Phase 4 (Claude AI features) are planned; see `CHANGELOG.md`.
+### Features (Phase 2)
+- **Screen → Mirror**: launches scrcpy (downloaded on demand from the official GitHub release, Apache-2.0) with sensible defaults, window title, optional MP4 recording. Mouse/keyboard control of the head unit. Never use while driving.
+- **Screen → Screenshot**: capture, preview, copy to clipboard, timestamped PNG files.
+- **Screen → Live logcat**: filter by package and level, free-text filter, colour by level, save to file, clear device buffer.
+- **Device → Wireless helper**: guided USB → Wi-Fi switch (`adb tcpip 5555` + `adb connect`), remembers the address.
+
+Phase 3 (app catalog, VirusTotal) and Phase 4 (Claude AI features) are planned; see `CHANGELOG.md`.
 
 ### Installation
 **Option A – installer / portable exe** (when built with `build.bat`):
@@ -88,6 +94,12 @@ build.bat  CarAppManager.spec  requirements.txt  CHANGELOG.md
 ---
 
 ## العربية
+
+### المزايا (المرحلة 2)
+- **الشاشة ← عرض الشاشة**: تشغيل scrcpy (يُنزَّل عند الطلب من إصدار GitHub الرسمي، رخصة Apache-2.0) بإعدادات مناسبة وعنوان نافذة وتسجيل MP4 اختياري. تحكم بالفأرة ولوحة المفاتيح. لا تستخدمه أثناء القيادة.
+- **الشاشة ← لقطة شاشة**: التقاط ومعاينة ونسخ إلى الحافظة وحفظ PNG مؤرّخ.
+- **الشاشة ← Logcat مباشر**: تصفية حسب الحزمة والمستوى ونص حر، تلوين حسب المستوى، حفظ إلى ملف، مسح سجل الجهاز.
+- **الجهاز ← مساعد الاتصال اللاسلكي**: تبديل موجّه من USB إلى Wi-Fi (`adb tcpip 5555` ثم `adb connect`) مع حفظ العنوان.
 
 ### المزايا (المرحلة 1)
 - **الجهاز**: اكتشاف عبر USB و Wi-Fi (`adb connect ip:port`)، عرض الطراز وإصدار أندرويد ومستوى API والمعمارية والتخزين، تحديث تلقائي، الأجهزة المعروفة، إعادة تشغيل خادم ADB، مساعد `adb tcpip 5555`.

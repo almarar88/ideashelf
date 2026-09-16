@@ -81,6 +81,8 @@ class DevicePage(BasePage):
         wl.addWidget(self.btn_forget)
         self.btn_tcpip = button("", slot=self._tcpip)
         self.lbl_tcpip = muted("")
+        self.btn_wizard = button("", "primary", self._wizard)
+        wl.addWidget(self.btn_wizard)
         wl.addWidget(self.btn_tcpip)
         wl.addWidget(self.lbl_tcpip)
         body.addWidget(self.wifi_group, 2)
@@ -113,6 +115,7 @@ class DevicePage(BasePage):
         self.lbl_known.setText(tr("device.known"))
         self.btn_forget.setText(tr("device.forget"))
         self.btn_tcpip.setText(tr("device.tcpip"))
+        self.btn_wizard.setText(tr("wiz.button"))
         self.lbl_tcpip.setText(tr("device.tcpip_help"))
         self._fill_combo(self.ctx.known_devices)
         self._show_info(self.ctx.device_info)
@@ -255,6 +258,15 @@ class DevicePage(BasePage):
             self.status.set(tr("device_not_ready"), "warn")
             return
         run_in_background(self.ctx.devices.enable_tcpip, cur.serial, on_done=lambda r: self.status.set(r.output or tr("done"), "ok" if r.ok else "error"))
+
+    def _wizard(self) -> None:
+        from ..wireless_wizard import WirelessWizard
+        w = WirelessWizard(self.ctx, self)
+        w.exec()
+        self._load_known()
+        if w.connected_address:
+            self.addr.setText(w.connected_address)
+        self.refresh()
 
     def _load_known(self) -> None:
         self.known_list.clear()

@@ -122,6 +122,7 @@ class AppsPage(BasePage):
         self.apps = apps
         self.status.set("")
         self._fill()
+        self.ctx.apps_loaded.emit([a.package for a in apps])
 
     def _fill(self) -> None:
         self.table.setSortingEnabled(False)
