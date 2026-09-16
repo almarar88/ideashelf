@@ -26,7 +26,12 @@ It assumes ADB debugging is **already enabled and authorized** on the head unit.
 - **Screen → Live logcat**: filter by package and level, free-text filter, colour by level, save to file, clear device buffer.
 - **Device → Wireless helper**: guided USB → Wi-Fi switch (`adb tcpip 5555` + `adb connect`), remembers the address.
 
-Phase 3 (app catalog, VirusTotal) and Phase 4 (Claude AI features) are planned; see `CHANGELOG.md`.
+### Features (Phase 3)
+- **Install → Catalog**: editable JSON catalog of apps with official source links, Arabic/English descriptions, a "tested on T2" flag you set yourself, import/export, and one-click download of direct APK links into the install list. The bundled seed list is **not** pre-tested on your car.
+- **VirusTotal (optional)**: enter your own free API key in Settings (stored in Windows Credential Manager). Every APK's SHA-256 is looked up (the file itself is never uploaded). Flagged files require explicit confirmation; nothing is blocked silently.
+- **SHA-256** shown for every APK and recorded in backups.
+
+Phase 4 (Claude AI features) is planned; see `CHANGELOG.md`.
 
 ### Installation
 **Option A – download the ready-made Windows build** (built automatically on GitHub Actions on every push):
@@ -97,6 +102,11 @@ build.bat  CarAppManager.spec  requirements.txt  CHANGELOG.md
 ---
 
 ## العربية
+
+### المزايا (المرحلة 3)
+- **التثبيت ← الكتالوج**: كتالوج JSON قابل للتعديل لتطبيقات بروابط مصادرها الرسمية، وصف عربي/إنجليزي، علامة «مجرّب على T2» تضعها أنت، استيراد/تصدير، وتنزيل مباشر لروابط APK إلى قائمة التثبيت بنقرة. القائمة الافتراضية **غير** مجرّبة مسبقاً على سيارتك.
+- **VirusTotal (اختياري)**: أدخل مفتاح API المجاني الخاص بك في الإعدادات (يُحفظ في Windows Credential Manager). تُفحص بصمة SHA-256 لكل ملف (لا يُرفع الملف نفسه أبداً). الملفات المشبوهة تتطلب تأكيداً صريحاً؛ لا يُمنع شيء بصمت.
+- **SHA-256** تظهر لكل ملف APK وتُسجَّل في النسخ الاحتياطية.
 
 ### المزايا (المرحلة 2)
 - **الشاشة ← عرض الشاشة**: تشغيل scrcpy (يُنزَّل عند الطلب من إصدار GitHub الرسمي، رخصة Apache-2.0) بإعدادات مناسبة وعنوان نافذة وتسجيل MP4 اختياري. تحكم بالفأرة ولوحة المفاتيح. لا تستخدمه أثناء القيادة.

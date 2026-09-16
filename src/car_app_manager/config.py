@@ -43,6 +43,12 @@ def default_backups_dir() -> Path:
     return p
 
 
+def downloads_dir() -> Path:
+    p = data_dir() / "downloads"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 def db_path() -> Path:
     return data_dir() / "car_app_manager.sqlite3"
 

@@ -2,6 +2,13 @@
 
 All notable changes to Car App Manager are documented here.
 
+## [0.3.0] - Phase 3 (curated catalog, VirusTotal, hashes)
+### Added
+- **Catalog tab** (Install page): local, user-editable JSON catalog (`%LOCALAPPDATA%\CarAppManager\catalog.json`, seeded from a bundled list of well-known apps with official source links). Fields: name, package, category, Arabic/English description, source URL, "tested on T2" flag, notes, optional SHA-256. Add / edit / delete / toggle tested, import & export JSON, open source page, direct download of `.apk`/`.xapk`/`.apks` links straight into the install list. Shows which catalog apps are currently installed.
+- **VirusTotal** (optional, off by default): the user's own API key is stored in Windows Credential Manager through `keyring` (session-only fallback when no store exists). Only the SHA-256 is sent, never the file. Results show in a new column and in the details pane with a link to the report. A file flagged malicious asks for explicit confirmation before install; nothing is blocked silently. Manual "Check VirusTotal" button, "Test key" in Settings.
+- **SHA-256** is computed for every APK / bundle (install list details, tracked installs, and now per-file in backup manifests).
+- Tests: catalog persistence / import / export, VirusTotal response parsing and HTTP status handling, secret storage with and without a keyring backend, GUI test for the catalog tab and the VirusTotal column.
+
 ## [0.2.0] - Phase 2 (remote control)
 ### Added
 - Screen page with three tabs:
@@ -28,5 +35,4 @@ All notable changes to Car App Manager are documented here.
 - Test suite: 48 pytest tests with a scriptable fake adb executor plus a headless (offscreen) GUI smoke test.
 
 ### Planned
-- Phase 3: curated JSON app catalog, optional VirusTotal hash lookup.
 - Phase 4: Claude API features (crash doctor, APK risk explainer, natural-language planner with tool allowlist, chat help), keyring-stored API key, spend cap.

@@ -9,6 +9,7 @@ from typing import Callable, Optional
 
 from .adb.install import Installer, InstallResult
 from .adb.packages import AppInfo, PackageManager
+from .apk.inspector import sha256_file
 
 MANIFEST_NAME = "apps.json"
 
@@ -21,6 +22,7 @@ class BackupEntry:
     version_code: int = 0
     files: list[str] = field(default_factory=list)  # relative to backup folder
     size_bytes: int = 0
+    sha256: dict[str, str] = field(default_factory=dict)  # relative file -> sha256
 
 
 @dataclass
@@ -61,6 +63,7 @@ def create_backup(
             package=app.package, label=app.label, version_name=app.version_name, version_code=app.version_code,
             files=[p.relative_to(folder).as_posix() for p in pulled],
             size_bytes=sum(p.stat().st_size for p in pulled),
+            sha256={p.relative_to(folder).as_posix(): sha256_file(p) for p in pulled},
         ))
     b = Backup(folder=folder, created=datetime.now().isoformat(timespec="seconds"), device=device, entries=entries)
     write_manifest(b)

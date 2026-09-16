@@ -133,3 +133,40 @@ def test_screen_page_screenshot_and_logcat(gui, tmp_path):
     assert any(r.action == "logcat start" and "--pid=4242" in r.command for r in ctx.db.actions())
     # scrcpy: not installed in the test environment -> start disabled, status warns
     assert not page.btn_start.isEnabled()
+
+
+def test_catalog_tab_and_vt_column(gui, tmp_path, monkeypatch):
+    app, ctx, win = gui
+    win.nav.setCurrentRow(2)
+    page = win.pages["install"]
+    tab = page.catalog_tab
+    assert tab.table.rowCount() >= 5
+    page.tabs.setCurrentIndex(1)
+    _pump(app, 150)
+    tab.table.setCurrentCell(0, 0)  # selectRow() is a no-op in RTL before the viewport is laid out
+    _pump(app, 100)
+    first_id = tab._selected_id()
+    tab._toggle_tested()
+    assert tab.catalog.get(first_id).tested_on_t2 and tab.table.item(0, 3).text() == "✔"
+    # VirusTotal disabled -> manual check shows the hint, no lookup
+    ctx.settings.virustotal_enabled = False
+    page._vt_check_selected()
+    assert "VirusTotal" in page.status.text()
+    # enabled with a fake key and a fake lookup -> column filled
+    from car_app_manager.security import secrets
+    from car_app_manager.ui.pages import install_page as ip
+    monkeypatch.setattr(secrets, "_backend_ok", lambda: False)
+    secrets.set_secret("virustotal", "FAKE")
+    monkeypatch.setattr(ip, "get_secret", lambda name: "FAKE")
+    monkeypatch.setattr(ip, "vt_lookup", lambda sha, key: ip.VTResult(sha, "found", malicious=3, harmless=10, undetected=1))
+    ctx.settings.virustotal_enabled = True
+    bogus = tmp_path / "x.apk"; bogus.write_bytes(b"zzz")
+    page.add_paths([str(bogus)])
+    item = page.items[-1]
+    t0 = time.time()
+    while (item.state == "checking" or item.vt is None) and time.time() - t0 < 30:
+        _pump(app, 100)
+    assert item.vt and item.vt.malicious == 3
+    row = page.table.rowCount() - 1
+    assert "3" in page.table.item(row, 6).text()
+    assert any(r.action == "virustotal lookup" for r in ctx.db.actions())

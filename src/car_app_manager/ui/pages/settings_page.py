@@ -5,8 +5,10 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QFormLayout, Q
                                QLineEdit, QProgressBar, QSpinBox, QVBoxLayout)
 
 from ...config import data_dir
-from ...i18n import tr
+from ...i18n import tr, current_lang
 from ...tools.platform_tools import download_platform_tools, verify_adb
+from ...security.secrets import get_secret, set_secret
+from ...security.virustotal import lookup as vt_lookup
 from ...workers import run_in_background
 from ..widgets.common import StatusLine, button, muted, title_label
 from .base import BasePage
@@ -70,6 +72,22 @@ class SettingsPage(BasePage):
         v.addWidget(self.adb_status)
         self.root.addWidget(self.g_adb)
 
+        self.g_vt = QGroupBox()
+        vv = QVBoxLayout(self.g_vt)
+        self.chk_vt = QCheckBox(); self.chk_vt.setChecked(self.ctx.settings.virustotal_enabled)
+        vv.addWidget(self.chk_vt)
+        hv = QHBoxLayout()
+        self.lbl_vt_key = QLabel()
+        self.ed_vt_key = QLineEdit(get_secret("virustotal")); self.ed_vt_key.setEchoMode(QLineEdit.Password)
+        self.btn_vt_test = button("", slot=self._test_vt)
+        hv.addWidget(self.lbl_vt_key); hv.addWidget(self.ed_vt_key, 1); hv.addWidget(self.btn_vt_test)
+        vv.addLayout(hv)
+        self.lbl_vt_help = muted("")
+        vv.addWidget(self.lbl_vt_help)
+        self.vt_status = StatusLine()
+        vv.addWidget(self.vt_status)
+        self.root.addWidget(self.g_vt)
+
         self.g_safety = QGroupBox()
         sv = QVBoxLayout(self.g_safety)
         self.lbl_safety = muted("")
@@ -101,6 +119,8 @@ class SettingsPage(BasePage):
         self.btn_adb_browse.setText(tr("browse"))
         self.btn_adb_test.setText(tr("settings.adb_test"))
         self.btn_adb_download.setText(tr("settings.adb_download"))
+        self.g_vt.setTitle(tr("settings.vt")); self.chk_vt.setText(tr("settings.vt_enable"))
+        self.lbl_vt_key.setText(tr("settings.vt_key")); self.btn_vt_test.setText(tr("settings.vt_test")); self.lbl_vt_help.setText(tr("settings.vt_key_help"))
         self.g_safety.setTitle(tr("settings.safety"))
         self.lbl_safety.setText(tr("settings.safety_text"))
         self.btn_save.setText(tr("settings.save"))
@@ -164,8 +184,21 @@ class SettingsPage(BasePage):
         run_in_background(lambda progress: download_platform_tools(lambda d, t: progress((d, t))),
                           on_done=done, on_error=fail, on_progress=prog)
 
+    def _test_vt(self) -> None:
+        key = self.ed_vt_key.text().strip()
+        self.vt_status.set(tr("working"))
+        # EICAR test file hash: always present on VirusTotal
+        run_in_background(vt_lookup, "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f", key,
+                          on_done=lambda r: self.vt_status.set(tr("settings.vt_ok") if r.status == "found" else tr("settings.vt_bad", msg=r.summary(current_lang())),
+                                                               "ok" if r.status == "found" else "error"))
+
     def _save(self) -> None:
         s = self.ctx.settings
+        s.virustotal_enabled = self.chk_vt.isChecked()
+        key = self.ed_vt_key.text().strip()
+        if key != get_secret("virustotal"):
+            persistent = set_secret("virustotal", key)
+            self.vt_status.set(tr("settings.key_saved") if persistent else tr("settings.key_memory"), "ok" if persistent else "warn")
         s.auto_refresh_seconds = self.spin_refresh.value()
         s.backups_dir = self.ed_backups.text().strip() or s.backups_dir
         s.confirm_destructive = self.chk_confirm.isChecked()

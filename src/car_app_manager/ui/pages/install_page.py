@@ -9,7 +9,9 @@ from typing import Optional
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QFileDialog, QFrame, QHBoxLayout, QHeaderView, QLabel,
-                               QProgressBar, QSplitter, QTableWidget, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget)
+                               QProgressBar, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QUrl
 
 from ...adb.install import InstallResult
 from ...apk.bundle import APK_EXTENSIONS, BUNDLE_EXTENSIONS, extract_bundle, is_base_apk
@@ -18,8 +20,11 @@ from ...i18n import tr, human_size, current_lang
 from ...workers import run_in_background
 from ..widgets.common import StatusLine, button, confirm, title_label
 from .base import BasePage
+from .catalog_tab import CatalogTab
+from ...security.virustotal import VTResult, lookup as vt_lookup
+from ...security.secrets import get_secret
 
-COLS = ("file", "package", "version", "sdk", "abi", "perms", "status")
+COLS = ("file", "package", "version", "sdk", "abi", "perms", "vt", "status")
 LEVEL_COLORS = {"ok": "#4cd964", "warn": "#ffb84d", "error": "#ff6b6b"}
 
 
@@ -32,6 +37,8 @@ class Item:
     state: str = "checking"  # checking | ok | warn | error | installing | installed | failed
     result: Optional[InstallResult] = None
     is_bundle: bool = False
+    vt: Optional[VTResult] = None
+    vt_checking: bool = False
 
 
 def inspect_path(path: str, device_sdk: int, device_abis: list[str], pm) -> tuple[ApkInfo, list[Check], Optional[tuple[str, int]]]:
@@ -106,6 +113,18 @@ class InstallPage(BasePage):
     def build(self) -> None:
         self.title = title_label("")
         self.root.addWidget(self.title)
+        self.tabs = QTabWidget()
+        self.root.addWidget(self.tabs, 1)
+        files_tab = QWidget()
+        self.files_lay = QVBoxLayout(files_tab)
+        self.files_lay.setContentsMargins(0, 8, 0, 0)
+        self.catalog_tab = CatalogTab(self.ctx, self.add_paths)
+        self.tabs.addTab(files_tab, "")
+        self.tabs.addTab(self.catalog_tab, "")
+        self._build_files()
+
+    def _build_files(self) -> None:
+        self.root = self.files_lay  # the rest of the widgets go into the files tab
         self.drop = DropZone(self.add_paths)
         self.root.addWidget(self.drop)
 
@@ -114,7 +133,8 @@ class InstallPage(BasePage):
         self.btn_add_folder = button("", slot=self._add_folder)
         self.btn_remove = button("", slot=self._remove_selected)
         self.btn_clear = button("", slot=self._clear)
-        for b in (self.btn_add, self.btn_add_folder, self.btn_remove, self.btn_clear):
+        self.btn_vt = button("", slot=self._vt_check_selected)
+        for b in (self.btn_add, self.btn_add_folder, self.btn_remove, self.btn_clear, self.btn_vt):
             bar.addWidget(b)
         bar.addStretch(1)
         self.root.addLayout(bar)
@@ -135,12 +155,12 @@ class InstallPage(BasePage):
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        for c in (3, 4, 5, 6):
+        for c in (3, 4, 5, 6, 7):
             self.table.horizontalHeader().setSectionResizeMode(c, QHeaderView.ResizeToContents)
         self.table.itemSelectionChanged.connect(self._show_details)
         split.addWidget(self.table)
-        self.details = QTextEdit()
-        self.details.setReadOnly(True)
+        self.details = QTextBrowser()
+        self.details.setOpenExternalLinks(True)
         split.addWidget(self.details)
         split.setSizes([320, 220])
         self.root.addWidget(split, 1)
@@ -162,6 +182,9 @@ class InstallPage(BasePage):
 
     def retranslate(self) -> None:
         self.title.setText(tr("install.title"))
+        self.tabs.setTabText(0, tr("install.tab.files")); self.tabs.setTabText(1, tr("install.tab.catalog"))
+        self.btn_vt.setText(tr("install.vt_check"))
+        self.catalog_tab.retranslate()
         self.drop.label.setText(tr("install.drop"))
         self.btn_add.setText(tr("install.add"))
         self.btn_add_folder.setText(tr("install.add_folder"))
@@ -220,6 +243,8 @@ class InstallPage(BasePage):
             it.state = worst_level(it.checks)
             self._refill()
             self._show_details()
+            if self.ctx.settings.virustotal_enabled and it.info and it.info.sha256 and it.vt is None:
+                self._vt_check(it)
 
         def fail(msg):
             it.info = ApkInfo(path=it.path, parse_error=msg)
@@ -261,11 +286,14 @@ class InstallPage(BasePage):
                 str(info.min_sdk) if info and info.min_sdk else "",
                 ", ".join(info.native_abis) if info and info.native_abis else ("—" if info else ""),
                 str(dp) if info else "",
+                self._vt_text(it),
                 tr(f"install.status.{it.state}"),
             ]
             for c, v in enumerate(vals):
                 cell = QTableWidgetItem(v)
-                if c == 6:
+                if c == 6 and it.vt is not None:
+                    cell.setForeground(QColor(LEVEL_COLORS.get(it.vt.level, "#e6e6e6")))
+                if c == 7:
                     color = {"ok": "ok", "installed": "ok", "warn": "warn", "error": "error", "failed": "error"}.get(it.state)
                     if color:
                         cell.setForeground(QColor(LEVEL_COLORS[color]))
@@ -325,9 +353,60 @@ class InstallPage(BasePage):
                 comps.append(f"providers: {len(info.providers)}")
             if comps:
                 html.append(f"<b>{tr('install.components')}:</b> " + ", ".join(comps) + "<br>")
+        if it.vt is not None:
+            html.append(f"<br><b style='color:{LEVEL_COLORS.get(it.vt.level, '#e6e6e6')}'>{it.vt.summary(lang)}</b>")
+            if it.vt.scan_date:
+                html.append(f" ({it.vt.scan_date})")
+            html.append(f" — <a href='{it.vt.permalink}'>{tr('vt.open')}</a><br>")
         if it.result:
             html.append(f"<br><b>{tr('install.col.status')}:</b> {it.result.message(lang)}<br><pre>{it.result.raw}</pre>")
         self.details.setHtml("".join(html))
+
+    # ---- virustotal -----------------------------------------------------------------
+    def _vt_text(self, it: Item) -> str:
+        if it.vt_checking:
+            return tr("vt.checking")
+        v = it.vt
+        if v is None:
+            return ""
+        if v.status == "found":
+            if v.malicious:
+                return tr("vt.malicious", n=v.malicious)
+            if v.suspicious:
+                return tr("vt.suspicious", n=v.suspicious)
+            return tr("vt.clean")
+        return tr("vt.unknown") if v.status == "not_found" else tr("vt.error")
+
+    def _vt_check_selected(self) -> None:
+        if not self.ctx.settings.virustotal_enabled or not get_secret("virustotal"):
+            self.status.set(tr("install.vt_off"), "warn")
+            return
+        items = self._selected_items() or list(self.items)
+        for it in items:
+            if it.info and it.info.sha256 and not it.vt_checking:
+                self._vt_check(it)
+
+    def _vt_check(self, it: Item) -> None:
+        key = get_secret("virustotal")
+        if not key or not it.info:
+            return
+        it.vt_checking = True
+        sha = it.info.sha256
+        self._refill()
+
+        def done(res):
+            it.vt_checking = False
+            it.vt = res
+            self.ctx.logger.note("virustotal lookup", f"{sha} -> {res.status} malicious={res.malicious}", success=res.status in ("found", "not_found"))
+            self._refill()
+            self._show_details()
+
+        def fail(msg):
+            it.vt_checking = False
+            it.vt = VTResult(sha, "error", message=msg)
+            self._refill()
+
+        run_in_background(vt_lookup, sha, key, on_done=done, on_error=fail)
 
     # ---- install --------------------------------------------------------------------
     def _install(self, selected_only: bool) -> None:
@@ -343,6 +422,11 @@ class InstallPage(BasePage):
         if any(t.state == "error" for t in todo):
             if not confirm(self, tr("install.confirm_errors"), danger=True):
                 return
+        for t in todo:
+            if t.vt is not None and t.vt.status == "found" and t.vt.malicious > 0:
+                if not confirm(self, tr("install.vt_confirm", n=t.vt.malicious, file=os.path.basename(t.path)), danger=True):
+                    return
+                self.ctx.logger.note("user overrode VirusTotal warning", f"{t.path} malicious={t.vt.malicious}", success=False)
         self._installing = True
         self.progress.setVisible(True)
         self.progress.setRange(0, len(todo))
