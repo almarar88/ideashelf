@@ -14,6 +14,8 @@ interface Ctx {
   setContext: (c: AgentContext | undefined) => void;
   navigate: (t: NavTarget) => void;
   registerNav: (fn: (t: NavTarget) => void) => void;
+  addTaskSignal: number;
+  requestAddTask: () => void;
 }
 
 const C = createContext<Ctx | null>(null);
@@ -24,6 +26,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [assistantPrefill, setPrefill] = useState("");
   const [context, setContextState] = useState<AgentContext | undefined>(undefined);
   const navRef = useRef<(t: NavTarget) => void>(() => {});
+  const [addTaskSignal, setAddTaskSignal] = useState(0);
+  const requestAddTask = useCallback(() => setAddTaskSignal((n) => n + 1), []);
   const timer = useRef<number | undefined>(undefined);
   const toast = useCallback((m: string) => {
     setMsg(m);
@@ -36,7 +40,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const navigate = useCallback((t: NavTarget) => navRef.current(t), []);
   const registerNav = useCallback((fn: (t: NavTarget) => void) => { navRef.current = fn; }, []);
   return (
-    <C.Provider value={{ toast, openAssistant, assistantOpen, assistantPrefill, closeAssistant, context, setContext, navigate, registerNav }}>
+    <C.Provider value={{ toast, openAssistant, assistantOpen, assistantPrefill, closeAssistant, context, setContext, navigate, registerNav, addTaskSignal, requestAddTask }}>
       {children}
       <Toast msg={msg} />
     </C.Provider>

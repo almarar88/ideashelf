@@ -9,6 +9,7 @@ import { useStore } from "@/store/useStore";
 import { addDays, fmtDate, fmtMoney, todayISO, uid } from "@/lib/ids";
 import { applySensitivity, overallScore, project } from "@/lib/finance";
 import { useAgentContext, useApp, useJob, useWide } from "@/lib/app-context";
+import { foreground, nativeNotify } from "@/lib/native";
 import { demoStudy, describeError, generateStudy, hasAI, matchPartners, type PartnerMatch } from "@/lib/ai";
 import type { Study, StudyInput } from "@/types";
 
@@ -95,12 +96,15 @@ function StudyWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (
       upsertStudy({ ...study, status: "ready", result: demoStudy(f, lang), generatedBy: "demo", updatedAt: new Date().toISOString() });
       return;
     }
+    void foreground(true, lang === "ar" ? "جارٍ توليد دراسة الجدوى" : "Generating feasibility study", f.title);
     try {
       const result = await generateStudy(settings, f, partners.find((p) => p.id === f.partnerId));
       upsertStudy({ ...study, status: "ready", result, generatedBy: "ai", updatedAt: new Date().toISOString() });
+      void nativeNotify(lang === "ar" ? "✓ دراسة الجدوى جاهزة" : "✓ Feasibility study ready", `${f.title} · ${result.verdict.toUpperCase()}`, { channel: "agent", action: "home" });
     } catch (e) {
       upsertStudy({ ...study, status: "error", error: describeError(e, lang), updatedAt: new Date().toISOString() });
-    }
+      void nativeNotify(lang === "ar" ? "⚠ تعذر توليد الدراسة" : "⚠ Study generation failed", f.title, { channel: "agent", action: "home" });
+    } finally { void foreground(false); }
   };
 
   return (

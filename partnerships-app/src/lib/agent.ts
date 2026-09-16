@@ -5,6 +5,7 @@ import { addDays, todayISO, uid } from "./ids";
 import { AIError, emailDraft, generateStudy, negotiationPrep, partnerBrief, proposalDraft, snapshot, weeklyReport } from "./ai";
 import { agreementsToSheet, dealsToSheet, meetingsToSheet, partnersToSheet, studyMeta, studyToMarkdown, studyToSheets, tasksToSheet } from "./report";
 import { exportDocx, exportPdfFromMarkdown, exportXlsx } from "./export";
+import { nativeNotify } from "./native";
 
 /* ------------------------------------------------------------------ */
 /* Tool definitions                                                     */
@@ -84,7 +85,9 @@ export async function runTool(name: string, input: In, settings: Settings): Prom
       const inp: StudyInput = { title: S(input.title), idea: S(input.idea), sector: S(input.sector), country: S(input.country), targetMarket: S(input.targetMarket), objectives: S(input.objectives), currency: settings.currency, budgetHint: typeof input.budgetHint === "number" ? N(input.budgetHint) : undefined, horizonYears: N(input.horizonYears, 5) === 3 ? 3 : 5, partnerId: p?.id };
       const study: Study = { id: uid(), input: inp, status: "generating", createdAt: now, updatedAt: now };
       st.upsertStudy(study);
-      generateStudy(settings, inp, p).then((result) => useStore.getState().upsertStudy({ ...study, status: "ready", result, generatedBy: "ai", updatedAt: new Date().toISOString() })).catch((e) => useStore.getState().upsertStudy({ ...study, status: "error", error: e instanceof Error ? e.message : String(e), updatedAt: new Date().toISOString() }));
+      generateStudy(settings, inp, p)
+        .then((result) => { useStore.getState().upsertStudy({ ...study, status: "ready", result, generatedBy: "ai", updatedAt: new Date().toISOString() }); void nativeNotify(settings.lang === "ar" ? "✓ دراسة الجدوى جاهزة" : "✓ Feasibility study ready", `${inp.title} · ${result.verdict.toUpperCase()}`, { channel: "agent" }); })
+        .catch((e) => useStore.getState().upsertStudy({ ...study, status: "error", error: e instanceof Error ? e.message : String(e), updatedAt: new Date().toISOString() }));
       return { result: JSON.stringify({ ok: true, id: study.id, status: "generating" }), summary: `✦ ${inp.title}` };
     }
     case "generate_document": {

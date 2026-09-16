@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="14dp"
+    android:layoutDirection="locale">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/w_title" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Day tasks" android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold" android:textDirection="anyRtl" android:gravity="start" />
+        <TextView android:id="@+id/w_date" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="" android:textColor="#B3FFFFFF" android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="4dp">
+        <TextView android:id="@+id/w_count" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="#FFFFFF" android:textSize="34sp" android:textStyle="bold" android:layout_marginEnd="8dp" />
+        <TextView android:id="@+id/w_sub" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="" android:textColor="#99FFFFFF" android:textSize="12sp" android:textDirection="anyRtl" android:gravity="start" />
+    </LinearLayout>
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="@drawable/widget_card" android:padding="10dp" android:layout_marginTop="6dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+            <ImageView android:id="@+id/w_d1" android:layout_width="8dp" android:layout_height="8dp" android:src="@drawable/widget_dot" android:layout_marginEnd="8dp" />
+            <TextView android:id="@+id/w_t1" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#1E2419" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" android:textDirection="anyRtl" android:gravity="start" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="5dp">
+            <ImageView android:id="@+id/w_d2" android:layout_width="8dp" android:layout_height="8dp" android:src="@drawable/widget_dot" android:layout_marginEnd="8dp" />
+            <TextView android:id="@+id/w_t2" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#1E2419" android:textSize="13sp" android:maxLines="1" android:ellipsize="end" android:textDirection="anyRtl" android:gravity="start" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="5dp">
+            <ImageView android:id="@+id/w_d3" android:layout_width="8dp" android:layout_height="8dp" android:src="@drawable/widget_dot" android:layout_marginEnd="8dp" />
+            <TextView android:id="@+id/w_t3" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#1E2419" android:textSize="13sp" android:maxLines="1" android:ellipsize="end" android:textDirection="anyRtl" android:gravity="start" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView android:id="@+id/w_foot" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="" android:textColor="#99FFFFFF" android:textSize="11sp" android:layout_marginTop="8dp" android:maxLines="1" android:ellipsize="end" android:textDirection="anyRtl" android:gravity="start" />
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+        <TextView android:id="@+id/w_add" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="+ Task" android:textColor="#1E2419" android:textSize="12sp" android:textStyle="bold" android:gravity="center" android:paddingTop="7dp" android:paddingBottom="7dp" android:background="@drawable/widget_pill_light" android:layout_marginEnd="6dp" />
+        <TextView android:id="@+id/w_agent" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="✦ Agent" android:textColor="#FFFFFF" android:textSize="12sp" android:textStyle="bold" android:gravity="center" android:paddingTop="7dp" android:paddingBottom="7dp" android:background="@drawable/widget_pill_dark" />
+    </LinearLayout>
+</LinearLayout>

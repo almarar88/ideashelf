@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sparkles, UserRound, Plus, FileSignature, Users, Briefcase, Lightbulb, AlertTriangle, ChevronRight, ChevronLeft, Search } from "lucide-react";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { DateStrip } from "@/components/DateStrip";
@@ -16,7 +16,10 @@ import type { Tab } from "@/components/BottomNav";
 export function Home({ go, openPartner, openSettings }: { go: (t: Tab) => void; openPartner: (id: string) => void; openSettings: () => void }) {
   const { t, lang, dir } = useT();
   const { tasks, partners, deals, agreements, studies, settings, meetings } = useStore();
-  const { openAssistant } = useApp();
+  const { openAssistant, addTaskSignal } = useApp();
+  const setSettings = useStore((s) => s.setSettings);
+  const [notifBusy, setNotifBusy] = useState(false);
+  useEffect(() => { if (addTaskSignal > 0) setTaskForm({ open: true }); }, [addTaskSignal]);
   const [day, setDay] = useState(todayISO());
   const [taskForm, setTaskForm] = useState<{ open: boolean; task?: Task }>({ open: false });
   const [search, setSearch] = useState(false);
@@ -64,6 +67,13 @@ export function Home({ go, openPartner, openSettings }: { go: (t: Tab) => void; 
       <GlobalSearch open={search} onClose={() => setSearch(false)} />
 
       <div className="mt-4"><DateStrip selected={day} onSelect={setDay} counts={counts} /></div>
+      {!settings.notifications && (
+        <Card dark className="mt-4 flex items-center gap-3">
+          <span className="text-[22px]">🔔</span>
+          <div className="flex-1 text-[13px]"><div className="font-bold">{t("notifications")}</div><div className="text-white/60">{t("enableNotifications")}</div></div>
+          <Button small disabled={notifBusy} onClick={async () => { setNotifBusy(true); try { const { enableNotifications } = await import("@/lib/notifications"); const ok = await enableNotifications(); setSettings({ notifications: ok }); } finally { setNotifBusy(false); } }}>{t("apply")}</Button>
+        </Card>
+      )}
 
       <SectionTitle action={<Button small onClick={() => setTaskForm({ open: true })}><Plus size={14} />{t("addTask")}</Button>}>{t("dayTasks")}</SectionTitle>
       {dayTasks.length === 0 ? (

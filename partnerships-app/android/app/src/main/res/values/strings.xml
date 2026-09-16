@@ -4,4 +4,5 @@
     <string name="title_activity_main">PartnerHub</string>
     <string name="package_name">com.ideashelf.partnerhub</string>
     <string name="custom_url_scheme">com.ideashelf.partnerhub</string>
+    <string name="widget_description">مهام اليوم، نبض الشراكات، والوكيل الذكي</string>
 </resources>

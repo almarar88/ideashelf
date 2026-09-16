@@ -8,6 +8,7 @@ import { useApp } from "@/lib/app-context";
 import { demoText, describeError, hasAI } from "@/lib/ai";
 import { runAgent } from "@/lib/agent";
 import { fmtDate, uid } from "@/lib/ids";
+import { foreground, nativeNotify } from "@/lib/native";
 import type { AgentTask } from "@/types";
 
 /** Executes a queued agent task (also used by TaskCard for agent-assigned tasks). */
@@ -18,6 +19,8 @@ export async function executeAgentTask(id: string) {
   const settings = st.settings;
   if (!hasAI(settings)) { st.upsertAgentTask({ ...task, status: "failed", result: demoText(settings.lang, settings.lang === "ar" ? "التنفيذ" : "execution"), finishedAt: new Date().toISOString() }); return; }
   st.upsertAgentTask({ ...task, status: "running", steps: [] });
+  const ar = settings.lang === "ar";
+  void foreground(true, ar ? "الوكيل الذكي يعمل" : "AI agent working", task.instruction.slice(0, 80));
   try {
     const r = await runAgent(settings, [{ role: "user", text: task.instruction }], {
       context: task.contextLabel ? { label: task.contextLabel } : undefined,
@@ -26,9 +29,13 @@ export async function executeAgentTask(id: string) {
     const cur = useStore.getState().agentTasks.find((a) => a.id === id)!;
     useStore.getState().upsertAgentTask({ ...cur, status: "done", result: r.text, finishedAt: new Date().toISOString() });
     if (task.linkedTaskId) { const lt = useStore.getState().tasks.find((x) => x.id === task.linkedTaskId); if (lt) useStore.getState().upsertTask({ ...lt, status: "done", agentResult: r.text }); }
+    void nativeNotify(ar ? "✓ الوكيل أنهى المهمة" : "✓ Agent finished", `${task.instruction.slice(0, 60)}${r.steps.length ? ` · ${r.steps.length} ${ar ? "إجراء" : "actions"}` : ""}`, { channel: "agent", action: "agent" });
   } catch (e) {
     const cur = useStore.getState().agentTasks.find((a) => a.id === id)!;
     useStore.getState().upsertAgentTask({ ...cur, status: "failed", result: describeError(e, settings.lang), finishedAt: new Date().toISOString() });
+    void nativeNotify(ar ? "⚠ فشلت مهمة الوكيل" : "⚠ Agent task failed", task.instruction.slice(0, 80), { channel: "agent", action: "agent" });
+  } finally {
+    if (!useStore.getState().agentTasks.some((a) => a.status === "running")) void foreground(false);
   }
 }
 

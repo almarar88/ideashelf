@@ -5,6 +5,7 @@ import { NavRail } from "@/components/NavRail";
 import { AppProvider, useApp, type NavTarget } from "@/lib/app-context";
 import { setFormatLang } from "@/lib/ids";
 import { Calendar } from "@/screens/Calendar";
+import { consumePendingAction, onNativeAction, syncNative } from "@/lib/native";
 import { useT } from "@/lib/useT";
 import { useStore } from "@/store/useStore";
 import { Home } from "@/screens/Home";
@@ -21,7 +22,7 @@ import { Assistant } from "@/screens/Assistant";
 
 function Shell() {
   const { dir, lang } = useT();
-  const { openAssistant, assistantOpen, registerNav } = useApp();
+  const { openAssistant, assistantOpen, registerNav, navigate, requestAddTask } = useApp();
   const [tab, setTab] = useState<Tab>("home");
   const [sub, setSub] = useState<Sub | null>(null);
   const [partnerId, setPartnerId] = useState<string | null>(null);
@@ -40,6 +41,30 @@ function Shell() {
       else { setTab("more"); setSub(tgt.sub); }
     });
   }, [registerNav]);
+
+  // native snapshot for widget + background worker (debounced)
+  const deals = useStore((s) => s.deals); const partnersAll = useStore((s) => s.partners); const studiesAll = useStore((s) => s.studies); const settingsAll = useStore((s) => s.settings);
+  useEffect(() => {
+    const h = window.setTimeout(() => { void syncNative(useStore.getState()); }, 800);
+    return () => window.clearTimeout(h);
+  }, [deals, partnersAll, studiesAll, settingsAll]);
+
+  // widget / notification taps → deep actions
+  useEffect(() => {
+    const handle = (a: string) => {
+      if (!a) return;
+      if (a === "addTask") { navigate({ kind: "tab", tab: "home" }); requestAddTask(); }
+      else if (a === "agent") openAssistant();
+      else if (a === "tasks" || a === "agreements" || a === "meetings" || a === "reports" || a === "calendar") navigate({ kind: "sub", sub: a });
+      else navigate({ kind: "tab", tab: "home" });
+    };
+    void consumePendingAction().then(handle);
+    let off: (() => void) | undefined;
+    void onNativeAction(handle).then((f) => { off = f; });
+    let offResume: (() => void) | undefined;
+    (async () => { try { const { App: CapApp } = await import("@capacitor/app"); const l = await CapApp.addListener("resume", () => { void consumePendingAction().then(handle); }); offResume = () => l.remove(); } catch { /* web */ } })();
+    return () => { off?.(); offResume?.(); };
+  }, [navigate, openAssistant, requestAddTask]);
 
   // local reminders (native only): reschedule when data changes, debounced
   const tasks = useStore((s) => s.tasks); const agreements = useStore((s) => s.agreements); const notif = useStore((s) => s.settings.notifications);
