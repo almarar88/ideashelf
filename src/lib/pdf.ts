@@ -152,6 +152,12 @@ export function looksScanned(text: string, pages: number): boolean {
   return text.replace(/\s/g, "").length < pages * 20;
 }
 
+/**
+ * Bumped whenever extraction changes in a way that invalidates stored text.
+ * 2 = position-aware reconstruction that fixed reversed, letter-separated Arabic.
+ */
+export const TEXT_VERSION = 2;
+
 export interface ImportProgress {
   stage: "opening" | "cover" | "text" | "done";
   page: number;
@@ -194,9 +200,21 @@ export async function importPdf(file: File, onProgress?: (p: ImportProgress) => 
     tags: [],
     favorite: false,
   };
-  await db.books.add(book);
+  await db.books.add({ ...book, textVersion: TEXT_VERSION });
 
-  // Text extraction in batches so the UI keeps updating.
+  await extractBookText(doc, book.id, onProgress);
+  await doc.destroy();
+  onProgress?.({ stage: "done", page: pages, pages });
+  return { ...book, textExtracted: true, textVersion: TEXT_VERSION };
+}
+
+/** Extract every page's text into the database, in batches so the UI keeps updating. */
+export async function extractBookText(
+  doc: PDFDocumentProxy,
+  bookId: string,
+  onProgress?: (p: ImportProgress) => void,
+): Promise<void> {
+  const pages = doc.numPages;
   const BATCH = 20;
   for (let start = 1; start <= pages; start += BATCH) {
     const end = Math.min(pages, start + BATCH - 1);
@@ -204,14 +222,21 @@ export async function importPdf(file: File, onProgress?: (p: ImportProgress) => 
     for (let p = start; p <= end; p++) {
       const page = await doc.getPage(p);
       const content = await page.getTextContent();
-      rows.push({ id: `${book.id}:${p}`, bookId: book.id, page: p, text: itemsToText(content.items as RawItem[]) });
+      rows.push({ id: `${bookId}:${p}`, bookId, page: p, text: itemsToText(content.items as RawItem[]) });
       page.cleanup();
     }
     await db.pageTexts.bulkPut(rows);
     onProgress?.({ stage: "text", page: end, pages });
   }
-  await db.books.update(book.id, { textExtracted: true });
-  await doc.destroy();
-  onProgress?.({ stage: "done", page: pages, pages });
-  return { ...book, textExtracted: true };
+  await db.books.update(bookId, { textExtracted: true, textVersion: TEXT_VERSION });
+}
+
+/**
+ * Re-extract a book whose stored text predates the current pipeline. Books imported before
+ * the Arabic fix hold reversed, letter-separated text that makes every AI answer nonsense.
+ */
+export async function ensureTextCurrent(doc: PDFDocumentProxy, book: Book): Promise<boolean> {
+  if (book.textVersion === TEXT_VERSION) return false;
+  await extractBookText(doc, book.id);
+  return true;
 }

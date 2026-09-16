@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { ChevronRight, CloudUpload, Database, Download, Eye, EyeOff, Globe, Heart, Lock, LogOut, Pencil, RefreshCw, Save, Trash2, Upload, X } from "lucide-react";
+import { ChevronRight, CloudUpload, Database, Download, Eye, EyeOff, FileText, Globe, Heart, Lock, LogOut, Pencil, RefreshCw, Save, Trash2, Upload, X } from "lucide-react";
 import { db, deleteBook, type Book } from "@/lib/db";
+import { TEXT_VERSION, extractBookText, openPdf } from "@/lib/pdf";
 import type { Settings } from "@/lib/settings";
 import { downloadCatalogBook, exportBackup, fetchCatalog, importBackup, isLoggedIn, loadTarget, login, logout, publishBook, saveTarget, storageEstimate, wipeAll, type CatalogEntry, type PublishTarget } from "@/lib/admin";
 import { UploadButton, type UploadState } from "@/components/UploadButton";
@@ -321,6 +322,21 @@ function PublishManager() {
 /* ---------------- Books manager ---------------- */
 function BooksManager({ books }: { books: Book[] }) {
   const [editing, setEditing] = useState<Book | null>(null);
+  const [redoing, setRedoing] = useState<string | null>(null);
+
+  async function reextract(b: Book) {
+    setRedoing(b.id);
+    try {
+      const doc = await openPdf(b.file);
+      await extractBookText(doc, b.id);
+      await doc.destroy();
+    } catch {
+      /* the book row keeps its old version and can be retried */
+    } finally {
+      setRedoing(null);
+    }
+  }
+
   if (books.length === 0) return <p className="py-10 text-center text-xs text-ink-muted">لا توجد كتب.</p>;
   return (
     <div className="space-y-2">
@@ -336,6 +352,17 @@ function BooksManager({ books }: { books: Book[] }) {
           </span>
           <IconButton tone="light" size="sm" onClick={() => db.books.update(b.id, { favorite: !b.favorite })} aria-label="مفضلة">
             <Heart size={14} fill={b.favorite ? "currentColor" : "none"} className={b.favorite ? "text-accent" : ""} />
+          </IconButton>
+          <IconButton
+            tone="light"
+            size="sm"
+            onClick={() => void reextract(b)}
+            disabled={redoing === b.id}
+            aria-label="إعادة استخراج النص"
+            title="إعادة استخراج النص"
+            className={b.textVersion === TEXT_VERSION ? "" : "text-accent"}
+          >
+            <FileText size={14} className={redoing === b.id ? "animate-pulse" : ""} />
           </IconButton>
           <IconButton tone="light" size="sm" onClick={() => setEditing(b)} aria-label="تعديل">
             <Pencil size={14} />

@@ -13,6 +13,8 @@ export interface Book {
   lastPage: number; // 1-based
   readingSeconds: number;
   textExtracted: boolean;
+  /** Version of the text-extraction pipeline used. Older books are re-extracted on open. */
+  textVersion?: number;
   tags: string[];
   favorite: boolean;
 }

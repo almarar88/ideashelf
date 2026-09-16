@@ -14,7 +14,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { db, logReading } from "@/lib/db";
-import { openPdf, renderPageFitted } from "@/lib/pdf";
+import { ensureTextCurrent, openPdf, renderPageFitted } from "@/lib/pdf";
 import type { PageEffect, Settings } from "@/lib/settings";
 import { Gauge } from "@/components/Gauge";
 import { IconButton, Toggle } from "@/components/ui";
@@ -88,7 +88,8 @@ export function ReaderScreen({
   const [viewportKey, setViewportKey] = useState("");
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const holderRef = useRef<HTMLDivElement>(null);
+  const holderRef = useRef<HTMLDivElement | null>(null);
+  const roRef = useRef<ResizeObserver | null>(null);
   const flipRef = useRef<HTMLDivElement>(null);
   const faceRef = useRef<HTMLCanvasElement>(null);
   const faceShadeRef = useRef<HTMLDivElement>(null);
@@ -126,6 +127,11 @@ export function ReaderScreen({
         pageRef.current = start;
         setDocReady(true);
         void db.books.update(bookId, { lastOpenedAt: Date.now() });
+        // Books imported before the Arabic extraction fix hold unusable text; redo it in
+        // the background so summaries and analysis work on them.
+        void ensureTextCurrent(opened, b).catch(() => {
+          /* the document may be torn down mid-pass; the next open retries */
+        });
       } catch (e) {
         if (aliveRef.current) setError(e instanceof Error ? e.message : "تعذر فتح الملف");
       } finally {
@@ -221,26 +227,31 @@ export function ReaderScreen({
     };
   }, [docReady, geometry, getPageCanvas, prefetch, viewportKey]);
 
-  /* ---------- resize (fold / unfold / rotate) ---------- */
-  useEffect(() => {
-    const holder = holderRef.current;
-    if (!holder) return;
-    let last = `${holder.clientWidth}x${holder.clientHeight}`;
-    setViewportKey(last);
+  /* ---------- resize (fold / unfold / rotate) ----------
+   * A callback ref, not an effect: on phones the AI panel replaces the reader, so the
+   * holder unmounts and a new node takes its place. An observer bound to the old node
+   * never fires again and the page comes back blank. */
+  const mountsRef = useRef(0);
+  const setHolder = useCallback((node: HTMLDivElement | null) => {
+    holderRef.current = node;
+    roRef.current?.disconnect();
+    roRef.current = null;
+    if (!node) return;
+    let last = `${node.clientWidth}x${node.clientHeight}`;
     let timer = 0;
     const ro = new ResizeObserver(() => {
-      const now = `${holder.clientWidth}x${holder.clientHeight}`;
+      const now = `${node.clientWidth}x${node.clientHeight}`;
       if (now === last) return;
       last = now;
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => setViewportKey(now), 120);
+      timer = window.setTimeout(() => setViewportKey(`${now}#${mountsRef.current}`), 120);
     });
-    ro.observe(holder);
-    return () => {
-      window.clearTimeout(timer);
-      ro.disconnect();
-    };
+    ro.observe(node);
+    roRef.current = ro;
+    mountsRef.current += 1;
+    setViewportKey(`${last}#${mountsRef.current}`);
   }, []);
+  useEffect(() => () => roRef.current?.disconnect(), []);
 
   /* ---------- the page-turn animation ---------- */
   const animateTurn = useCallback(async (dir: Dir, face: HTMLCanvasElement, onSettle: () => void) => {
@@ -429,7 +440,7 @@ export function ReaderScreen({
     <div className="relative h-full min-h-0 overflow-hidden bg-ink text-cream">
       {/* page surface — fills the whole screen when the controls are hidden */}
       <div
-        ref={holderRef}
+        ref={setHolder}
         className="absolute inset-x-0 overflow-auto no-scrollbar"
         style={{
           top: showChrome ? "calc(var(--safe-top) + 58px)" : 0,

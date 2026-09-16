@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronDown, ChevronRight, Copy, Send, Square, Trash2 } from "lucide-react";
 import { db, uid, type Analysis, type Book } from "@/lib/db";
-import { looksScanned } from "@/lib/pdf";
+import { TEXT_VERSION, looksScanned } from "@/lib/pdf";
 import { chatWithBook, describeError, runTask, scopeLabel, type Scope, type TaskKind } from "@/lib/ai";
 import type { Settings } from "@/lib/settings";
 import { Markdown } from "@/components/Markdown";
@@ -45,11 +45,14 @@ export function AIPanel({
     return rows.map((r) => r.text).join("");
   }, [book.id]);
   const scanned = book.textExtracted && bookText !== undefined && looksScanned(bookText, book.pages);
+  const textStale = book.textVersion !== TEXT_VERSION;
   const [output, setOutput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [extra, setExtra] = useState("");
   const [showSaved, setShowSaved] = useState(true);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -75,6 +78,10 @@ export function AIPanel({
       };
       await db.analyses.add(a);
       setOutput("");
+      // Keep the finished result on screen — collapsing it looked like nothing happened.
+      setOpenId(a.id);
+      setShowSaved(true);
+      requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (err) {
       if (!(err instanceof Error && err.name === "AbortError")) setError(describeError(err));
     } finally {
@@ -129,6 +136,12 @@ export function AIPanel({
         ))}
       </div>
 
+      {textStale && !scanned && (
+        <div className="mx-4 mb-3 rounded-2xl bg-cream-deep px-4 py-3 text-xs leading-6 text-ink">
+          جارٍ تحديث نص هذا الكتاب بعد تحسين قراءة العربية. انتظر حتى ينتهي لتحصل على تحليل دقيق.
+        </div>
+      )}
+
       {scanned && (
         <div className="mx-4 mb-3 rounded-2xl bg-amber-100 px-4 py-3 text-xs leading-6 text-amber-900">
           هذا الملف يبدو مصورًا (صفحات ممسوحة ضوئيًا بلا نص قابل للقراءة)، لذلك لن يتمكن الذكاء الاصطناعي من تحليله. يحتاج الملف إلى معالجة OCR أولاً.
@@ -174,6 +187,7 @@ export function AIPanel({
               </div>
             )}
 
+            <div ref={resultsRef} />
             <button onClick={() => setShowSaved((v) => !v)} className="mb-2 flex w-full items-center justify-between text-xs font-semibold text-ink-muted">
               <span>النتائج المحفوظة ({analyses.length})</span>
               <ChevronDown size={14} className={cn("transition", !showSaved && "-rotate-90")} />
@@ -183,7 +197,7 @@ export function AIPanel({
                 اختر النطاق ثم اضغط <b>توليد</b> لإنشاء {MODE_META[mode].title} بالذكاء الاصطناعي. تُحفظ النتائج هنا تلقائيًا لتعود إليها بلا إنترنت.
               </div>
             )}
-            {showSaved && analyses.map((a) => <SavedCard key={a.id} a={a} />)}
+            {showSaved && analyses.map((a) => <SavedCard key={a.id} a={a} open={openId === a.id} onToggle={() => setOpenId(openId === a.id ? null : a.id)} />)}
           </div>
         </div>
       )}
@@ -191,11 +205,10 @@ export function AIPanel({
   );
 }
 
-function SavedCard({ a }: { a: Analysis }) {
-  const [open, setOpen] = useState(false);
+function SavedCard({ a, open, onToggle }: { a: Analysis; open: boolean; onToggle: () => void }) {
   return (
     <div className="rise mb-2 overflow-hidden rounded-3xl bg-white">
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 px-4 py-3 text-start">
+      <button onClick={onToggle} className="flex w-full items-center gap-2 px-4 py-3 text-start">
         <span className="rounded-full bg-cream-soft px-2 py-0.5 text-[11px] font-semibold">{a.title}</span>
         <span className="text-[11px] text-ink-muted">{a.scope}</span>
         <span className="ms-auto text-[10px] text-ink-muted">{new Date(a.createdAt).toLocaleDateString("ar")}</span>
