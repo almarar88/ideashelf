@@ -1,0 +1,12 @@
+{
+  "name": "مكتبة الكود الرقمية",
+  "short_name": "مكتبة الكود",
+  "description": "اقرأ كتب PDF وحلّلها ولخّصها بالذكاء الاصطناعي",
+  "start_url": "./",
+  "display": "standalone",
+  "dir": "rtl",
+  "lang": "ar",
+  "background_color": "#2b2826",
+  "theme_color": "#2b2826",
+  "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

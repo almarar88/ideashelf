@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #cfc9c2;
+  --surface: #f3efe9;
+  --surface-2: #e9e4dc;
+  --ink: #2b2826;
+  --ink-2: #3a3634;
+  --muted: #6b6461;
+  --accent: #ee7a4b;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #1b1918;
+  --surface: #2b2826;
+  --surface-2: #3a3634;
+  --ink: #f3efe9;
+  --ink-2: #e9e4dc;
+  --muted: #a9a19b;
+  color-scheme: dark;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans Arabic", "Tajawal", system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+/* Markdown output from the AI */
+.prose-ai h1,
+.prose-ai h2,
+.prose-ai h3 {
+  font-weight: 700;
+  margin: 1.1em 0 0.4em;
+  line-height: 1.35;
+}
+.prose-ai h1 { font-size: 1.25rem; }
+.prose-ai h2 { font-size: 1.1rem; }
+.prose-ai h3 { font-size: 1rem; }
+.prose-ai p { margin: 0.5em 0; line-height: 1.8; }
+.prose-ai ul, .prose-ai ol { padding-inline-start: 1.4em; margin: 0.4em 0; }
+.prose-ai li { margin: 0.25em 0; line-height: 1.75; }
+.prose-ai strong { font-weight: 700; }
+.prose-ai code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em; background: rgba(127,127,127,0.15); padding: 0.1em 0.35em; border-radius: 0.4em; direction: ltr; unicode-bidi: embed; }
+.prose-ai pre { background: rgba(0,0,0,0.35); color: #f3efe9; padding: 0.8em 1em; border-radius: 1em; overflow-x: auto; direction: ltr; text-align: left; font-size: 0.8rem; }
+.prose-ai pre code { background: transparent; padding: 0; }
+.prose-ai table { width: 100%; border-collapse: collapse; margin: 0.6em 0; font-size: 0.9em; }
+.prose-ai th, .prose-ai td { border: 1px solid rgba(127,127,127,0.3); padding: 0.4em 0.6em; text-align: start; vertical-align: top; }
+.prose-ai th { background: rgba(127,127,127,0.12); font-weight: 600; }
+.prose-ai blockquote { border-inline-start: 3px solid var(--accent); padding-inline-start: 0.8em; margin: 0.6em 0; color: var(--muted); }
+.prose-ai hr { border: 0; border-top: 1px solid rgba(127,127,127,0.3); margin: 1em 0; }
+
+@keyframes pulse-dot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+.typing-dot { animation: pulse-dot 1.2s infinite ease-in-out; }
+.typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise { animation: rise 0.28s ease-out both; }
