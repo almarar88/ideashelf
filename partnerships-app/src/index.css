@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --olive: #4b5343;
+  --olive-deep: #2f3629;
+  --card: #ffffff;
+  --ink: #1e2419;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--olive);
+  color: #fff;
+  font-family: "Manrope", "IBM Plex Sans Arabic", "Tajawal", system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+[dir="rtl"] body { font-family: "IBM Plex Sans Arabic", "Tajawal", "Manrope", system-ui, sans-serif; }
+
+/* topographic contour backdrop */
+.topo {
+  background-color: var(--olive);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420' viewBox='0 0 420 420'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.07' stroke-width='1.2'%3E%3Cpath d='M-20 60c60-40 120-40 180 0s120 40 180 0 100-40 160 0'/%3E%3Cpath d='M-20 110c60-40 120-40 180 0s120 40 180 0 100-40 160 0'/%3E%3Cpath d='M-20 160c60-40 120-40 180 0s120 40 180 0 100-40 160 0'/%3E%3Cpath d='M-20 210c60-40 120-40 180 0s120 40 180 0 100-40 160 0'/%3E%3Cpath d='M-20 260c60-40 120-40 180 0s120 40 180 0 100-40 160 0'/%3E%3Cpath d='M-20 310c60-40 120-40 180 0s120 40 180 0 100-40 160 0'/%3E%3Cpath d='M-20 360c60-40 120-40 180 0s120 40 180 0 100-40 160 0'/%3E%3Cpath d='M-20 410c60-40 120-40 180 0s120 40 180 0 100-40 160 0'/%3E%3Cellipse cx='300' cy='120' rx='90' ry='40'/%3E%3Cellipse cx='300' cy='120' rx='60' ry='24'/%3E%3Cellipse cx='300' cy='120' rx='30' ry='11'/%3E%3Cellipse cx='110' cy='330' rx='80' ry='36'/%3E%3Cellipse cx='110' cy='330' rx='50' ry='20'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 420px 420px;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.card-white { background: var(--card); color: var(--ink); border-radius: 22px; }
+.card-dark { background: var(--olive-deep); color: #fff; border-radius: 22px; }
+
+input, textarea, select { font: inherit; }
+.field {
+  @apply w-full rounded-2xl bg-white/10 border border-white/10 px-4 py-3 text-white placeholder-white/40 outline-none focus:border-white/40;
+}
+select.field option { color: #1e2419; }
+.label { @apply text-[12px] text-white/60 mb-1 block; }
+
+.prose-app h1, .prose-app h2, .prose-app h3 { font-weight: 700; margin: 12px 0 6px; }
+.prose-app h1 { font-size: 18px; } .prose-app h2 { font-size: 16px; } .prose-app h3 { font-size: 14px; }
+.prose-app p { margin: 6px 0; line-height: 1.6; }
+.prose-app ul, .prose-app ol { padding-inline-start: 18px; margin: 6px 0; }
+.prose-app li { margin: 3px 0; line-height: 1.5; }
+.prose-app table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0; }
+.prose-app th, .prose-app td { border: 1px solid rgba(0,0,0,0.12); padding: 4px 6px; text-align: start; }
+.prose-app code { background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 4px; }
+.prose-app strong { font-weight: 700; }
+
+@keyframes pulse-soft { 0%,100% { opacity: .55 } 50% { opacity: 1 } }
+.pulse-soft { animation: pulse-soft 1.4s ease-in-out infinite; }
+@keyframes slide-up { from { transform: translateY(24px); opacity: 0 } to { transform: none; opacity: 1 } }
+.slide-up { animation: slide-up .22s ease-out; }
+
+/* responsive helpers: phones stack, foldables/tablets use grids */
+.list-grid { @apply space-y-3 md:space-y-0 md:grid md:grid-cols-2 md:gap-3; }
+@media (min-width: 1100px) { .list-grid.wide-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
