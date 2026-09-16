@@ -29,8 +29,11 @@ It assumes ADB debugging is **already enabled and authorized** on the head unit.
 Phase 3 (app catalog, VirusTotal) and Phase 4 (Claude AI features) are planned; see `CHANGELOG.md`.
 
 ### Installation
-**Option A – installer / portable exe** (when built with `build.bat`):
-1. Run `installer_output\CarAppManager-Setup.exe`, or just run `dist\CarAppManager.exe` (portable, single file).
+**Option A – download the ready-made Windows build** (built automatically on GitHub Actions on every push):
+1. Open https://github.com/almarar88/ideashelf/releases/tag/car-app-manager-latest
+2. Download `CarAppManager.exe` (portable, single file, no install) or `CarAppManager-Setup.exe` (installer).
+3. Windows SmartScreen may warn because the file is not code-signed: click *More info → Run anyway*.
+   Or build it yourself with `build.bat` (produces `dist\CarAppManager.exe` and `installer_output\CarAppManager-Setup.exe`).
 2. On first start the app looks for `adb.exe`. If none is found it offers to **download the official Android SDK Platform-Tools** from `https://dl.google.com/android/repository/platform-tools-latest-windows.zip` into `%LOCALAPPDATA%\CarAppManager\tools`, or you can point it to an existing `adb.exe`. Nothing is bundled.
 
 **Option B – from source** (Python 3.11+):
@@ -112,8 +115,11 @@ build.bat  CarAppManager.spec  requirements.txt  CHANGELOG.md
 - سمة داكنة بسيطة، دعم كامل للعربية من اليمين لليسار. كل عمليات الجهاز تعمل في الخلفية.
 
 ### التثبيت
-**الخيار أ – المثبّت أو الملف التنفيذي المحمول** (بعد البناء بـ `build.bat`):
-1. شغّل `installer_output\CarAppManager-Setup.exe`، أو شغّل مباشرة `dist\CarAppManager.exe` (ملف واحد محمول).
+**الخيار أ – تنزيل نسخة ويندوز الجاهزة** (تُبنى تلقائياً على GitHub Actions مع كل تحديث):
+1. افتح https://github.com/almarar88/ideashelf/releases/tag/car-app-manager-latest
+2. نزّل `CarAppManager.exe` (ملف واحد محمول بدون تثبيت) أو `CarAppManager-Setup.exe` (مثبّت).
+3. قد يحذّر Windows SmartScreen لأن الملف غير موقّع رقمياً: اضغط *مزيد من المعلومات ← التشغيل على أي حال*.
+   أو ابنِه بنفسك عبر `build.bat` (ينتج `dist\CarAppManager.exe` و`installer_output\CarAppManager-Setup.exe`).
 2. عند أول تشغيل يبحث البرنامج عن `adb.exe`. إن لم يجده يعرض **تنزيل Android SDK Platform-Tools الرسمية** من Google إلى `%LOCALAPPDATA%\CarAppManager\tools`، أو يمكنك تحديد `adb.exe` موجود لديك. لا شيء مضمّن داخل البرنامج.
 
 **الخيار ب – من المصدر** (Python 3.11 أو أحدث): انظر الأوامر في القسم الإنجليزي أعلاه (`pip install -r requirements.txt` ثم `python src\run_app.py`).
