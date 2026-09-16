@@ -14,7 +14,7 @@ export function supportsEffort(model: ModelId): boolean {
   return model !== "claude-haiku-4-5";
 }
 
-export type Phase = "ack" | "working" | "searching" | "writing" | "computer" | "device";
+export type Phase = "ack" | "working" | "searching" | "writing" | "computer" | "device" | "retrying";
 export type ToolOutput = string | Anthropic.ContentBlockParam[];
 
 export interface TurnOpts {
@@ -44,29 +44,30 @@ export function isTransient(e: unknown): boolean {
   return false;
 }
 
-const STALL_MS = 150_000;
-let activityStamp = 0;
-const onActivity = () => { activityStamp = Date.now(); };
+const STALL_MS = 120_000;
 
 /**
  * Runs one streamed request; if the stream dies mid-way (mobile networks, app backgrounded,
  * proxies dropping idle SSE) or stalls with no events, retries the whole request up to 4 times.
+ * `attempt` receives a per-attempt signal and a `touch()` to report stream activity.
  */
-async function withStreamRetry<T>(outer: AbortSignal | undefined, attempt: (signal: AbortSignal) => Promise<T>): Promise<T> {
+async function withStreamRetry<T>(outer: AbortSignal | undefined, attempt: (signal: AbortSignal, touch: () => void) => Promise<T>, onRetry?: (n: number) => void): Promise<T> {
   let lastErr: unknown;
   for (let n = 0; n < 5; n++) {
     if (outer?.aborted) throw new DOMException("Stopped", "AbortError");
     const ac = new AbortController();
     const onOuter = () => ac.abort();
     outer?.addEventListener("abort", onOuter, { once: true });
-    activityStamp = Date.now();
+    let stamp = Date.now();
     let stalled = false;
-    const watchdog = window.setInterval(() => { if (Date.now() - activityStamp > STALL_MS) { stalled = true; ac.abort(); } }, 5000);
+    const watchdog = window.setInterval(() => { if (Date.now() - stamp > STALL_MS) { stalled = true; ac.abort(); } }, 5000);
     try {
-      return await attempt(ac.signal);
+      return await attempt(ac.signal, () => { stamp = Date.now(); });
     } catch (e) {
       lastErr = stalled ? new Error("stream stalled (watchdog)") : e;
+      console.warn(`[majlis] attempt ${n + 1} failed:`, lastErr);
       if (outer?.aborted || !isTransient(lastErr)) throw lastErr;
+      onRetry?.(n + 1);
       await new Promise((r) => setTimeout(r, Math.min(8000, 1000 * 2 ** n)));
     } finally {
       window.clearInterval(watchdog);
@@ -97,12 +98,12 @@ export async function runTurn(o: TurnOpts): Promise<TurnResult> {
     if (supportsEffort(o.model)) params.thinking = { type: "adaptive", display: "summarized" }; // keeps bytes flowing during long thinking (mobile networks drop silent streams)
     const textBefore = text;
     const searchesBefore = searches;
-    const final = await withStreamRetry(o.signal, async (signal) => {
+    const final = await withStreamRetry(o.signal, async (signal, touch) => {
       text = textBefore; searches = searchesBefore;
       const stream = o.client.messages.stream(params, { signal });
       let sawText = false;
       for await (const ev of stream) {
-        onActivity();
+        touch();
         if (ev.type === "content_block_start") {
           const b = ev.content_block;
           if (b.type === "server_tool_use") { searches++; o.onPhase?.("searching"); }
@@ -114,7 +115,7 @@ export async function runTurn(o: TurnOpts): Promise<TurnResult> {
         }
       }
       return stream.finalMessage();
-    });
+    }, () => o.onPhase?.("retrying"));
     usage.input += final.usage.input_tokens + (final.usage.cache_read_input_tokens ?? 0) + (final.usage.cache_creation_input_tokens ?? 0);
     usage.output += final.usage.output_tokens;
     stopReason = final.stop_reason ?? "end_turn";

@@ -19,14 +19,16 @@ async function fg() {
 }
 
 export const keepAlive = {
+  /** Never blocks the caller: the service starts in the background with a short timeout. */
   async start(title: string, body: string) {
     if (!isAndroid) return;
-    try {
+    const work = (async () => {
       const F = await fg();
-      await F.requestPermissions().catch(() => undefined);
+      await Promise.race([F.requestPermissions().catch(() => undefined), new Promise((r) => setTimeout(r, 4000))]);
       await F.startForegroundService({ id: 7, title, body, smallIcon: "ic_stat_majlis", silent: true, notificationChannelId: CHANNEL });
       active = true;
-    } catch (e) { console.warn("foreground service failed", e); }
+    })().catch((e) => console.warn("foreground service failed", e));
+    await Promise.race([work, new Promise((r) => setTimeout(r, 1500))]);
   },
   async update(title: string, body: string) {
     if (!isAndroid || !active) return;

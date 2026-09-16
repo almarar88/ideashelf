@@ -147,7 +147,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
   };
 
   const nameFor = (m: Message) => m.agentId === JUDGE_ID ? judge.name : agentOf(m.agentId)?.name ?? "?";
-  const phaseLabel = (m: Message) => m.phase === "searching" ? t(lang, "statusSearching") : m.phase === "working" ? t(lang, "working") : m.phase === "computer" ? t(lang, "statusComputer") : m.phase === "device" ? t(lang, "statusDevice") : m.phase === "writing" ? t(lang, "typing") : t(lang, "statusThinking");
+  const phaseLabel = (m: Message) => m.phase === "searching" ? t(lang, "statusSearching") : m.phase === "working" ? t(lang, "working") : m.phase === "computer" ? t(lang, "statusComputer") : m.phase === "device" ? t(lang, "statusDevice") : m.phase === "retrying" ? t(lang, "statusRetrying") : m.phase === "writing" ? t(lang, "typing") : t(lang, "statusThinking");
   const typingNow = msgs.filter((m) => m.status === "streaming");
 
   return (
@@ -158,7 +158,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
           <div className="grow" style={{ textAlign: "center", minWidth: 0 }}>
             <div style={{ fontWeight: 600, fontSize: 17, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{group.emoji} {group.name}</div>
             <div className="small" style={{ color: "rgba(255,255,255,.6)" }}>
-              {typingNow.length ? typingNow.map((m) => nameFor(m)).join("، ") + " " + t(lang, "typing") : `${members.length} ${t(lang, "agentsCount")}${group.judgeEnabled ? " + " + judge.name : ""}`}
+              {typingNow.length ? typingNow.map((m) => nameFor(m)).join("، ") + " " + t(lang, "typing") : running ? t(lang, "teamReading") : `${members.length} ${t(lang, "agentsCount")}${group.judgeEnabled ? " + " + judge.name : ""}`}
             </div>
           </div>
           <button className="icon-btn" onClick={() => setShowSettings(true)}><Icon name="more" /></button>

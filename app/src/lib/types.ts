@@ -83,7 +83,7 @@ export interface Message {
   files: FileRef[];
   sources: Source[];
   status: MsgStatus;
-  phase?: "ack" | "working" | "searching" | "writing" | "computer" | "device";
+  phase?: "ack" | "working" | "searching" | "writing" | "computer" | "device" | "retrying";
   verdict?: Verdict;
   usage?: Usage;
   model?: ModelId;

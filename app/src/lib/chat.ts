@@ -215,7 +215,7 @@ async function dispatch(client: Anthropic, group: Group, members: Agent[], judge
       system: "You route messages in a group chat between a boss and AI specialist colleagues. Pick who should reply.",
       messages: [{ role: "user", content: `Roster:\n${roster}\n\nJudge enabled: ${group.judgeEnabled} (the judge ${judge.name} decides when there are multiple opinions or the boss asks for a decision/opinion/recommendation).\n\nRecent chat:\n${recent}\n\nNEW MESSAGE from boss: """${userMsg.text}"""${userMsg.files.length ? `\n(with attachments: ${userMsg.files.map((f) => f.name).join(", ")})` : ""}\n\nRules: pick 1 colleague for simple/specific requests, 2-3 when the topic spans fields or the boss asks for opinions/comparison. If the boss addresses someone by name, pick them. If the message is a greeting or small talk, pick 1. judge=true when a decision is needed or 2+ responders.` }],
       output_config: { format: zodOutputFormat(DispatchSchema) },
-    }, { signal: undefined });
+    }, { timeout: 25_000, maxRetries: 1 });
     const p = r.parsed_output;
     if (p && p.responders.length) {
       const valid = p.responders.filter((id) => members.some((m) => m.id === id));
@@ -346,7 +346,7 @@ async function runJudge(ctx: ChatCtx, client: Anthropic, judge: JudgeConfig, mem
         system: judgeSystem(judge, ctx.group, members, catalog) + "\nRespond ONLY with the structured verdict. All free-text fields in the boss's language.",
         messages: [{ role: "user", content: `Chat history:\n${history}\n\nThe boss asked the council: """${userMsg.text}"""\n\nCouncil positions:\n${replyText}\n\nAgent ids: ${roster}\n\nProduce the verdict.` }],
         output_config: { format: zodOutputFormat(VerdictSchema), ...(model !== "claude-haiku-4-5" ? { effort: "high" as const } : {}) },
-      }, { signal: ctx.signal });
+      }, { signal: ctx.signal, timeout: 300_000, maxRetries: 3 });
       const v = r.parsed_output as Verdict | null;
       const usage = { input: r.usage.input_tokens + (r.usage.cache_read_input_tokens ?? 0), output: r.usage.output_tokens };
       if (v) push({ verdict: v, text: v.decision, usage, model, status: "done", phase: undefined });
