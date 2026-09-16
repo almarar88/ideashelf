@@ -31,7 +31,13 @@ It assumes ADB debugging is **already enabled and authorized** on the head unit.
 - **VirusTotal (optional)**: enter your own free API key in Settings (stored in Windows Credential Manager). Every APK's SHA-256 is looked up (the file itself is never uploaded). Flagged files require explicit confirmation; nothing is blocked silently.
 - **SHA-256** shown for every APK and recorded in backups.
 
-Phase 4 (Claude AI features) is planned; see `CHANGELOG.md`.
+### Features (Phase 4) — AI Assistant (optional, your own Claude API key)
+- **Crash doctor**: pick a package, the tool collects its recent logcat and crash buffer and asks Claude for the likely cause, fix steps and a confidence level.
+- **APK risk explainer**: plain-language explanation of what an APK can access, from its manifest summary only (the file is never uploaded).
+- **Assistant**: type a request such as “install all APKs in D:\apps and back up first”. Claude proposes a plan limited to six allowed actions (list apps, install APK, backup, launch app, screenshot, get logcat). You review and approve before anything runs.
+- **Chat help** about ADB and the tool.
+- Settings: API key (stored in Windows Credential Manager), models for cheap/complex tasks, **monthly spend cap**, per-request token limit, usage display. Defaults: `claude-haiku-4-5-20251001` and `claude-sonnet-5`.
+- All device output and APK data sent to the model is marked as untrusted data, never as instructions.
 
 ### Installation
 **Option A – download the ready-made Windows build** (built automatically on GitHub Actions on every push):
@@ -102,6 +108,14 @@ build.bat  CarAppManager.spec  requirements.txt  CHANGELOG.md
 ---
 
 ## العربية
+
+### المزايا (المرحلة 4) — المساعد الذكي (اختياري، بمفتاح Claude API الخاص بك)
+- **طبيب الأعطال**: اختر حزمة، يجمع البرنامج logcat وسجل الأعطال الخاص بها ويسأل Claude عن السبب المرجّح وخطوات الإصلاح ومستوى الثقة.
+- **شرح مخاطر APK**: شرح مبسّط لما يمكن للتطبيق الوصول إليه اعتماداً على ملخص manifest فقط (لا يُرفع الملف أبداً).
+- **المساعد**: اكتب طلباً مثل «ثبّت كل ملفات APK في D:\apps واعمل نسخة احتياطية أولاً». يقترح Claude خطة محصورة في ست عمليات مسموحة (عرض التطبيقات، تثبيت APK، نسخ احتياطي، تشغيل تطبيق، لقطة شاشة، قراءة logcat). تراجعها وتوافق قبل تنفيذ أي شيء.
+- **مساعدة ودردشة** عن ADB والبرنامج.
+- الإعدادات: مفتاح API (يُحفظ في Windows Credential Manager)، نموذج للمهام البسيطة وآخر للمعقدة، **حد إنفاق شهري**، حد توكنات لكل طلب، وعرض الاستهلاك. الافتراضي: `claude-haiku-4-5-20251001` و`claude-sonnet-5`.
+- كل مخرجات الجهاز وبيانات APK تُرسل للنموذج كبيانات غير موثوقة، لا كتعليمات.
 
 ### المزايا (المرحلة 3)
 - **التثبيت ← الكتالوج**: كتالوج JSON قابل للتعديل لتطبيقات بروابط مصادرها الرسمية، وصف عربي/إنجليزي، علامة «مجرّب على T2» تضعها أنت، استيراد/تصدير، وتنزيل مباشر لروابط APK إلى قائمة التثبيت بنقرة. القائمة الافتراضية **غير** مجرّبة مسبقاً على سيارتك.

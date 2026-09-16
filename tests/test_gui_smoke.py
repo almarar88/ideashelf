@@ -170,3 +170,54 @@ def test_catalog_tab_and_vt_column(gui, tmp_path, monkeypatch):
     row = page.table.rowCount() - 1
     assert "3" in page.table.item(row, 6).text()
     assert any(r.action == "virustotal lookup" for r in ctx.db.actions())
+
+
+def test_ai_page_plan_and_execute_with_mocked_model(gui, tmp_path, monkeypatch):
+    from types import SimpleNamespace as NS
+    app, ctx, win = gui
+    t0 = time.time()
+    while (not ctx.device_info) and time.time() - t0 < 15:
+        _pump(app, 100)
+    from car_app_manager.security import secrets
+    monkeypatch.setattr(secrets, "_backend_ok", lambda: False)
+    secrets.set_secret("anthropic", "sk-test")
+    apk = tmp_path / "x.apk"; apk.write_bytes(b"x")
+
+    class FakeClient:
+        def __init__(self):
+            self.messages = NS(create=self.create)
+        def create(self, **kw):
+            return NS(content=[NS(type="text", text="Plan ready"),
+                               NS(type="tool_use", id="1", name="screenshot", input={}),
+                               NS(type="tool_use", id="2", name="launch_app", input={"package": "com.spotify.music"}),
+                               NS(type="tool_use", id="3", name="wipe_device", input={})],
+                      stop_reason="end_turn", model="claude-sonnet-5", stop_details=None,
+                      usage=NS(input_tokens=500, output_tokens=50, cache_read_input_tokens=0, cache_creation_input_tokens=0))
+    ctx.ai._client_factory = lambda key: FakeClient()
+    ctx.ai._client = None
+    ctx.settings.screenshots_dir = str(tmp_path / "shots")
+    win.nav.setCurrentRow(6)
+    page = win.pages["ai"]
+    page.tabs.setCurrentIndex(2)
+    page.ed_request.setPlainText("take a screenshot then open spotify")
+    page._make_plan()
+    t0 = time.time()
+    while page.plan is None and time.time() - t0 < 15:
+        _pump(app, 100)
+    assert page.plan and [s.tool for s in page.plan.executable] == ["screenshot", "launch_app"]
+    assert not page.plan.steps[2].allowed and page.plan_table.rowCount() == 3
+    assert page.btn_execute.isEnabled()
+    # approve (auto-confirm) and execute against the fake adb
+    from car_app_manager.ui.pages import ai_page as ap
+    monkeypatch.setattr(ap, "confirm", lambda *a, **k: True)
+    page._execute()
+    t0 = time.time()
+    while page._busy and time.time() - t0 < 20:
+        _pump(app, 100)
+    statuses = [s.status for s in page.plan.steps]
+    assert statuses == ["done", "done", "skipped"], statuses
+    assert list((tmp_path / "shots").glob("*.png"))
+    assert any(r.action == "assistant plan approved" for r in ctx.db.actions())
+    inp, out, spent = ctx.ai.month_usage()
+    assert inp == 500 and spent > 0
+    assert "0." in page.usage.text()

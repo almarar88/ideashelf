@@ -15,6 +15,7 @@ from .db import Database
 from .i18n import i18n, set_language
 from .logs import ActionLogger, setup_file_logging
 from .tools.platform_tools import find_adb
+from .ai.client import AIService
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ class AppContext(QObject):
         self.current_device: Optional[Device] = None
         self.device_info: Optional[DeviceInfo] = None
         self.known_devices: list[Device] = []
+        self.ai = AIService(self.settings, self.db)
         set_language(self.settings.language)
         i18n().on_change(self._on_lang)
 

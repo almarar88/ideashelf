@@ -15,8 +15,8 @@ from .pages.backup_page import BackupPage
 from .pages.device_page import DevicePage
 from .pages.install_page import InstallPage
 from .pages.logs_page import LogsPage
-from .pages.placeholder import PlaceholderPage
 from .pages.screen_page import ScreenPage
+from .pages.ai_page import AIPage
 from .pages.settings_page import SettingsPage
 
 NAV = ("device", "apps", "install", "screen", "backup", "logs", "ai", "settings")
@@ -73,7 +73,7 @@ class MainWindow(QMainWindow):
             "screen": ScreenPage(ctx),
             "backup": BackupPage(ctx),
             "logs": LogsPage(ctx),
-            "ai": PlaceholderPage(ctx, "ai.title"),
+            "ai": AIPage(ctx),
             "settings": SettingsPage(ctx),
         }
         for key in NAV:

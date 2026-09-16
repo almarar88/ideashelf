@@ -1,8 +1,8 @@
 """Settings page: language, adb location/download, refresh interval, backups folder."""
 from __future__ import annotations
 
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
-                               QLineEdit, QProgressBar, QSpinBox, QVBoxLayout)
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QGroupBox, QHBoxLayout,
+                               QLabel, QLineEdit, QProgressBar, QScrollArea, QSpinBox, QVBoxLayout, QWidget)
 
 from ...config import data_dir
 from ...i18n import tr, current_lang
@@ -18,6 +18,11 @@ class SettingsPage(BasePage):
     def build(self) -> None:
         self.title = title_label("")
         self.root.addWidget(self.title)
+        # everything below scrolls (the page is taller than most windows)
+        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QFrame.NoFrame)
+        inner = QWidget(); page_root = self.root
+        self.root = QVBoxLayout(inner); self.root.setContentsMargins(0, 0, 8, 0); self.root.setSpacing(10)
+        scroll.setWidget(inner); page_root.addWidget(scroll, 1)
 
         self.g_general = QGroupBox()
         f = QFormLayout(self.g_general)
@@ -88,6 +93,26 @@ class SettingsPage(BasePage):
         vv.addWidget(self.vt_status)
         self.root.addWidget(self.g_vt)
 
+        self.g_ai = QGroupBox()
+        av = QFormLayout(self.g_ai)
+        ha = QHBoxLayout()
+        self.lbl_ai_key = QLabel()
+        self.ed_ai_key = QLineEdit(get_secret("anthropic")); self.ed_ai_key.setEchoMode(QLineEdit.Password)
+        self.btn_ai_test = button("", slot=self._test_ai)
+        ha.addWidget(self.ed_ai_key, 1); ha.addWidget(self.btn_ai_test)
+        av.addRow(self.lbl_ai_key, ha)
+        self.lbl_ai_help = muted("")
+        av.addRow("", self.lbl_ai_help)
+        self.lbl_ai_cheap = QLabel(); self.ed_ai_cheap = QLineEdit(self.ctx.settings.ai_cheap_model); av.addRow(self.lbl_ai_cheap, self.ed_ai_cheap)
+        self.lbl_ai_smart = QLabel(); self.ed_ai_smart = QLineEdit(self.ctx.settings.ai_smart_model); av.addRow(self.lbl_ai_smart, self.ed_ai_smart)
+        self.lbl_ai_cap = QLabel(); self.spin_ai_cap = QDoubleSpinBox(); self.spin_ai_cap.setRange(0.0, 1000.0); self.spin_ai_cap.setDecimals(2)
+        self.spin_ai_cap.setValue(float(self.ctx.settings.ai_monthly_cap_usd)); av.addRow(self.lbl_ai_cap, self.spin_ai_cap)
+        self.lbl_ai_tokens = QLabel(); self.spin_ai_tokens = QSpinBox(); self.spin_ai_tokens.setRange(256, 64000)
+        self.spin_ai_tokens.setValue(int(self.ctx.settings.ai_max_tokens_per_request)); av.addRow(self.lbl_ai_tokens, self.spin_ai_tokens)
+        self.ai_status = StatusLine()
+        av.addRow("", self.ai_status)
+        self.root.addWidget(self.g_ai)
+
         self.g_safety = QGroupBox()
         sv = QVBoxLayout(self.g_safety)
         self.lbl_safety = muted("")
@@ -121,6 +146,14 @@ class SettingsPage(BasePage):
         self.btn_adb_download.setText(tr("settings.adb_download"))
         self.g_vt.setTitle(tr("settings.vt")); self.chk_vt.setText(tr("settings.vt_enable"))
         self.lbl_vt_key.setText(tr("settings.vt_key")); self.btn_vt_test.setText(tr("settings.vt_test")); self.lbl_vt_help.setText(tr("settings.vt_key_help"))
+        self.g_ai.setTitle(tr("settings.ai")); self.lbl_ai_key.setText(tr("settings.ai_key")); self.btn_ai_test.setText(tr("settings.ai_test"))
+        self.lbl_ai_help.setText(tr("settings.ai_key_help")); self.lbl_ai_cheap.setText(tr("settings.ai_cheap")); self.lbl_ai_smart.setText(tr("settings.ai_smart"))
+        self.lbl_ai_cap.setText(tr("settings.ai_cap")); self.lbl_ai_tokens.setText(tr("settings.ai_max_tokens"))
+        try:
+            _, _, spent = self.ctx.ai.month_usage()
+            self.ai_status.set(tr("settings.ai_usage", spent=spent))
+        except Exception:
+            pass
         self.g_safety.setTitle(tr("settings.safety"))
         self.lbl_safety.setText(tr("settings.safety_text"))
         self.btn_save.setText(tr("settings.save"))
@@ -192,8 +225,37 @@ class SettingsPage(BasePage):
                           on_done=lambda r: self.vt_status.set(tr("settings.vt_ok") if r.status == "found" else tr("settings.vt_bad", msg=r.summary(current_lang())),
                                                                "ok" if r.status == "found" else "error"))
 
+    def _test_ai(self) -> None:
+        key = self.ed_ai_key.text().strip()
+        if key != get_secret("anthropic"):
+            set_secret("anthropic", key)
+        self.ai_status.set(tr("working"))
+
+        def done(models):
+            self.ai_status.set(tr("settings.ai_ok", models=", ".join(models[:6])), "ok")
+
+        def fail(msg):
+            self.ai_status.set(msg, "error")
+
+        run_in_background(self._ai_models, on_done=done, on_error=fail)
+
+    def _ai_models(self):
+        from ...ai.client import AIError
+        try:
+            return self.ctx.ai.test_key()
+        except AIError as e:
+            raise RuntimeError(e.text(current_lang())) from e
+
     def _save(self) -> None:
         s = self.ctx.settings
+        s.ai_cheap_model = self.ed_ai_cheap.text().strip() or s.ai_cheap_model
+        s.ai_smart_model = self.ed_ai_smart.text().strip() or s.ai_smart_model
+        s.ai_monthly_cap_usd = float(self.spin_ai_cap.value())
+        s.ai_max_tokens_per_request = int(self.spin_ai_tokens.value())
+        ai_key = self.ed_ai_key.text().strip()
+        if ai_key != get_secret("anthropic"):
+            persistent = set_secret("anthropic", ai_key)
+            self.ai_status.set(tr("settings.key_saved") if persistent else tr("settings.key_memory"), "ok" if persistent else "warn")
         s.virustotal_enabled = self.chk_vt.isChecked()
         key = self.ed_vt_key.text().strip()
         if key != get_secret("virustotal"):

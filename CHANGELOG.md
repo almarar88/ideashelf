@@ -2,6 +2,18 @@
 
 All notable changes to Car App Manager are documented here.
 
+## [0.4.0] - Phase 4 (AI features, Claude API)
+### Added
+- **AI Assistant page** (official `anthropic` Python SDK, the user's own key stored in Windows Credential Manager via `keyring`; never written to disk, logs or the repo):
+  - **Crash doctor**: collects the crash buffer + recent logcat for one package (by pid when running), sends it as untrusted data, returns likely cause, evidence, fix steps and a confidence level in Arabic or English (typed result via a strict tool schema).
+  - **APK risk explainer**: sends only a manifest summary (permissions, components, SDK levels, ABIs, SHA-256; never the binary) and returns a plain-language risk assessment with notable permissions, compatibility notes and a recommendation.
+  - **Natural-language assistant**: the model may only propose calls to the allowlist `list_apps`, `install_apk`, `backup`, `launch_app`, `screenshot`, `get_logcat` (strict schemas). Every step is validated locally (absolute existing APK paths, sane package names, capped line counts); anything else is shown as rejected. Nothing runs until the user approves the plan in a confirmation dialog; execution and results are logged.
+  - **Chat help** about ADB and this tool, in the UI language.
+- Default models: `claude-haiku-4-5-20251001` for cheap tasks (doctor, risk, chat) and `claude-sonnet-5` for planning; both editable in Settings. Model IDs verified against the current Claude API reference.
+- **Monthly spend cap** and **per-request output token limit** in Settings; every call records tokens and estimated cost (SQLite), the page shows this month's usage, and a request that would exceed the cap is refused before it is sent. "Test key" lists the models the key can see.
+- Every prompt wraps device output / APK data in `<untrusted_data>` tags with instructions to treat it as data only; refusals (`stop_reason: refusal`) are surfaced to the user.
+- Tests: pricing table, usage recording, spend cap, key/error translation, allowlist validation, folder listing for the planner, prompt safety framing, diagnosis/risk parsing, logcat collection, refusal handling, and a GUI test that plans and executes against the fake adb with a mocked model.
+
 ## [0.3.0] - Phase 3 (curated catalog, VirusTotal, hashes)
 ### Added
 - **Catalog tab** (Install page): local, user-editable JSON catalog (`%LOCALAPPDATA%\CarAppManager\catalog.json`, seeded from a bundled list of well-known apps with official source links). Fields: name, package, category, Arabic/English description, source URL, "tested on T2" flag, notes, optional SHA-256. Add / edit / delete / toggle tested, import & export JSON, open source page, direct download of `.apk`/`.xapk`/`.apks` links straight into the install list. Shows which catalog apps are currently installed.
@@ -34,5 +46,3 @@ All notable changes to Car App Manager are documented here.
 - `--version` and `--inspect <apk>` CLI helpers.
 - Test suite: 48 pytest tests with a scriptable fake adb executor plus a headless (offscreen) GUI smoke test.
 
-### Planned
-- Phase 4: Claude API features (crash doctor, APK risk explainer, natural-language planner with tool allowlist, chat help), keyring-stored API key, spend cap.

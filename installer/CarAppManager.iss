@@ -1,6 +1,6 @@
 ; Inno Setup script for Car App Manager (built by build.bat when ISCC.exe is available)
 #define MyAppName "Car App Manager"
-#define MyAppVersion "0.3.0"
+#define MyAppVersion "0.4.0"
 #define MyAppExeName "CarAppManager.exe"
 
 [Setup]
