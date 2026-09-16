@@ -9,7 +9,11 @@ REM ---------------------------------------------------------------
 cd /d "%~dp0"
 
 where py >nul 2>nul
-if %errorlevel%==0 (set PY=py -3.11) else (set PY=python)
+if %errorlevel%==0 (set PY=py -3) else (set PY=python)
+%PY% -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" || (
+  echo Python 3.11 or newer is required. Install it from https://www.python.org/downloads/windows/ and tick "Add python.exe to PATH".
+  exit /b 1
+)
 
 if not exist .venv (
   echo [1/5] Creating virtual environment...

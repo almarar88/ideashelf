@@ -1,0 +1,79 @@
+name: Build Windows exe
+
+on:
+  push:
+    branches: ["claude/car-app-manager-desktop-erb3tu", "main"]
+    paths-ignore: ["*.js", "*.css", "index.html", "vite.config.ts", "package.json", "vite.svg"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests (headless)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q
+
+      - name: Build CarAppManager.exe
+        run: |
+          python assets\make_icon.py
+          python -m PyInstaller --noconfirm --clean CarAppManager.spec
+          dist\CarAppManager.exe --version
+
+      - name: Smoke-test the exe (starts, inspects an APK)
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          CAR_APP_MANAGER_SKIP_FIRSTRUN: "1"
+        run: |
+          $p = Start-Process -FilePath "dist\CarAppManager.exe" -PassThru
+          Start-Sleep -Seconds 12
+          if ($p.HasExited) { Write-Error "exe exited early with code $($p.ExitCode)"; exit 1 }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "exe stayed alive for 12s - OK"
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\CarAppManager.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CarAppManager-windows
+          path: |
+            dist/CarAppManager.exe
+            installer_output/CarAppManager-Setup.exe
+          if-no-files-found: error
+
+      - name: Publish release (latest build)
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: car-app-manager-latest
+          name: Car App Manager (latest build)
+          prerelease: true
+          body: |
+            Automatic build from ${{ github.sha }} on branch ${{ github.ref_name }}.
+            - `CarAppManager.exe` — portable, single file (no install needed)
+            - `CarAppManager-Setup.exe` — installer
+            First run downloads Android Platform-Tools (adb) from Google. See README.md.
+          files: |
+            dist/CarAppManager.exe
+            installer_output/CarAppManager-Setup.exe
