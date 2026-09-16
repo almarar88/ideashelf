@@ -112,6 +112,8 @@ class LogcatStreamer(QThread):
                 if self._stop:
                     break
                 self._queue.put(raw.decode("utf-8", "replace").rstrip("\r\n"))
+        except (ValueError, OSError):
+            pass  # pipe closed by stop()
         finally:
             self._terminate()
         self.finished_with.emit("" if self._stop else "logcat ended")
@@ -119,15 +121,31 @@ class LogcatStreamer(QThread):
     def _terminate(self) -> None:
         p = self._proc
         if p and p.poll() is None:
-            try:
-                p.terminate()
-                p.wait(timeout=3)
-            except Exception:
-                try:
-                    p.kill()
-                except Exception:
-                    pass
+            kill_process_tree(p)
 
     def stop(self) -> None:
         self._stop = True
         self._terminate()
+        p = self._proc
+        if p and p.stdout:
+            try:
+                p.stdout.close()  # unblocks readline() in the reader thread
+            except Exception:
+                pass
+
+
+def kill_process_tree(p: subprocess.Popen) -> None:
+    """Terminate a child and everything it spawned (a .bat/cmd wrapper on Windows keeps the pipe open)."""
+    try:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], capture_output=True, timeout=10,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        else:
+            p.terminate()
+        p.wait(timeout=3)
+    except Exception:
+        try:
+            p.kill()
+            p.wait(timeout=3)
+        except Exception:
+            pass

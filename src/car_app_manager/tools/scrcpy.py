@@ -153,11 +153,8 @@ class ScrcpyProcess:
     def stop(self) -> None:
         if self.running:
             assert self.proc
-            self.proc.terminate()
-            try:
-                self.proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.proc.kill()
+            from ..adb.logcat import kill_process_tree
+            kill_process_tree(self.proc)
 
     def tail_log(self, n: int = 20) -> str:
         if not self.log_path or not self.log_path.exists():
