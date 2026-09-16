@@ -1,0 +1,6 @@
+PySide6-Essentials>=6.7
+androguard>=4.1
+keyring>=25
+anthropic>=0.40
+pytest>=8
+pyinstaller>=6.5
