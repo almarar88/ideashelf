@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   userName: "",
   lang: "ar",
   theme: "system",
-  catalogUrl: "./catalog.json",
+  catalogUrl: "https://almarar88.github.io/ideashelf/catalog.json",
 };
 
 export const MODELS: { id: ModelId; label: string; hint: string }[] = [

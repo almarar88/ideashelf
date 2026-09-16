@@ -1,41 +1,50 @@
 import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { ChevronRight, Database, Download, Globe, Heart, Lock, Pencil, RefreshCw, Save, Trash2, Upload, X } from "lucide-react";
+import { ChevronRight, CloudUpload, Database, Download, Eye, EyeOff, Globe, Heart, Lock, LogOut, Pencil, RefreshCw, Save, Trash2, Upload, X } from "lucide-react";
 import { db, deleteBook, type Book } from "@/lib/db";
 import type { Settings } from "@/lib/settings";
-import { clearPin, downloadCatalogBook, exportBackup, fetchCatalog, hasPin, importBackup, setPin, storageEstimate, verifyPin, wipeAll, type CatalogEntry } from "@/lib/admin";
+import { downloadCatalogBook, exportBackup, fetchCatalog, importBackup, isLoggedIn, loadTarget, login, logout, publishBook, saveTarget, storageEstimate, wipeAll, type CatalogEntry, type PublishTarget } from "@/lib/admin";
 import { UploadButton, type UploadState } from "@/components/UploadButton";
 import { Button, Card, IconButton } from "@/components/ui";
 import { cn, formatBytes, formatDuration } from "@/lib/utils";
 
 export function AdminScreen({ settings, update, onBack }: { settings: Settings; update: (p: Partial<Settings>) => void; onBack: () => void }) {
-  const [unlocked, setUnlocked] = useState(false);
-  if (!unlocked) return <PinGate onUnlock={() => setUnlocked(true)} onBack={onBack} />;
-  return <Dashboard settings={settings} update={update} onBack={onBack} />;
+  const [unlocked, setUnlocked] = useState(isLoggedIn);
+  if (!unlocked) return <LoginGate onUnlock={() => setUnlocked(true)} onBack={onBack} />;
+  return (
+    <Dashboard
+      settings={settings}
+      update={update}
+      onBack={onBack}
+      onLogout={() => {
+        logout();
+        setUnlocked(false);
+      }}
+    />
+  );
 }
 
-/* ---------------- PIN gate ---------------- */
-function PinGate({ onUnlock, onBack }: { onUnlock: () => void; onBack: () => void }) {
-  const setup = !hasPin();
-  const [pin, setPinVal] = useState("");
-  const [confirmPin, setConfirm] = useState("");
+/* ---------------- Login gate ---------------- */
+function LoginGate({ onUnlock, onBack }: { onUnlock: () => void; onBack: () => void }) {
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
+  const [show, setShow] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function submit() {
-    if (pin.length < 4) return setErr("الرمز يجب أن يكون 4 أرقام على الأقل");
-    if (setup) {
-      if (pin !== confirmPin) return setErr("الرمزان غير متطابقين");
-      await setPin(pin);
-      onUnlock();
-      return;
-    }
-    if (await verifyPin(pin)) onUnlock();
-    else setErr("رمز غير صحيح");
+    if (!user.trim() || !pass) return setErr("أدخل اسم المستخدم وكلمة المرور");
+    setBusy(true);
+    const ok = await login(user, pass, remember);
+    setBusy(false);
+    if (ok) onUnlock();
+    else setErr("اسم المستخدم أو كلمة المرور غير صحيحة");
   }
 
   return (
     <div className="flex h-full flex-col bg-ink text-cream">
-      <header className="flex items-center px-4 pt-4">
+      <header className="flex items-center px-4 pt-4" style={{ paddingTop: "calc(var(--safe-top) + 12px)" }}>
         <IconButton tone="ghost" onClick={onBack} aria-label="رجوع">
           <ChevronRight size={20} />
         </IconButton>
@@ -44,23 +53,40 @@ function PinGate({ onUnlock, onBack }: { onUnlock: () => void; onBack: () => voi
         <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-accent text-white">
           <Lock size={26} />
         </span>
-        <h1 className="text-2xl font-bold">{setup ? "أنشئ رمز المشرف" : "لوحة تحكم المشرف"}</h1>
-        <p className="mt-2 text-xs text-cream/60">{setup ? "هذا الرمز يحمي لوحة الإدارة على هذا الجهاز." : "أدخل رمز المشرف للمتابعة."}</p>
+        <h1 className="text-2xl font-bold">لوحة تحكم المشرف</h1>
+        <p className="mt-2 text-xs text-cream/60">سجّل الدخول لإدارة التطبيق ورفع الكتب.</p>
         <input
-          type="password"
-          inputMode="numeric"
-          value={pin}
-          onChange={(e) => setPinVal(e.target.value)}
+          value={user}
+          onChange={(e) => setUser(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder="••••"
-          className="mt-6 h-14 w-full max-w-xs rounded-full bg-cream/10 text-center text-2xl tracking-[0.5em] text-cream outline-none"
+          placeholder="اسم المستخدم"
+          autoCapitalize="none"
+          autoComplete="username"
+          dir="ltr"
+          className="mt-6 h-12 w-full max-w-xs rounded-full bg-cream/10 px-5 text-center text-cream outline-none placeholder:text-cream/40"
         />
-        {setup && (
-          <input type="password" inputMode="numeric" value={confirmPin} onChange={(e) => setConfirm(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="تأكيد الرمز" className="mt-3 h-14 w-full max-w-xs rounded-full bg-cream/10 text-center text-lg text-cream outline-none" />
-        )}
+        <div className="mt-3 flex h-12 w-full max-w-xs items-center rounded-full bg-cream/10 px-4">
+          <input
+            type={show ? "text" : "password"}
+            value={pass}
+            onChange={(e) => setPass(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            placeholder="كلمة المرور"
+            autoComplete="current-password"
+            dir="ltr"
+            className="h-full min-w-0 flex-1 bg-transparent text-center text-cream outline-none placeholder:text-cream/40"
+          />
+          <button onClick={() => setShow((v) => !v)} className="text-cream/60" aria-label="إظهار كلمة المرور">
+            {show ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </div>
+        <label className="mt-4 flex items-center gap-2 text-xs text-cream/70">
+          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="accent-[#ee7a4b]" />
+          تذكرني على هذا الجهاز
+        </label>
         {err && <p className="mt-3 text-xs text-accent">{err}</p>}
-        <Button tone="accent" className="mt-6 w-full max-w-xs" onClick={submit}>
-          {setup ? "حفظ ودخول" : "دخول"}
+        <Button tone="accent" className="mt-6 w-full max-w-xs" onClick={submit} disabled={busy}>
+          {busy ? "جارٍ التحقق…" : "تسجيل الدخول"}
         </Button>
       </div>
     </div>
@@ -68,9 +94,9 @@ function PinGate({ onUnlock, onBack }: { onUnlock: () => void; onBack: () => voi
 }
 
 /* ---------------- Dashboard ---------------- */
-type Tab = "overview" | "books" | "catalog" | "backup";
+type Tab = "overview" | "publish" | "books" | "catalog" | "backup";
 
-function Dashboard({ settings, update, onBack }: { settings: Settings; update: (p: Partial<Settings>) => void; onBack: () => void }) {
+function Dashboard({ settings, update, onBack, onLogout }: { settings: Settings; update: (p: Partial<Settings>) => void; onBack: () => void; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>("overview");
   const books = useLiveQuery(() => db.books.orderBy("addedAt").reverse().toArray(), []) ?? [];
   const analysesCount = useLiveQuery(() => db.analyses.count(), []) ?? 0;
@@ -85,7 +111,7 @@ function Dashboard({ settings, update, onBack }: { settings: Settings; update: (
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-3 px-4 pt-4">
+      <header className="flex items-center gap-3 px-4 pt-4" style={{ paddingTop: "calc(var(--safe-top) + 12px)" }}>
         <IconButton tone="light" onClick={onBack} aria-label="رجوع">
           <ChevronRight size={20} />
         </IconButton>
@@ -93,16 +119,8 @@ function Dashboard({ settings, update, onBack }: { settings: Settings; update: (
           <h1 className="text-xl font-bold">لوحة تحكم المشرف</h1>
           <p className="text-[11px] text-ink-muted">إدارة التطبيق والمكتبة</p>
         </div>
-        <button
-          onClick={() => {
-            if (confirm("إزالة رمز المشرف؟ سيُطلب إنشاء رمز جديد عند الدخول التالي.")) {
-              clearPin();
-              onBack();
-            }
-          }}
-          className="rounded-full bg-white px-3 py-1.5 text-[11px]"
-        >
-          تغيير الرمز
+        <button onClick={onLogout} className="flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-[11px]">
+          <LogOut size={12} /> خروج
         </button>
       </header>
 
@@ -110,6 +128,7 @@ function Dashboard({ settings, update, onBack }: { settings: Settings; update: (
         {(
           [
             ["overview", "نظرة عامة"],
+            ["publish", "نشر كتاب"],
             ["books", `الكتب (${books.length})`],
             ["catalog", "الفهرس العام"],
             ["backup", "النسخ الاحتياطي"],
@@ -150,6 +169,7 @@ function Dashboard({ settings, update, onBack }: { settings: Settings; update: (
             <BulkUpload />
           </div>
         )}
+        {tab === "publish" && <PublishManager />}
         {tab === "books" && <BooksManager books={books} />}
         {tab === "catalog" && <CatalogManager settings={settings} update={update} books={books} />}
         {tab === "backup" && <BackupManager />}
@@ -196,6 +216,105 @@ function BulkUpload() {
         </ul>
       )}
     </Card>
+  );
+}
+
+/* ---------------- Publish to GitHub ---------------- */
+function PublishManager() {
+  const [target, setTarget] = useState<PublishTarget>(loadTarget);
+  const [showTok, setShowTok] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [author, setAuthor] = useState("");
+  const [tags, setTags] = useState("");
+  const [stage, setStage] = useState("");
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const patch = (p: Partial<PublishTarget>) =>
+    setTarget((t) => {
+      const next = { ...t, ...p };
+      saveTarget(next);
+      return next;
+    });
+
+  async function run() {
+    if (!file) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await publishBook(
+        target,
+        file,
+        {
+          title: title.trim() || file.name.replace(/\.pdf$/i, ""),
+          author: author.trim(),
+          tags: tags
+            .split(/[،,]/)
+            .map((t) => t.trim())
+            .filter(Boolean),
+        },
+        setStage,
+      );
+      setResult({ ok: true, text: `تم النشر. سيظهر الكتاب لجميع المستخدمين بعد اكتمال نشر GitHub Pages (دقيقة أو دقيقتين): ${r.url}` });
+      setFile(null);
+      setTitle("");
+      setAuthor("");
+      setTags("");
+      if (fileRef.current) fileRef.current.value = "";
+    } catch (e) {
+      setResult({ ok: false, text: e instanceof Error ? e.message : "فشل النشر" });
+    } finally {
+      setBusy(false);
+      setStage("");
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <Card tone="dark" className="p-5">
+        <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+          <CloudUpload size={16} className="text-accent" /> نشر كتاب لجميع المستخدمين
+        </div>
+        <p className="text-[11px] leading-5 text-cream/60">
+          يرفع ملف PDF إلى مجلد <code dir="ltr">public/library/</code> في مستودع GitHub ويضيفه إلى الفهرس العام تلقائيًا. يحتاج رمز وصول (Personal Access Token) بصلاحية <b>Contents: Read and write</b> على المستودع. الرمز يُحفظ على هذا الجهاز فقط.
+        </p>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <input value={target.owner} onChange={(e) => patch({ owner: e.target.value.trim() })} dir="ltr" placeholder="owner" className="h-10 min-w-0 rounded-full bg-cream/10 px-3 text-center text-xs text-cream outline-none" />
+          <input value={target.repo} onChange={(e) => patch({ repo: e.target.value.trim() })} dir="ltr" placeholder="repo" className="h-10 min-w-0 rounded-full bg-cream/10 px-3 text-center text-xs text-cream outline-none" />
+          <input value={target.branch} onChange={(e) => patch({ branch: e.target.value.trim() })} dir="ltr" placeholder="branch" className="h-10 min-w-0 rounded-full bg-cream/10 px-3 text-center text-xs text-cream outline-none" />
+        </div>
+        <div className="mt-2 flex h-11 items-center rounded-full bg-cream/10 px-4">
+          <input type={showTok ? "text" : "password"} value={target.token} onChange={(e) => patch({ token: e.target.value.trim() })} dir="ltr" placeholder="github_pat_… / ghp_…" autoComplete="off" spellCheck={false} className="h-full min-w-0 flex-1 bg-transparent text-xs text-cream outline-none placeholder:text-cream/30" />
+          <button onClick={() => setShowTok((v) => !v)} className="text-cream/60" aria-label="إظهار الرمز">
+            {showTok ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        </div>
+      </Card>
+
+      <Card tone="white" className="p-5">
+        <input ref={fileRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0] ?? null; setFile(f); if (f && !title) setTitle(f.name.replace(/\.pdf$/i, "").replace(/[_-]+/g, " ")); }} />
+        <Button tone="light" className="w-full" onClick={() => fileRef.current?.click()} disabled={busy}>
+          <Upload size={16} /> {file ? `${file.name} (${formatBytes(file.size)})` : "اختيار ملف PDF"}
+        </Button>
+        <label className="mb-1 mt-4 block text-xs font-semibold">العنوان</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className="h-11 w-full rounded-full bg-cream-soft px-4 text-sm outline-none" />
+        <label className="mb-1 mt-3 block text-xs font-semibold">المؤلف</label>
+        <input value={author} onChange={(e) => setAuthor(e.target.value)} className="h-11 w-full rounded-full bg-cream-soft px-4 text-sm outline-none" />
+        <label className="mb-1 mt-3 block text-xs font-semibold">الوسوم (مفصولة بفاصلة)</label>
+        <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="برمجة، خوارزميات" className="h-11 w-full rounded-full bg-cream-soft px-4 text-sm outline-none" />
+        <Button tone="accent" className="mt-4 w-full" onClick={run} disabled={!file || !target.token || busy}>
+          <CloudUpload size={16} /> {busy ? stage || "جارٍ النشر…" : "نشر الكتاب"}
+        </Button>
+        {result && <p className={cn("mt-3 break-all text-xs leading-5", result.ok ? "text-green-700" : "text-red-600")}>{result.text}</p>}
+      </Card>
+
+      <Card tone="light" className="p-4 text-[11px] leading-6 text-ink-muted">
+        <p className="font-semibold text-ink">كيف تحصل على رمز الوصول؟</p>
+        GitHub ← Settings ← Developer settings ← Personal access tokens ← Fine-grained tokens ← Generate. اختر المستودع <code dir="ltr">ideashelf</code> وامنح صلاحية Contents: Read and write.
+      </Card>
+    </div>
   );
 }
 

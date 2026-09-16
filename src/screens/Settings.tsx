@@ -120,7 +120,7 @@ export function SettingsScreen({ settings, update, navigate }: { settings: Setti
           </span>
           <span className="flex-1">
             <span className="block text-sm font-semibold">لوحة تحكم المشرف</span>
-            <span className="block text-[11px] text-white/80">رفع الكتب بالجملة، إدارة المكتبة، الفهرس، النسخ الاحتياطي</span>
+            <span className="block text-[11px] text-white/80">تسجيل دخول المشرف: رفع ونشر الكتب، إدارة المكتبة، النسخ الاحتياطي</span>
           </span>
           <ChevronLeft size={18} />
         </Card>

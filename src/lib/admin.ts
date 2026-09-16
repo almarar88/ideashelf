@@ -1,7 +1,10 @@
 import { db, uid } from "./db";
 import { importPdf } from "./pdf";
 
-const PIN_KEY = "dcl.admin.pin";
+const SESSION_KEY = "dcl.admin.session";
+// SHA-256 of "dcl-admin:<username>:<password>". The app has no server, so this only
+// keeps the dashboard out of casual reach — anyone with the bundle can bypass it.
+const ADMIN_HASH = "5557a1401da7f335226700ab18bf116dafd9985395d68f71ac5d519141436e58";
 
 async function sha256(s: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
@@ -10,14 +13,96 @@ async function sha256(s: string): Promise<string> {
     .join("");
 }
 
-export const hasPin = () => !!localStorage.getItem(PIN_KEY);
-export async function setPin(pin: string) {
-  localStorage.setItem(PIN_KEY, await sha256(`dcl:${pin}`));
+export async function login(username: string, password: string, remember: boolean): Promise<boolean> {
+  const ok = (await sha256(`dcl-admin:${username.trim().toLowerCase()}:${password}`)) === ADMIN_HASH;
+  if (ok) (remember ? localStorage : sessionStorage).setItem(SESSION_KEY, "1");
+  return ok;
 }
-export async function verifyPin(pin: string) {
-  return (await sha256(`dcl:${pin}`)) === localStorage.getItem(PIN_KEY);
+export const isLoggedIn = () => localStorage.getItem(SESSION_KEY) === "1" || sessionStorage.getItem(SESSION_KEY) === "1";
+export function logout() {
+  localStorage.removeItem(SESSION_KEY);
+  sessionStorage.removeItem(SESSION_KEY);
 }
-export const clearPin = () => localStorage.removeItem(PIN_KEY);
+
+/* ---------------- Publish to GitHub (books visible to every user) ---------------- */
+export interface PublishTarget {
+  owner: string;
+  repo: string;
+  branch: string;
+  token: string;
+}
+const GH_KEY = "dcl.admin.github";
+export const DEFAULT_TARGET: PublishTarget = { owner: "almarar88", repo: "ideashelf", branch: "main", token: "" };
+export function loadTarget(): PublishTarget {
+  try {
+    return { ...DEFAULT_TARGET, ...(JSON.parse(localStorage.getItem(GH_KEY) ?? "{}") as Partial<PublishTarget>) };
+  } catch {
+    return { ...DEFAULT_TARGET };
+  }
+}
+export const saveTarget = (t: PublishTarget) => localStorage.setItem(GH_KEY, JSON.stringify(t));
+
+async function gh(t: PublishTarget, path: string, init: RequestInit = {}) {
+  const res = await fetch(`https://api.github.com/repos/${t.owner}/${t.repo}/contents/${path}`, {
+    ...init,
+    headers: { Authorization: `Bearer ${t.token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", ...(init.headers ?? {}) },
+  });
+  if (res.status === 404 && (init.method ?? "GET") === "GET") return null;
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(res.status === 401 ? "رمز GitHub غير صالح" : `GitHub: ${body.message ?? res.status}`);
+  }
+  return (await res.json()) as { sha: string; content?: string };
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve((r.result as string).split(",")[1]);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+
+const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/\.pdf$/i, "")
+    .replace(/[^a-z0-9\u0600-\u06FF]+/g, "-")
+    .replace(/^-+|-+$/g, "") || `book-${Date.now()}`;
+
+/** Uploads the PDF into public/library/ and appends it to public/catalog.json on the branch. */
+export async function publishBook(t: PublishTarget, file: File, meta: { title: string; author: string; tags: string[] }, onStage?: (s: string) => void) {
+  if (!t.token) throw new Error("أدخل رمز وصول GitHub أولاً");
+  if (file.size > 95 * 1024 * 1024) throw new Error("الحد الأقصى للملف عبر GitHub هو 95 MB");
+  const id = slug(meta.title || file.name);
+  const path = `public/library/${id}.pdf`;
+  onStage?.("رفع ملف PDF…");
+  const existing = await gh(t, `${path}?ref=${t.branch}`);
+  await gh(t, path, {
+    method: "PUT",
+    body: JSON.stringify({ message: `Add book: ${meta.title}`, branch: t.branch, content: await blobToBase64(file), ...(existing ? { sha: existing.sha } : {}) }),
+  });
+  onStage?.("تحديث الفهرس…");
+  const cat = await gh(t, `public/catalog.json?ref=${t.branch}`);
+  let books: CatalogEntry[] = [];
+  if (cat?.content) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(escape(atob(cat.content.replace(/\n/g, ""))))) as { books?: CatalogEntry[] };
+      books = parsed.books ?? [];
+    } catch {
+      books = [];
+    }
+  }
+  books = books.filter((b) => b.id !== id);
+  books.push({ id, title: meta.title, author: meta.author || undefined, url: `./library/${id}.pdf`, tags: meta.tags });
+  const json = JSON.stringify({ books }, null, 2);
+  await gh(t, "public/catalog.json", {
+    method: "PUT",
+    body: JSON.stringify({ message: `Catalog: add ${meta.title}`, branch: t.branch, content: btoa(unescape(encodeURIComponent(json))), ...(cat ? { sha: cat.sha } : {}) }),
+  });
+  return { id, url: `https://${t.owner}.github.io/${t.repo}/library/${id}.pdf` };
+}
 
 /* ---------------- Remote catalog ---------------- */
 export interface CatalogEntry {
