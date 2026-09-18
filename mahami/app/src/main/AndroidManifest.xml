@@ -2,8 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-        الإنترنت مطلوب فقط لعمليات الشراء والاشتراك عبر Google Play.
-        لا يرسل التطبيق أي مهمة أو بيانات مستخدم إلى أي خادم.
+        الإنترنت مطلوب للشراء عبر Google Play، ولمزامنة الحساب
+        عند تسجيل الدخول فقط. بدون تسجيل دخول يعمل التطبيق محلياً بالكامل.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="com.android.vending.BILLING" />
@@ -13,6 +13,13 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
+    <!-- رؤية محرّك الإملاء الصوتي على أندرويد 11 فأحدث -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <application
         android:name=".MahamiApplication"
@@ -36,6 +43,12 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- استقبال نص مُشارَك من أي تطبيق وتحويله إلى مهام -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
             <meta-data
                 android:name="android.app.shortcuts"

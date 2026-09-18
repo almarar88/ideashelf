@@ -64,7 +64,8 @@ fun SettingsScreen(
     onOpenProjects: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenPaywall: () -> Unit = {},
-    onOpenArchive: () -> Unit = {}
+    onOpenArchive: () -> Unit = {},
+    onOpenAccount: () -> Unit = {}
 ) {
     val colors = MahamiTheme.colors
     val context = LocalContext.current
@@ -402,6 +403,17 @@ fun SettingsScreen(
                     ) { vm.setAppLock(it) }
                 }
             }
+        }
+
+        item { SectionTitle("الحساب") }
+
+        item {
+            val account by vm.session.collectAsStateWithLifecycle()
+            ActionRow(
+                "الحساب والمزامنة",
+                if (account.signedIn) "مسجّل باسم ${account.email} — مهامك محفوظة في حسابك"
+                else "سجّل الدخول لتفتح مهامك من أي جهاز"
+            ) { onOpenAccount() }
         }
 
         item { SectionTitle("البيانات") }

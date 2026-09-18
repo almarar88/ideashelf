@@ -18,6 +18,14 @@ enum class TaskStatus(val label: String) {
     PENDING("لم تبدأ"), IN_PROGRESS("قيد التنفيذ"), DONE("مكتملة")
 }
 
+/** أرباع مصفوفة الأولويات (مهم × عاجل) */
+enum class Quadrant(val label: String, val hint: String) {
+    DO_NOW("افعلها الآن", "مهمة وعاجلة"),
+    SCHEDULE("خطّط لها", "مهمة وغير عاجلة"),
+    DELEGATE("فوّضها أو اختصرها", "عاجلة وغير مهمة"),
+    LATER("أجّلها", "غير مهمة وغير عاجلة")
+}
+
 /** تكرار المهمة بعد إنجازها */
 enum class Repeat(val label: String) {
     NONE("بدون"),
@@ -31,8 +39,12 @@ enum class Repeat(val label: String) {
     val isAdvanced: Boolean get() = this == EVERY_N_DAYS || this == WEEKDAYS
 }
 
-/** خطوة فرعية داخل المهمة */
-data class SubTask(val title: String, val done: Boolean = false)
+/** خطوة فرعية داخل المهمة، مع يوم مستهدف اختياري من خطة التنفيذ */
+data class SubTask(
+    val title: String,
+    val done: Boolean = false,
+    val targetDate: LocalDate? = null
+)
 
 /** رابط مرفق بالمهمة (ملف سحابي، صفحة، نظام داخلي) */
 data class TaskLink(val title: String, val url: String)
@@ -43,7 +55,10 @@ data class Project(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val colorArgb: Long,
-    val createdAt: LocalDateTime = LocalDateTime.now()
+    val createdAt: LocalDateTime = LocalDateTime.now(),
+    /** معرّف ثابت للمزامنة بين الأجهزة */
+    val syncId: String = java.util.UUID.randomUUID().toString(),
+    val updatedAt: LocalDateTime = LocalDateTime.now()
 )
 
 /** نوع الحدث في سجل نشاط المهمة */
@@ -67,6 +82,23 @@ data class ActivityEntry(
 )
 
 /** جلسة تركيز مسجّلة على مهمة */
+/** سجل حذف يُرسل للخادم ليُحذف السجل من بقية الأجهزة */
+@Entity(tableName = "tombstones")
+data class Tombstone(
+    @PrimaryKey val syncId: String,
+    val kind: String,
+    val at: LocalDateTime = LocalDateTime.now()
+)
+
+/** تعليق أو تحديث يكتبه المستخدم على المهمة */
+@Entity(tableName = "comments")
+data class Comment(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val taskId: Long,
+    val text: String,
+    val at: LocalDateTime = LocalDateTime.now()
+)
+
 @Entity(tableName = "focus_sessions")
 data class FocusSession(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -118,11 +150,23 @@ data class Task(
     val repeatDays: List<Int> = emptyList(),
     /** مجموع دقائق التركيز المسجّلة على المهمة */
     val focusMinutes: Int = 0,
+    /** الوقت المقدّر لإنجاز المهمة بالدقائق */
+    val estimateMinutes: Int = 0,
+    /** مهمة يجب إنجازها قبل البدء بهذه */
+    val dependsOn: Long? = null,
+    /** مهمة مهمة استراتيجياً — يُستخدم في مصفوفة الأولويات */
+    val important: Boolean = false,
+    /** اليوم الذي اختيرت فيه ضمن «أهم ثلاث مهام» */
+    val mitDate: LocalDate? = null,
     val pinned: Boolean = false,
     val createdAt: LocalDateTime = LocalDateTime.now(),
     val completedAt: LocalDateTime? = null,
     /** تنبيه يظهر داخل التفاصيل (تعارض تاريخ، معلومة تحتاج تأكيداً) */
-    val alert: String = ""
+    val alert: String = "",
+    /** معرّف ثابت للمزامنة بين الأجهزة */
+    val syncId: String = java.util.UUID.randomUUID().toString(),
+    /** آخر تعديل محلي — يُستخدم في حل التعارضات */
+    val updatedAt: LocalDateTime = LocalDateTime.now()
 ) {
     val dueDateTime: LocalDateTime get() = LocalDateTime.of(dueDate, dueTime)
 
@@ -140,6 +184,20 @@ data class Task(
     fun daysLeft(today: LocalDate = LocalDate.now()): Long =
         ChronoUnit.DAYS.between(today, dueDate)
 
+    /** عاجلة إذا كان موعدها خلال يومين أو تجاوزته */
+    fun isUrgent(today: LocalDate = LocalDate.now()): Boolean = daysLeft(today) <= 2
+
+    /** الربع في مصفوفة الأولويات */
+    fun quadrant(today: LocalDate = LocalDate.now()): Quadrant = when {
+        important && isUrgent(today) -> Quadrant.DO_NOW
+        important && !isUrgent(today) -> Quadrant.SCHEDULE
+        !important && isUrgent(today) -> Quadrant.DELEGATE
+        else -> Quadrant.LATER
+    }
+
+    /** هل اختيرت ضمن أهم ثلاث مهام اليوم؟ */
+    fun isMitFor(date: LocalDate): Boolean = mitDate == date
+
     /** هل سُلّمت في موعدها؟ null إن لم تكتمل بعد */
     fun deliveredOnTime(): Boolean? =
         completedAt?.let { !it.toLocalDate().isAfter(dueDate) }
@@ -156,12 +214,21 @@ class Converters {
     @TypeConverter fun stringToDateTime(v: String?): LocalDateTime? = v?.let { LocalDateTime.parse(it) }
 
     @TypeConverter fun subTasksToString(v: List<SubTask>): String =
-        v.joinToString(UNIT) { "${it.done}$FIELD${it.title}" }
+        v.joinToString(UNIT) { "${it.done}$FIELD${it.title}$FIELD${it.targetDate ?: ""}" }
 
     @TypeConverter fun stringToSubTasks(v: String): List<SubTask> =
         if (v.isBlank()) emptyList() else v.split(UNIT).mapNotNull { chunk ->
-            val parts = chunk.split(FIELD, limit = 2)
-            if (parts.size == 2) SubTask(parts[1], parts[0].toBoolean()) else null
+            val parts = chunk.split(FIELD)
+            when {
+                parts.size >= 3 -> SubTask(
+                    title = parts[1],
+                    done = parts[0].toBoolean(),
+                    targetDate = parts[2].takeIf { it.isNotBlank() }
+                        ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                )
+                parts.size == 2 -> SubTask(parts[1], parts[0].toBoolean())
+                else -> null
+            }
         }
 
     @TypeConverter fun linksToString(v: List<TaskLink>): String =

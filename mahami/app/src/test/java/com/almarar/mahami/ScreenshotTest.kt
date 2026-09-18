@@ -17,6 +17,9 @@ import com.almarar.mahami.data.Repository
 import com.almarar.mahami.data.ThemeMode
 import com.almarar.mahami.ui.MahamiViewModel
 import com.almarar.mahami.ui.screens.AboutScreen
+import com.almarar.mahami.ui.screens.AccountScreen
+import com.almarar.mahami.ui.screens.ImportScreen
+import com.almarar.mahami.ui.screens.MatrixScreen
 import com.almarar.mahami.ui.screens.CalendarScreen
 import com.almarar.mahami.ui.screens.HomeScreen
 import com.almarar.mahami.ui.screens.OnboardingScreen
@@ -131,6 +134,24 @@ class ScreenshotTest {
     }
 
     @Test fun archive() = shot("14-archive") { ArchiveScreen(vm, onOpenTask = {}, onBack = {}) }
+
+    @Test fun account() = shot("15-account") { AccountScreen(vm) {} }
+
+    @Test fun matrix() = shot("16-matrix") {
+        MatrixScreen(vm, onOpenTask = {}, onBack = {})
+    }
+
+    @Test fun import_() {
+        vm.prepareImport(
+            """
+            - تجهيز عرض اللجنة الأربعاء الساعة 10 عاجل #عروض
+            - مراجعة ملفات المدربين بعد 3 أيام
+            - اتصال بمنصة التسجيل غداً
+            """.trimIndent()
+        )
+        idle()
+        shot("17-import") { ImportScreen(vm, onBack = {}, onDone = {}) }
+    }
 
     @Test fun homeDark() = shot("12-home-dark", dark = true) {
         HomeScreen(

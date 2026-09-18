@@ -21,6 +21,8 @@ enum class CalendarView(val label: String) {
 
 /** ألوان التمييز المتاحة في النسخة المدفوعة */
 enum class AccentColor(val label: String, val argb: Long) {
+    /** اللون الافتراضي — جمرة دافئة تناسب اللوحة الكريمية */
+    EMBER("جمري", 0xFFE8743B),
     BLUE("أزرق", 0xFF2E9BF0),
     GREEN("أخضر", 0xFF3BA55D),
     VIOLET("بنفسجي", 0xFF7C6BD4),
@@ -39,7 +41,7 @@ data class Settings(
     val defaultReminderOffsets: List<Int> = listOf(1, 0),
     val calendarView: CalendarView = CalendarView.MONTH,
     val appLock: Boolean = false,
-    val accentColor: AccentColor = AccentColor.BLUE,
+    val accentColor: AccentColor = AccentColor.EMBER,
     /** طول جلسة التركيز بالدقائق */
     val focusMinutes: Int = 25,
     /** طول الاستراحة بالدقائق */
@@ -80,8 +82,8 @@ class Prefs(private val context: Context) {
             calendarView = runCatching { CalendarView.valueOf(p[Keys.CALENDAR_VIEW] ?: "MONTH") }
                 .getOrDefault(CalendarView.MONTH),
             appLock = p[Keys.APP_LOCK] ?: false,
-            accentColor = runCatching { AccentColor.valueOf(p[Keys.ACCENT] ?: "BLUE") }
-                .getOrDefault(AccentColor.BLUE),
+            accentColor = runCatching { AccentColor.valueOf(p[Keys.ACCENT] ?: "EMBER") }
+                .getOrDefault(AccentColor.EMBER),
             focusMinutes = p[Keys.FOCUS_MINUTES] ?: 25,
             breakMinutes = p[Keys.BREAK_MINUTES] ?: 5,
             paywallSeen = p[Keys.PAYWALL_SEEN] ?: 0

@@ -93,7 +93,7 @@ fun CalendarScreen(vm: MahamiViewModel, onOpenTask: (Long) -> Unit) {
         }
 
         item {
-            com.almarar.mahami.ui.components.SegmentedTabs(
+            com.almarar.mahami.ui.components.SlidingTabs(
                 options = CalendarView.entries.map { it.label },
                 selectedIndex = settings.calendarView.ordinal,
                 onSelect = { vm.setCalendarView(CalendarView.entries[it]) }

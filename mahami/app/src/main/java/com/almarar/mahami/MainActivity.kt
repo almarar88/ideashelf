@@ -51,6 +51,10 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun resolveStart(intent: Intent?): StartDestination {
+        if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            val shared = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim()
+            if (!shared.isNullOrBlank()) return StartDestination.SharedText(shared)
+        }
         val taskId = intent?.getLongExtra(EXTRA_TASK_ID, -1L) ?: -1L
         if (taskId > 0) return StartDestination.TaskDetail(taskId)
         return when (intent?.getStringExtra(EXTRA_DESTINATION)) {

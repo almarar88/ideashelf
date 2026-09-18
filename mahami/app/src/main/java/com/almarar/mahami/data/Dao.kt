@@ -115,3 +115,33 @@ interface CustomTemplateDao {
     @Delete
     suspend fun delete(template: CustomTemplate)
 }
+
+@Dao
+interface CommentDao {
+    @Query("SELECT * FROM comments WHERE taskId = :taskId ORDER BY at DESC")
+    fun observeForTask(taskId: Long): Flow<List<Comment>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(comment: Comment)
+
+    @Delete
+    suspend fun delete(comment: Comment)
+
+    @Query("DELETE FROM comments WHERE taskId = :taskId")
+    suspend fun deleteForTask(taskId: Long)
+
+    @Query("DELETE FROM comments")
+    suspend fun deleteAll()
+}
+
+@Dao
+interface TombstoneDao {
+    @Query("SELECT * FROM tombstones")
+    suspend fun getAll(): List<Tombstone>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(tombstone: Tombstone)
+
+    @Query("DELETE FROM tombstones")
+    suspend fun deleteAll()
+}

@@ -19,6 +19,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Send
+import androidx.compose.material.icons.rounded.Timeline
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Check
@@ -63,6 +69,7 @@ import com.almarar.mahami.ui.components.priorityColor
 import com.almarar.mahami.ui.components.statusColor
 import com.almarar.mahami.ui.theme.AccentGreen
 import com.almarar.mahami.ui.theme.AccentRed
+import com.almarar.mahami.ui.theme.AccentYellow
 import com.almarar.mahami.ui.theme.MahamiTheme
 
 @Composable
@@ -79,6 +86,8 @@ fun TaskDetailScreen(
     val tasks by vm.tasks.collectAsStateWithLifecycle()
     val task = tasks.firstOrNull { it.id == taskId }
     val activity by vm.activityFor(taskId).collectAsStateWithLifecycle(emptyList())
+    val comments by vm.commentsFor(taskId).collectAsStateWithLifecycle(emptyList())
+    var commentDraft by remember { mutableStateOf("") }
 
     var messageTemplate by remember { mutableStateOf<MessageTemplate?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -252,7 +261,97 @@ fun TaskDetailScreen(
             }
         }
 
+        vm.blockerOf(task)?.let { blocker ->
+            item {
+                SoftCard(
+                    Modifier.fillMaxWidth(),
+                    color = AccentYellow.copy(alpha = 0.12f),
+                    corner = 22.dp,
+                    elevation = 0.dp,
+                    onClick = { onEdit(task.id) }
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Lock, null, tint = AccentYellow, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (vm.isBlocked(task)) "محجوبة حتى تنتهي" else "مرتبطة بـ",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.inkMuted
+                            )
+                            Text(
+                                blocker.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = colors.ink
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         if (task.subTasks.isNotEmpty()) {
+            item {
+                val planned = task.subTasks.count { it.targetDate != null }
+                SoftCard(Modifier.fillMaxWidth(), color = colors.feature, corner = 26.dp) {
+                    Column(Modifier.fillMaxWidth().padding(18.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Rounded.Timeline, null,
+                                tint = colors.accent, modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "خطة التنفيذ",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = colors.onFeature
+                                )
+                                Text(
+                                    if (planned > 0) "$planned من ${task.subTasks.size} خطوة لها يوم محدّد"
+                                    else "وزّع الخطوات على الأيام المتبقية قبل الموعد",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.onFeatureMuted
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(
+                                Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(colors.accent)
+                                    .clickable { vm.buildExecutionPlan(task) }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    if (planned > 0) "أعد التوزيع" else "وزّع تلقائياً",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = Color.White
+                                )
+                            }
+                            if (planned > 0) {
+                                Box(
+                                    Modifier
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(colors.featureSoft)
+                                        .clickable { vm.clearExecutionPlan(task) }
+                                        .padding(horizontal = 18.dp, vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        "مسح",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = colors.onFeatureMuted
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             item {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("الخطوات", style = MaterialTheme.typography.titleLarge, color = colors.ink)
@@ -288,11 +387,21 @@ fun TaskDetailScreen(
                             }
                         }
                         Spacer(Modifier.width(12.dp))
-                        Text(
-                            sub.title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = if (sub.done) colors.inkMuted else colors.ink
-                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                sub.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (sub.done) colors.inkMuted else colors.ink
+                            )
+                            sub.targetDate?.let { target ->
+                                Text(
+                                    Ar.relative(target),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (!sub.done && target.isBefore(java.time.LocalDate.now()))
+                                        AccentRed else colors.accent
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -477,6 +586,111 @@ fun TaskDetailScreen(
                         SmallAction("+ يوم", Modifier.weight(1f)) { vm.postpone(task, 1) }
                         SmallAction("+ 3 أيام", Modifier.weight(1f)) { vm.postpone(task, 3) }
                         SmallAction("+ أسبوع", Modifier.weight(1f)) { vm.postpone(task, 7) }
+                    }
+                }
+            }
+        }
+
+        item {
+            SoftCard(Modifier.fillMaxWidth(), corner = 24.dp) {
+                Column(Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("الملاحظات", style = MaterialTheme.typography.titleMedium, color = colors.ink)
+                        Spacer(Modifier.weight(1f))
+                        if (comments.isNotEmpty()) {
+                            Text(
+                                "${comments.size}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.inkMuted
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+
+                    comments.forEach { comment ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Box(
+                                Modifier
+                                    .padding(top = 6.dp)
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(colors.accent)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    comment.text,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = colors.inkSoft
+                                )
+                                Text(
+                                    "${comment.at.dayOfMonth}/${comment.at.monthValue} — " +
+                                        "%02d:%02d".format(comment.at.hour, comment.at.minute),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colors.inkMuted
+                                )
+                            }
+                            Icon(
+                                Icons.Rounded.Close,
+                                "حذف الملاحظة",
+                                tint = colors.inkMuted,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clickable { vm.deleteComment(comment) }
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(colors.surfaceMuted)
+                                .padding(horizontal = 14.dp, vertical = 12.dp)
+                        ) {
+                            if (commentDraft.isEmpty()) {
+                                Text(
+                                    "أضف ملاحظة أو تحديثاً…",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = colors.inkMuted
+                                )
+                            }
+                            BasicTextField(
+                                value = commentDraft,
+                                onValueChange = { commentDraft = it },
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = colors.ink),
+                                cursorBrush = SolidColor(colors.accent),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Box(
+                            Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (commentDraft.isBlank()) colors.surfaceMuted else colors.accent
+                                )
+                                .clickable(enabled = commentDraft.isNotBlank()) {
+                                    vm.addComment(task.id, commentDraft.trim())
+                                    commentDraft = ""
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Rounded.Send,
+                                "إضافة",
+                                tint = if (commentDraft.isBlank()) colors.inkMuted else Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }

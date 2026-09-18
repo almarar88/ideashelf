@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SwapVert
@@ -52,7 +53,8 @@ fun TasksScreen(
     vm: MahamiViewModel,
     onOpenTask: (Long) -> Unit,
     onNewTask: () -> Unit,
-    onOpenProjects: () -> Unit
+    onOpenProjects: () -> Unit,
+    onOpenMatrix: () -> Unit = {}
 ) {
     val colors = MahamiTheme.colors
     val tasks by vm.visibleTasks.collectAsStateWithLifecycle()
@@ -80,6 +82,20 @@ fun TasksScreen(
                         color = colors.inkMuted
                     )
                 }
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(colors.surface)
+                        .clickable { onOpenMatrix() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.GridView, "مصفوفة الأولويات",
+                        tint = colors.ink, modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
                 Box(
                     Modifier
                         .size(44.dp)

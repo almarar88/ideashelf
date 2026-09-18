@@ -35,10 +35,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.almarar.mahami.core.Ar
+import com.almarar.mahami.data.ProjectKit
+import com.almarar.mahami.data.ProjectTemplates
 import com.almarar.mahami.data.Templates
 import com.almarar.mahami.ui.MahamiViewModel
 import com.almarar.mahami.ui.components.CircleIconButton
 import com.almarar.mahami.ui.components.Pill
+import com.almarar.mahami.ui.components.SlidingTabs
 import com.almarar.mahami.ui.components.SoftCard
 import com.almarar.mahami.ui.components.priorityColor
 import com.almarar.mahami.ui.theme.MahamiTheme
@@ -54,6 +57,7 @@ fun TemplatesScreen(
     val colors = MahamiTheme.colors
     val projects by vm.projects.collectAsStateWithLifecycle()
     var projectId by remember { mutableStateOf<Long?>(null) }
+    var tab by remember { mutableStateOf(0) }
     val today = LocalDate.now()
 
     LazyColumn(
@@ -70,7 +74,8 @@ fun TemplatesScreen(
                 Column {
                     Text("قوالب جاهزة", style = MaterialTheme.typography.headlineSmall, color = colors.ink)
                     Text(
-                        "اختر قالباً لتُنشأ المهمة بخطواتها وموعدها ومستوى أولويتها",
+                        if (tab == 0) "مهمة واحدة بخطواتها وموعدها"
+                        else "مشروع كامل بمهامه موزّعة على الأيام",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.inkMuted
                     )
@@ -78,7 +83,15 @@ fun TemplatesScreen(
             }
         }
 
-        if (projects.isNotEmpty()) {
+        item {
+            SlidingTabs(
+                options = listOf("قوالب مهمة", "أطقم مشاريع"),
+                selectedIndex = tab,
+                onSelect = { tab = it }
+            )
+        }
+
+        if (tab == 0 && projects.isNotEmpty()) {
             item {
                 SoftCard(Modifier.fillMaxWidth(), corner = 22.dp, elevation = 4.dp) {
                     Column(Modifier.padding(16.dp)) {
@@ -105,7 +118,13 @@ fun TemplatesScreen(
             }
         }
 
-        items(Templates.tasks, key = { it.id }) { template ->
+        if (tab == 1) {
+            items(ProjectTemplates.kits, key = { it.id }) { kit ->
+                KitCard(kit, today) { vm.createProjectKit(kit) { onBack() } }
+            }
+        }
+
+        if (tab == 0) items(Templates.tasks, key = { it.id }) { template ->
             SoftCard(
                 Modifier.fillMaxWidth(),
                 corner = 24.dp,
@@ -204,5 +223,93 @@ private fun ProjectChip(label: String, selected: Boolean, dot: Color?, onClick: 
             style = MaterialTheme.typography.labelMedium,
             color = if (selected) colors.accent else colors.inkMuted
         )
+    }
+}
+
+@Composable
+private fun KitCard(kit: ProjectKit, today: LocalDate, onCreate: () -> Unit) {
+    val colors = MahamiTheme.colors
+    val tint = Color(kit.colorArgb)
+    var expanded by remember { mutableStateOf(false) }
+
+    SoftCard(Modifier.fillMaxWidth(), corner = 26.dp, elevation = 6.dp, onClick = { expanded = !expanded }) {
+        Column(Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(tint.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) { Text(kit.emoji, style = MaterialTheme.typography.titleLarge) }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(kit.name, style = MaterialTheme.typography.titleMedium, color = colors.ink)
+                    Text(kit.hint, style = MaterialTheme.typography.bodySmall, color = colors.inkMuted)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Pill("${kit.tasks.size} مهام", tint.copy(alpha = 0.12f), tint)
+                Pill(Ar.countDays(kit.durationDays), colors.surfaceMuted, colors.inkMuted)
+                Pill(
+                    "ينتهي ${Ar.shortDate(today.plusDays(kit.durationDays))}",
+                    colors.surfaceMuted,
+                    colors.inkMuted
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+            kit.tasks.take(if (expanded) kit.tasks.size else 3).forEach { task ->
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(if (task.important) tint else colors.inkMuted)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        task.title,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.inkSoft,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        Ar.shortDate(today.plusDays(task.offsetDays)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.inkMuted
+                    )
+                }
+            }
+            if (!expanded && kit.tasks.size > 3) {
+                Text(
+                    "و${kit.tasks.size - 3} مهام أخرى — اضغط للعرض",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.accent
+                )
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(tint)
+                    .clickable { onCreate() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "أنشئ المشروع",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White
+                )
+            }
+        }
     }
 }

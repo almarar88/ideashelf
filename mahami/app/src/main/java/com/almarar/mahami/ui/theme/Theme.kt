@@ -21,7 +21,7 @@ object MahamiTheme {
 @Composable
 fun MahamiAppTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
-    accent: AccentColor = AccentColor.BLUE,
+    accent: AccentColor = AccentColor.EMBER,
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (themeMode) {

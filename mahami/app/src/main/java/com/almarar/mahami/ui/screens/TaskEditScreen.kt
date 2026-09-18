@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -47,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.almarar.mahami.core.Ar
+import com.almarar.mahami.data.TaskStatus
 import com.almarar.mahami.data.Priority
 import com.almarar.mahami.data.Repeat
 import com.almarar.mahami.data.SubTask
@@ -91,6 +94,9 @@ fun TaskEditScreen(
     var newTag by remember { mutableStateOf("") }
     var linkTitle by remember { mutableStateOf("") }
     var linkUrl by remember { mutableStateOf("") }
+    var important by remember(existing) { mutableStateOf(existing?.important ?: false) }
+    var estimate by remember(existing) { mutableStateOf(existing?.estimateMinutes ?: 0) }
+    var dependsOn by remember(existing) { mutableStateOf(existing?.dependsOn) }
 
     val steps = remember(existing) {
         mutableStateListOf<SubTask>().apply { addAll(existing?.subTasks.orEmpty()) }
@@ -514,6 +520,108 @@ fun TaskEditScreen(
             }
         }
 
+        item {
+            SoftCard(Modifier.fillMaxWidth(), corner = 24.dp) {
+                Column(Modifier.fillMaxWidth().padding(18.dp)) {
+                    // --- علم «مهمة» الذي يحدّد موقعها في مصفوفة الأولويات ---
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { important = !important }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (important) colors.accent.copy(alpha = 0.14f)
+                                    else colors.surfaceMuted
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Rounded.Star, null,
+                                tint = if (important) colors.accent else colors.inkMuted,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "مهمة استراتيجية",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = colors.ink
+                            )
+                            Text(
+                                "تدخل ربع «افعلها الآن» في مصفوفة الأولويات",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.inkMuted
+                            )
+                        }
+                        Switch(
+                            checked = important,
+                            onCheckedChange = { important = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = colors.accent,
+                                uncheckedTrackColor = colors.surfaceMuted
+                            )
+                        )
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        "الوقت المقدّر",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = colors.ink
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(0, 15, 30, 45, 60, 90, 120, 240).forEach { minutes ->
+                            ChoiceChip(
+                                label = if (minutes == 0) "غير محدّد" else Ar.duration(minutes),
+                                selected = estimate == minutes
+                            ) { estimate = minutes }
+                        }
+                    }
+
+                    val candidates = tasks.filter {
+                        it.id != taskId && it.status != TaskStatus.DONE
+                    }
+                    if (candidates.isNotEmpty()) {
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "تعتمد على مهمة أخرى",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = colors.ink
+                        )
+                        Text(
+                            "لن تظهر كجاهزة للبدء حتى تنتهي المهمة المختارة",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.inkMuted
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ChoiceChip(label = "بدون", selected = dependsOn == null) {
+                                dependsOn = null
+                            }
+                            candidates.take(12).forEach { candidate ->
+                                ChoiceChip(
+                                    label = candidate.title.take(24),
+                                    selected = dependsOn == candidate.id
+                                ) {
+                                    dependsOn = if (dependsOn == candidate.id) null else candidate.id
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         item { LabeledField("ملاحظات", notes, "أي تفاصيل إضافية", minLines = 3) { notes = it } }
 
         item {
@@ -540,7 +648,10 @@ fun TaskEditScreen(
                             reminderOffsetsDays = offsets.toList().ifEmpty { listOf(0) },
                             subTasks = steps.toList(),
                             tags = tags.toList(),
-                            links = links.toList()
+                            links = links.toList(),
+                            important = important,
+                            estimateMinutes = estimate,
+                            dependsOn = dependsOn
                         )
                         vm.save(task) { onDone() }
                     },

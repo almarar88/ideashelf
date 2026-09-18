@@ -93,6 +93,27 @@ object Ar {
         else -> "$n يوماً"
     }
 
+    /** مدة بالدقائق بصيغة عربية مختصرة: 45 د، ساعة ونصف، ساعتان */
+    fun duration(minutes: Int): String {
+        if (minutes <= 0) return "غير محدّد"
+        if (minutes < 60) return "$minutes د"
+        val hours = minutes / 60
+        val rest = minutes % 60
+        val hoursText = when (hours) {
+            1 -> "ساعة"
+            2 -> "ساعتان"
+            in 3..10 -> "$hours ساعات"
+            else -> "$hours ساعة"
+        }
+        return when (rest) {
+            0 -> hoursText
+            30 -> "$hoursText ونصف"
+            15 -> "$hoursText وربع"
+            45 -> "$hoursText وثلاثة أرباع"
+            else -> "$hoursText و$rest د"
+        }
+    }
+
     private fun pad(n: Int) = n.toString().padStart(2, '0')
 }
 

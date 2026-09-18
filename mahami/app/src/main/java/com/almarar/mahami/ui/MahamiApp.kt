@@ -1,5 +1,10 @@
 package com.almarar.mahami.ui
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,10 +44,13 @@ import androidx.navigation.navArgument
 import com.almarar.mahami.ui.components.BottomNavPill
 import com.almarar.mahami.ui.components.NavItem
 import com.almarar.mahami.ui.screens.AboutScreen
+import com.almarar.mahami.ui.screens.AccountScreen
 import com.almarar.mahami.ui.screens.ArchiveScreen
 import com.almarar.mahami.ui.screens.CalendarScreen
 import com.almarar.mahami.ui.screens.FocusScreen
 import com.almarar.mahami.ui.screens.HomeScreen
+import com.almarar.mahami.ui.screens.ImportScreen
+import com.almarar.mahami.ui.screens.MatrixScreen
 import com.almarar.mahami.ui.screens.OnboardingScreen
 import com.almarar.mahami.ui.screens.PaywallScreen
 import com.almarar.mahami.ui.screens.ProjectsScreen
@@ -67,6 +75,9 @@ object Routes {
     const val ABOUT = "about"
     const val PAYWALL = "paywall"
     const val ARCHIVE = "archive"
+    const val ACCOUNT = "account"
+    const val IMPORT = "import"
+    const val MATRIX = "matrix"
     const val FOCUS = "focus/{taskId}"
     const val DETAIL = "detail/{taskId}"
     const val EDIT = "edit?taskId={taskId}"
@@ -90,6 +101,8 @@ sealed interface StartDestination {
     data object Today : StartDestination
     data object Calendar : StartDestination
     data class TaskDetail(val id: Long) : StartDestination
+    /** نص وصل من تطبيق آخر عبر «مشاركة» */
+    data class SharedText(val text: String) : StartDestination
 }
 
 @Composable
@@ -109,6 +122,31 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
             val showNav = route in setOf(
                 Routes.HOME, Routes.TASKS, Routes.CALENDAR, Routes.REPORTS
             )
+
+            val voiceLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                if (result.resultCode == Activity.RESULT_OK) {
+                    result.data
+                        ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                        ?.firstOrNull()
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { vm.addFromVoice(it) }
+                }
+            }
+            val startVoice: () -> Unit = {
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(
+                        RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                    )
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-SA")
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ar")
+                    putExtra(RecognizerIntent.EXTRA_PROMPT, "قل مهمتك…")
+                }
+                runCatching { voiceLauncher.launch(intent) }
+                    .onFailure { vm.showToast("لا يوجد محرّك إملاء صوتي على الجهاز") }
+            }
 
             val lockedFeature by vm.lockedFeature.collectAsStateWithLifecycle()
             LaunchedEffect(lockedFeature) {
@@ -138,6 +176,10 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                     }
                     StartDestination.Calendar -> navController.navigate(Routes.CALENDAR)
                     is StartDestination.TaskDetail -> navController.navigate(Routes.detail(start.id))
+                    is StartDestination.SharedText -> {
+                        vm.prepareImport(start.text)
+                        navController.navigate(Routes.IMPORT)
+                    }
                     StartDestination.None -> Unit
                 }
             }
@@ -170,7 +212,9 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                             onOpenTasks = { navController.navigate(Routes.TASKS) },
                             onOpenTemplates = { navController.navigate(Routes.TEMPLATES) },
                             onNewTask = { navController.navigate(Routes.edit()) },
-                            onOpenPaywall = { navController.navigate(Routes.PAYWALL) }
+                            onOpenPaywall = { navController.navigate(Routes.PAYWALL) },
+                            onOpenAccount = { navController.navigate(Routes.ACCOUNT) },
+                            onStartVoice = startVoice
                         )
                     }
                     composable(Routes.TASKS) {
@@ -178,7 +222,8 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                             vm = vm,
                             onOpenTask = { navController.navigate(Routes.detail(it)) },
                             onNewTask = { navController.navigate(Routes.edit()) },
-                            onOpenProjects = { navController.navigate(Routes.PROJECTS) }
+                            onOpenProjects = { navController.navigate(Routes.PROJECTS) },
+                            onOpenMatrix = { navController.navigate(Routes.MATRIX) }
                         )
                     }
                     composable(Routes.CALENDAR) {
@@ -192,7 +237,8 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                             onOpenProjects = { navController.navigate(Routes.PROJECTS) },
                             onOpenAbout = { navController.navigate(Routes.ABOUT) },
                             onOpenPaywall = { navController.navigate(Routes.PAYWALL) },
-                            onOpenArchive = { navController.navigate(Routes.ARCHIVE) }
+                            onOpenArchive = { navController.navigate(Routes.ARCHIVE) },
+                            onOpenAccount = { navController.navigate(Routes.ACCOUNT) }
                         )
                     }
                     composable(Routes.PROJECTS) {
@@ -203,6 +249,26 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                     }
                     composable(Routes.PAYWALL) {
                         PaywallScreen(vm) { navController.popBackStack() }
+                    }
+                    composable(Routes.ACCOUNT) {
+                        AccountScreen(vm) { navController.popBackStack() }
+                    }
+                    composable(Routes.IMPORT) {
+                        ImportScreen(
+                            vm = vm,
+                            onBack = { navController.popBackStack() },
+                            onDone = {
+                                navController.popBackStack()
+                                navController.navigate(Routes.TASKS)
+                            }
+                        )
+                    }
+                    composable(Routes.MATRIX) {
+                        MatrixScreen(
+                            vm = vm,
+                            onOpenTask = { navController.navigate(Routes.detail(it)) },
+                            onBack = { navController.popBackStack() }
+                        )
                     }
                     composable(Routes.ARCHIVE) {
                         ArchiveScreen(

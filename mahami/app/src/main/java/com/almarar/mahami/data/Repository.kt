@@ -18,7 +18,9 @@ class Repository(
     private val projectDao: ProjectDao,
     private val activityDao: ActivityDao,
     private val focusDao: FocusDao,
-    private val customTemplateDao: CustomTemplateDao
+    private val customTemplateDao: CustomTemplateDao,
+    private val commentDao: CommentDao,
+    private val tombstoneDao: TombstoneDao
 ) {
 
     val tasks: Flow<List<Task>> = taskDao.observeAll()
@@ -27,6 +29,16 @@ class Repository(
     val focusSessions: Flow<List<FocusSession>> = focusDao.observeRecent()
 
     fun activityFor(taskId: Long): Flow<List<ActivityEntry>> = activityDao.observeForTask(taskId)
+
+    fun commentsFor(taskId: Long): Flow<List<Comment>> = commentDao.observeForTask(taskId)
+
+    suspend fun addComment(taskId: Long, text: String) {
+        val clean = text.trim()
+        if (clean.isBlank()) return
+        commentDao.insert(Comment(taskId = taskId, text = clean))
+    }
+
+    suspend fun deleteComment(comment: Comment) = commentDao.delete(comment)
 
     suspend fun allTasks(): List<Task> = taskDao.getAll()
     suspend fun allProjects(): List<Project> = projectDao.getAll()
@@ -41,9 +53,10 @@ class Repository(
 
     // ---------- المهام ----------
 
-    suspend fun upsert(task: Task): Long {
+    suspend fun upsert(task: Task, touch: Boolean = true): Long {
         val isNew = task.id == 0L
-        val id = taskDao.insert(task)
+        val prepared = if (touch) task.copy(updatedAt = LocalDateTime.now()) else task
+        val id = taskDao.insert(prepared)
         log(
             if (isNew) ActivityEntry(taskId = id, type = ActivityType.CREATED, text = task.title)
             else ActivityEntry(taskId = id, type = ActivityType.EDITED, text = "تحديث بيانات المهمة")
@@ -52,7 +65,11 @@ class Repository(
         return id
     }
 
-    suspend fun delete(task: Task) {
+    suspend fun delete(task: Task, recordTombstone: Boolean = true) {
+        if (recordTombstone) {
+            runCatching { tombstoneDao.insert(Tombstone(task.syncId, "task")) }
+        }
+        commentDao.deleteForTask(task.id)
         taskDao.delete(task)
         activityDao.deleteForTask(task.id)
         focusDao.deleteForTask(task.id)
@@ -211,7 +228,10 @@ class Repository(
 
     suspend fun upsertProject(project: Project): Long = projectDao.insert(project)
 
-    suspend fun deleteProject(project: Project) {
+    suspend fun deleteProject(project: Project, recordTombstone: Boolean = true) {
+        if (recordTombstone) {
+            runCatching { tombstoneDao.insert(Tombstone(project.syncId, "project")) }
+        }
         taskDao.getAll().filter { it.projectId == project.id }.forEach {
             taskDao.update(it.copy(projectId = null))
         }
@@ -233,6 +253,7 @@ class Repository(
         taskDao.deleteAll()
         activityDao.deleteAll()
         focusDao.deleteAll()
+        commentDao.deleteAll()
         refresh()
     }
 
@@ -311,7 +332,9 @@ class Repository(
                     db.projectDao(),
                     db.activityDao(),
                     db.focusDao(),
-                    db.customTemplateDao()
+                    db.customTemplateDao(),
+                    db.commentDao(),
+                    db.tombstoneDao()
                 ).also { INSTANCE = it }
             }
         }

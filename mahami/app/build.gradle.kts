@@ -26,9 +26,22 @@ android {
         applicationId = "com.almarar.mahami"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
         resourceConfigurations += listOf("ar", "en")
+
+        // إعدادات خادم المزامنة — تُضبط في gradle.properties أو أسرار CI.
+        // تركها فارغة يجعل التطبيق يعمل محلياً فقط دون مزامنة.
+        buildConfigField(
+            "String",
+            "SUPABASE_URL",
+            "\"${project.findProperty("SUPABASE_URL") ?: ""}\""
+        )
+        buildConfigField(
+            "String",
+            "SUPABASE_ANON_KEY",
+            "\"${project.findProperty("SUPABASE_ANON_KEY") ?: ""}\""
+        )
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -72,7 +85,10 @@ android {
 
     kotlinOptions { jvmTarget = "17" }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     testOptions {
         unitTests {

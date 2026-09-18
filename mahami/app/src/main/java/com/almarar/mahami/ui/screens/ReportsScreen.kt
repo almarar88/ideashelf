@@ -40,7 +40,7 @@ import com.almarar.mahami.ui.components.DottedBars
 import com.almarar.mahami.ui.components.GaugeArc
 import com.almarar.mahami.ui.components.GaugeLegend
 import com.almarar.mahami.ui.components.GaugeSegment
-import com.almarar.mahami.ui.components.SegmentedTabs
+import com.almarar.mahami.ui.components.SlidingTabs
 import com.almarar.mahami.ui.components.SoftCard
 import com.almarar.mahami.ui.components.ThinProgress
 import com.almarar.mahami.ui.theme.AccentGreen
@@ -99,7 +99,7 @@ fun ReportsScreen(vm: MahamiViewModel) {
         }
 
         item {
-            SegmentedTabs(
+            SlidingTabs(
                 options = listOf("يومي", "أسبوعي", "شهري"),
                 selectedIndex = range,
                 onSelect = { range = it }

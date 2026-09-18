@@ -18,8 +18,12 @@ import com.almarar.mahami.core.TaskStats
 import com.almarar.mahami.data.AccentColor
 import com.almarar.mahami.data.ActivityEntry
 import com.almarar.mahami.data.CalendarView
+import com.almarar.mahami.data.Comment
 import com.almarar.mahami.data.CustomTemplate
 import com.almarar.mahami.data.FocusSession
+import com.almarar.mahami.data.ProjectKit
+import com.almarar.mahami.data.ProjectTemplates
+import com.almarar.mahami.data.SubTask
 import com.almarar.mahami.data.Prefs
 import com.almarar.mahami.data.Project
 import com.almarar.mahami.data.Repository
@@ -30,6 +34,15 @@ import com.almarar.mahami.data.TaskTemplate
 import com.almarar.mahami.data.Templates
 import com.almarar.mahami.data.ThemeMode
 import com.almarar.mahami.notify.DailyDigestWorker
+import com.almarar.mahami.smart.ParsedChip
+import com.almarar.mahami.smart.ParsedTask
+import com.almarar.mahami.smart.Planner
+import com.almarar.mahami.smart.SmartParser
+import com.almarar.mahami.sync.AuthClient
+import com.almarar.mahami.sync.AuthResult
+import com.almarar.mahami.sync.Session
+import com.almarar.mahami.sync.SyncConfig
+import com.almarar.mahami.sync.SyncManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -39,6 +52,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -62,6 +76,9 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = Prefs.get(app)
     private val billing = BillingManager.get(app)
     private val entitlementStore = EntitlementStore.get(app)
+    private val auth = AuthClient.get(app)
+    private val syncManager = SyncManager.get(app)
+    private val syncConfig = SyncConfig.get(app)
 
     val settings: StateFlow<Settings> = prefs.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, Settings())
@@ -178,12 +195,270 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
         .stateIn(viewModelScope, SharingStarted.Eagerly, TaskStats())
 
     init {
-        viewModelScope.launch {
+        // عمل التهيئة خارج الخيط الرئيسي: لا يحجب الواجهة،
+        // ولا يترك قفل التهيئة معلّقاً إن كان الخيط الرئيسي مشغولاً.
+        viewModelScope.launch(Dispatchers.Default) {
             repo.initializeIfNeeded()
             repo.refresh()
+            _syncConfigured.value = syncConfig.isConfigured()
+            if (syncConfig.currentSession().signedIn) syncManager.syncNow()
             DailyDigestWorker.schedule(app, prefs.settings.first().digestHour)
         }
     }
+
+    // ---------- الحساب والمزامنة ----------
+
+    val session: StateFlow<Session> = syncConfig.session
+        .stateIn(viewModelScope, SharingStarted.Eagerly, Session())
+
+    val syncState = syncManager.state
+
+    private val _authBusy = MutableStateFlow(false)
+    val authBusy = _authBusy.asStateFlow()
+
+    private val _authMessage = MutableStateFlow("")
+    val authMessage = _authMessage.asStateFlow()
+
+    private val _syncConfigured = MutableStateFlow(false)
+    val syncConfigured = _syncConfigured.asStateFlow()
+
+    fun signUp(email: String, password: String) = runAuth {
+        when (val result = auth.signUp(email, password)) {
+            is AuthResult.Success -> {
+                _authMessage.value = "تم إنشاء الحساب"
+                syncManager.syncNow()
+            }
+            is AuthResult.NeedsEmailConfirmation ->
+                _authMessage.value = "أرسلنا رسالة تأكيد إلى ${result.email} — افتحها ثم سجّل الدخول."
+            is AuthResult.Failure -> _authMessage.value = result.message
+        }
+    }
+
+    fun signIn(email: String, password: String) = runAuth {
+        when (val result = auth.signIn(email, password)) {
+            is AuthResult.Success -> {
+                _authMessage.value = "تم تسجيل الدخول"
+                syncManager.syncNow()
+            }
+            is AuthResult.NeedsEmailConfirmation ->
+                _authMessage.value = "فعّل بريدك أولاً من رسالة التأكيد."
+            is AuthResult.Failure -> _authMessage.value = result.message
+        }
+    }
+
+    fun resetPassword(email: String) = runAuth {
+        when (val result = auth.sendPasswordReset(email)) {
+            is AuthResult.Success -> _authMessage.value = "أرسلنا رابط إعادة التعيين إلى بريدك."
+            is AuthResult.Failure -> _authMessage.value = result.message
+            else -> Unit
+        }
+    }
+
+    fun signOut() = runAuth {
+        auth.signOut()
+        _authMessage.value = "تم تسجيل الخروج — بياناتك تبقى على هذا الجهاز."
+    }
+
+    /** حذف الحساب من الخادم — متطلب إلزامي في متجر جوجل */
+    fun deleteAccount(onDone: () -> Unit = {}) = runAuth {
+        when (val result = auth.deleteAccount()) {
+            is AuthResult.Success -> {
+                _authMessage.value = "حُذف الحساب نهائياً من الخادم."
+                onDone()
+            }
+            is AuthResult.Failure -> _authMessage.value = result.message
+            else -> Unit
+        }
+    }
+
+    fun syncNow() = viewModelScope.launch {
+        if (!session.value.signedIn) {
+            showToast("سجّل الدخول لتفعيل المزامنة")
+            return@launch
+        }
+        syncManager.syncNow()
+    }
+
+    fun setSyncServer(url: String, key: String) = viewModelScope.launch {
+        syncConfig.setServer(url, key)
+        _syncConfigured.value = syncConfig.isConfigured()
+        _authMessage.value = if (_syncConfigured.value) "حُفظت إعدادات الخادم" else "الإعدادات غير مكتملة"
+    }
+
+    fun clearAuthMessage() { _authMessage.value = "" }
+
+    private fun runAuth(block: suspend () -> Unit) = viewModelScope.launch {
+        _authBusy.value = true
+        _authMessage.value = ""
+        runCatching { block() }.onFailure { _authMessage.value = it.message ?: "حدث خطأ" }
+        _authBusy.value = false
+    }
+
+    // ---------- الإدخال الذكي ----------
+
+    private val _quickInput = MutableStateFlow(QuickInputState())
+    val quickInput = _quickInput.asStateFlow()
+
+    fun onQuickInputChange(text: String) {
+        val parsed = if (text.isBlank()) null else SmartParser.parse(text)
+        _quickInput.value = QuickInputState(
+            text = text,
+            title = parsed?.title.orEmpty(),
+            chips = parsed?.matches.orEmpty(),
+            parsed = parsed
+        )
+    }
+
+    /** يحفظ ما فهمه المحلّل كمهمة كاملة */
+    fun commitQuickAdd() {
+        val state = _quickInput.value
+        val parsed = state.parsed ?: SmartParser.parse(state.text) ?: return
+        viewModelScope.launch {
+            val id = saveParsed(parsed)
+            _quickInput.value = QuickInputState()
+            showToast(
+                "أُضيفت: ${parsed.title}",
+                undo = { viewModelScope.launch { repo.taskById(id)?.let { repo.delete(it) } } }
+            )
+        }
+    }
+
+    /** يحوّل نتيجة الإدخال الصوتي إلى مهمة */
+    fun addFromVoice(spoken: String) {
+        val parsed = SmartParser.parse(spoken) ?: return
+        viewModelScope.launch {
+            saveParsed(parsed)
+            showToast("أُضيفت بالصوت: ${parsed.title}")
+        }
+    }
+
+    private suspend fun saveParsed(parsed: ParsedTask): Long {
+        val defaults = prefs.settings.first().defaultReminderOffsets
+        val projectId = parsed.projectName?.let { name ->
+            projects.value.firstOrNull { it.name.contains(name, true) }?.id
+                ?: repo.upsertProject(
+                    Project(
+                        name = name,
+                        colorArgb = com.almarar.mahami.ui.theme.ProjectColors.random()
+                    )
+                )
+        } ?: _projectFilter.value
+
+        return repo.upsert(
+            Task(
+                title = parsed.title,
+                dueDate = parsed.dueDate,
+                dueTime = parsed.dueTime ?: java.time.LocalTime.of(9, 0),
+                priority = parsed.priority,
+                important = parsed.important,
+                tags = parsed.tags,
+                owner = parsed.owner,
+                estimateMinutes = parsed.estimateMinutes,
+                projectId = projectId,
+                reminderOffsetsDays = if (isPro) defaults else defaults.take(1)
+            )
+        )
+    }
+
+    // ---------- الاستيراد من نص أو مشاركة ----------
+
+    private val _importCandidates = MutableStateFlow<List<ParsedTask>>(emptyList())
+    val importCandidates = _importCandidates.asStateFlow()
+
+    fun prepareImport(text: String) {
+        _importCandidates.value = SmartParser.parseMany(text)
+    }
+
+    fun clearImport() { _importCandidates.value = emptyList() }
+
+    fun confirmImport(selected: List<ParsedTask>, onDone: () -> Unit = {}) = viewModelScope.launch {
+        selected.forEach { saveParsed(it) }
+        _importCandidates.value = emptyList()
+        showToast("أُضيفت ${com.almarar.mahami.core.Ar.countTasks(selected.size)}")
+        onDone()
+    }
+
+    // ---------- أهم ثلاث مهام ----------
+
+    fun toggleMit(task: Task) = viewModelScope.launch {
+        val today = LocalDate.now()
+        val current = tasks.value.count { it.isMitFor(today) && it.status != TaskStatus.DONE }
+        if (!task.isMitFor(today) && current >= 3) {
+            showToast("اخترت ثلاث مهام بالفعل — ألغِ إحداها أولاً")
+            return@launch
+        }
+        repo.upsert(task.copy(mitDate = if (task.isMitFor(today)) null else today))
+    }
+
+    // ---------- التبعيات ----------
+
+    /** هل المهمة محجوبة بانتظار مهمة أخرى؟ */
+    fun isBlocked(task: Task): Boolean {
+        val blocker = task.dependsOn ?: return false
+        return tasks.value.firstOrNull { it.id == blocker }?.status != TaskStatus.DONE &&
+            tasks.value.any { it.id == blocker }
+    }
+
+    fun blockerOf(task: Task): Task? = task.dependsOn?.let { id -> tasks.value.firstOrNull { it.id == id } }
+
+    fun setDependency(task: Task, blockerId: Long?) = viewModelScope.launch {
+        repo.upsert(task.copy(dependsOn = blockerId))
+    }
+
+    fun toggleImportant(task: Task) = viewModelScope.launch {
+        repo.upsert(task.copy(important = !task.important))
+    }
+
+    // ---------- خطة التنفيذ ----------
+
+    fun buildExecutionPlan(task: Task) {
+        if (!isPro) {
+            requestPro(ProFeature.ADVANCED_REPORTS)
+            return
+        }
+        viewModelScope.launch {
+            val planned = Planner.applyTo(task)
+            repo.upsert(planned)
+            val days = Planner.plan(task).size
+            showToast("وُزّعت الخطوات على $days أيام")
+        }
+    }
+
+    fun clearExecutionPlan(task: Task) = viewModelScope.launch {
+        repo.upsert(task.copy(subTasks = task.subTasks.map { it.copy(targetDate = null) }))
+    }
+
+    fun stepsDueToday(): List<Pair<Task, SubTask>> = Planner.stepsDueToday(tasks.value)
+
+    // ---------- أطقم المشاريع ----------
+
+    fun createProjectKit(kit: ProjectKit, onDone: (Long) -> Unit = {}) {
+        if (!isPro && projects.value.size >= FreeLimits.PROJECTS) {
+            requestPro(ProFeature.UNLIMITED_PROJECTS)
+            return
+        }
+        viewModelScope.launch {
+            val projectId = repo.upsertProject(
+                Project(name = kit.name, colorArgb = kit.colorArgb)
+            )
+            val defaults = prefs.settings.first().defaultReminderOffsets
+            ProjectTemplates.buildTasks(kit, projectId, LocalDate.now(), defaults).forEach {
+                repo.upsert(it)
+            }
+            showToast("أُنشئ مشروع «${kit.name}» بـ ${kit.tasks.size} مهام")
+            onDone(projectId)
+        }
+    }
+
+    // ---------- التعليقات ----------
+
+    fun commentsFor(taskId: Long): Flow<List<Comment>> = repo.commentsFor(taskId)
+
+    fun addComment(taskId: Long, text: String) = viewModelScope.launch {
+        repo.addComment(taskId, text)
+    }
+
+    fun deleteComment(comment: Comment) = viewModelScope.launch { repo.deleteComment(comment) }
 
     // ---------- استعلامات مساعدة ----------
 
