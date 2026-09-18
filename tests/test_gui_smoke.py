@@ -221,3 +221,82 @@ def test_ai_page_plan_and_execute_with_mocked_model(gui, tmp_path, monkeypatch):
     inp, out, spent = ctx.ai.month_usage()
     assert inp == 500 and spent > 0
     assert "0." in page.usage.text()
+
+
+def _wait(app, cond, seconds=30):
+    t0 = time.time()
+    while not cond() and time.time() - t0 < seconds:
+        _pump(app, 100)
+    return cond()
+
+
+def test_install_waits_for_checks_and_falls_back_to_legacy(gui, tmp_path, monkeypatch):
+    app, ctx, win = gui
+    assert _wait(app, lambda: ctx.device_info is not None, 15)
+    from car_app_manager.ui.pages import install_page as ip
+    dialogs = []
+    monkeypatch.setattr(ip.InstallFailureDialog, "exec", lambda self: dialogs.append(self) or 0)
+    win.nav.setCurrentRow(2)
+    page = win.pages["install"]
+    f = tmp_path / "fail_stream.apk"; f.write_bytes(b"not really an apk")
+    page.add_paths([str(f)])
+    page._install(selected_only=False)  # clicked while the check is still running
+    from car_app_manager.i18n import tr
+    assert (page._pending_install is False and page.status.text() == tr("install.waiting_checks")) or page._installing or page.items[0].state != "checking"
+    assert _wait(app, lambda: page.items[0].state in ("installed", "failed"), 40), page.items[0].state
+    it = page.items[0]
+    assert it.state == "installed" and it.result.method_used == "legacy"
+    assert [a.method for a in it.result.attempts] == ["streamed", "legacy"]
+    assert not dialogs and not page._installing
+    assert any(r.action.startswith("pm install") for r in ctx.db.actions())
+
+
+def test_install_failure_dialog_has_hint_and_transcript(gui, tmp_path, monkeypatch):
+    app, ctx, win = gui
+    assert _wait(app, lambda: ctx.device_info is not None, 15)
+    from car_app_manager.ui.pages import install_page as ip
+    dialogs = []
+    monkeypatch.setattr(ip.InstallFailureDialog, "exec", lambda self: dialogs.append(self) or 0)
+    win.nav.setCurrentRow(2)
+    page = win.pages["install"]
+    f = tmp_path / "olddk_app.apk"; f.write_bytes(b"x")
+    page.add_paths([str(f)])
+    assert _wait(app, lambda: page.items[0].state != "checking", 30)
+    page._install(selected_only=False)
+    assert _wait(app, lambda: page.items[0].state in ("installed", "failed"), 40)
+    assert page.items[0].state == "failed" and page.items[0].result.error.code == "INSTALL_FAILED_OLDER_SDK"
+    assert len(dialogs) == 1
+    rep = dialogs[0].report_text
+    assert "INSTALL_FAILED_OLDER_SDK" in rep and "API 29" in rep and "$ " in rep
+    assert not any(a.method == "legacy" for a in page.items[0].result.attempts)  # definitive error: no fallback
+
+
+def test_diagnostics_dialog_runs(gui):
+    app, ctx, win = gui
+    assert _wait(app, lambda: ctx.device_info is not None, 15)
+    from car_app_manager.ui.diagnostics_dialog import DiagnosticsDialog
+    d = DiagnosticsDialog(ctx, win)
+    d.run()
+    assert _wait(app, lambda: d.report is not None, 30)
+    keys = {i.key: i for i in d.report.items}
+    assert keys["pm_session"].level == "ok" and keys["shell"].level == "ok" and "appguard" in keys["guards"].en
+    assert d.list.count() == len(d.report.items) and d.btn_export.isEnabled()
+    assert any(r.action == "diagnostics" for r in ctx.db.actions())
+
+
+def test_apps_batch_uninstall(gui, monkeypatch):
+    app, ctx, win = gui
+    assert _wait(app, lambda: ctx.device_info is not None, 15)
+    win.nav.setCurrentRow(1)
+    page = win.pages["apps"]
+    assert _wait(app, lambda: bool(page.apps), 20)
+    from car_app_manager.ui.pages import apps_page as ap
+    monkeypatch.setattr(ap, "confirm", lambda *a, **k: True)
+    page.table.selectAll()
+    _pump(app, 100)
+    sel = page._selected_all()
+    assert len(sel) == 3 and not page.btn_uninstall.isEnabled()  # a protected app is in the selection
+    page._uninstall_many(sel)  # protected one is filtered out inside
+    assert _wait(app, lambda: page.isEnabled() and len(page.apps) == 1, 20)
+    assert page.apps[0].package == "com.chery.usercfg"
+    assert not any("uninstall com.chery.usercfg" in r.command for r in ctx.db.actions())

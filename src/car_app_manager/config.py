@@ -79,6 +79,8 @@ class Settings:
     ai_monthly_cap_usd: float = 5.0
     ai_max_tokens_per_request: int = 2048
     virustotal_enabled: bool = False
+    install_method: str = "auto"
+    install_allow_test: bool = True
     window_geometry: str = ""
 
     _lock = threading.Lock()  # class-level; not a dataclass field

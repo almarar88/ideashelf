@@ -60,6 +60,8 @@ def test_backup_and_restore(runner, fake, tmp_path):
             return 0, "pulled", ""
         if "install" in args:
             return 0, "Success", ""
+        if any("pm path" in a for a in args):
+            return 0, "package:/data/app/x/base.apk", ""
         return 0, "", ""
     runner._executor = executor
     pm = PackageManager(runner)
@@ -73,7 +75,7 @@ def test_backup_and_restore(runner, fake, tmp_path):
     assert loaded[0].entries[0].files == ["com.a/com.a.apk"]
     results = bk.restore(Installer(runner), loaded[0], ["com.b"])
     assert len(results) == 1 and results[0].success
-    assert "install-multiple" in fake.calls[-1]
+    assert any("install-multiple" in c for c in fake.calls)
 
 
 def test_settings_roundtrip(tmp_path):

@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import logging
+import subprocess
+import sys
+import threading
 from typing import Optional
 
 from PySide6.QtCore import QObject, Signal
@@ -43,6 +46,8 @@ class AppContext(QObject):
         self.device_info: Optional[DeviceInfo] = None
         self.known_devices: list[Device] = []
         self.ai = AIService(self.settings, self.db)
+        if self.adb_path:
+            self.warm_adb_server(self.adb_path)
         set_language(self.settings.language)
         i18n().on_change(self._on_lang)
 
@@ -50,10 +55,25 @@ class AppContext(QObject):
     def set_adb_path(self, path: str, persist: bool = True) -> None:
         self.adb_path = path
         self.runner.adb_path = path or "adb"
+        if path:
+            self.warm_adb_server(path)
         if persist:
             self.settings.adb_path = path
             self.settings.save()
         self.adb_changed.emit(path)
+
+    @staticmethod
+    def warm_adb_server(adb_path: str) -> None:
+        """Start the adb daemon detached (no inherited pipes) so later captured calls never block on it."""
+        def _go():
+            try:
+                kw: dict = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "close_fds": True}
+                if sys.platform == "win32":
+                    kw["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                subprocess.Popen([adb_path, "start-server"], **kw).wait(timeout=30)
+            except Exception as e:  # noqa: BLE001
+                log.warning("adb start-server failed: %s", e)
+        threading.Thread(target=_go, daemon=True).start()
 
     @property
     def adb_available(self) -> bool:
@@ -98,7 +118,11 @@ class AppContext(QObject):
 
     def installer(self) -> Installer:
         abis = self.device_info.abis if self.device_info else []
-        return Installer(self.runner, abis)
+        return Installer(self.runner, abis, self.pm)
+
+    def install_options(self):
+        from .adb.install import InstallOptions
+        return InstallOptions(method=self.settings.install_method or "auto", allow_test=bool(self.settings.install_allow_test))
 
     # ---- language --------------------------------------------------------------------
     def set_language(self, lang: str) -> None:

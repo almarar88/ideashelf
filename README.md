@@ -86,7 +86,10 @@ python src\run_app.py
 | `INSTALL_FAILED_NO_MATCHING_ABIS` | The APK only ships x86 libraries; the T2 is arm64-v8a / armeabi-v7a. |
 | `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | The installed app was signed with a different key. Uninstall it first (Apps page). |
 | `INSTALL_FAILED_MISSING_SPLIT` | Use the complete `.apks`/`.xapk` bundle instead of a single split. |
-| Install "succeeds" but the app is missing from the launcher | Some head-unit launchers only show whitelisted apps. Use *Launch* from the Apps page. |
+| Install fails with `INSTALL_FAILED_USER_RESTRICTED`, `INSTALL_FAILED_ABORTED` or `INSTALL_FAILED_INTERNAL_ERROR` | Watch the car screen during the install: some units show a confirmation prompt. The tool automatically retries in compatibility mode (push + `pm install`); you can also force it under *Install method*. Then run **Device → Diagnostics** and read the failure dialog's hint. |
+| `INSTALL_FAILED_VERIFICATION_FAILURE` / app disappears right after install | The unit verifies or removes sideloaded apps. In **Device → Diagnostics** use *Disable ADB install verification* (reversible global setting) and retry. If a guard package is listed in the report, it may still delete apps; there is no safe workaround for that. |
+| Install "succeeds" but the app is missing from the launcher | Some head-unit launchers only show whitelisted apps. Use *Launch installed app* on the Install page or *Launch* from the Apps page. |
+| Any other failure | The failure dialog shows the exact commands and device output. Press *Copy report* and share it, together with **Diagnostics → Export report**. |
 | App list is slow | Each app needs a few adb calls; the UI stays responsive, wait for the progress bar. |
 | Where are logs / settings? | `%LOCALAPPDATA%\CarAppManager` (`settings.json`, `car_app_manager.sqlite3`, `logs\`, `backups\`, `tools\`). |
 
@@ -176,7 +179,10 @@ build.bat  CarAppManager.spec  requirements.txt  CHANGELOG.md
 | `INSTALL_FAILED_NO_MATCHING_ABIS` | التطبيق يحوي مكتبات x86 فقط؛ الشاشة arm64-v8a / armeabi-v7a. |
 | `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | التطبيق المثبّت موقّع بمفتاح مختلف. ألغِ تثبيته أولاً من صفحة التطبيقات. |
 | `INSTALL_FAILED_MISSING_SPLIT` | استخدم حزمة `.apks`/`.xapk` كاملة بدل جزء واحد. |
-| نجح التثبيت لكن التطبيق لا يظهر في المشغّل | بعض مشغّلات الشاشات تعرض تطبيقات محددة فقط. استخدم زر *تشغيل* من صفحة التطبيقات. |
+| يفشل التثبيت بـ `INSTALL_FAILED_USER_RESTRICTED` أو `INSTALL_FAILED_ABORTED` أو `INSTALL_FAILED_INTERNAL_ERROR` | راقب شاشة السيارة أثناء التثبيت: بعض الشاشات تعرض نافذة تأكيد. البرنامج يعيد المحاولة تلقائياً في وضع التوافق (push + `pm install`)، ويمكنك فرضه من *طريقة التثبيت*. ثم شغّل **الجهاز ← تشخيص** واقرأ التلميح في نافذة الفشل. |
+| `INSTALL_FAILED_VERIFICATION_FAILURE` أو يختفي التطبيق مباشرة بعد التثبيت | الشاشة تتحقق من التطبيقات الخارجية أو تحذفها. من **الجهاز ← تشخيص** استخدم *تعطيل التحقق من تثبيتات ADB* (إعداد عام قابل للإرجاع) وأعد المحاولة. إن ظهرت حزمة حماية في التقرير فقد تستمر بحذف التطبيقات، ولا يوجد حل آمن لذلك. |
+| نجح التثبيت لكن التطبيق لا يظهر في المشغّل | بعض مشغّلات الشاشات تعرض تطبيقات محددة فقط. استخدم *تشغيل التطبيق المثبّت* في صفحة التثبيت أو *تشغيل* من صفحة التطبيقات. |
+| أي فشل آخر | نافذة الفشل تعرض الأوامر ومخرجات الجهاز بالضبط. اضغط *نسخ التقرير* وأرسله مع **تشخيص ← تصدير التقرير**. |
 | قائمة التطبيقات بطيئة | كل تطبيق يحتاج عدة أوامر adb؛ الواجهة تبقى مستجيبة، انتظر شريط التقدم. |
 | أين السجلات والإعدادات؟ | `%LOCALAPPDATA%\CarAppManager` (`settings.json`، `car_app_manager.sqlite3`، `logs\`، `backups\`، `tools\`). |
 

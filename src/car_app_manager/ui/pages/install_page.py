@@ -8,17 +8,19 @@ from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent
-from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QFileDialog, QFrame, QHBoxLayout, QHeaderView, QLabel,
-                               QProgressBar, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame, QHBoxLayout, QHeaderView,
+                               QLabel, QProgressBar, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser,
+                               QVBoxLayout, QWidget)
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import QUrl
 
-from ...adb.install import InstallResult
+from ...adb.install import InstallOptions, InstallResult, METHODS
 from ...apk.bundle import APK_EXTENSIONS, BUNDLE_EXTENSIONS, extract_bundle, is_base_apk
 from ...apk.inspector import ApkInfo, Check, check_compatibility, inspect_apk, sha256_file, worst_level
 from ...i18n import tr, human_size, current_lang
 from ...workers import run_in_background
-from ..widgets.common import StatusLine, button, confirm, title_label
+from ..widgets.common import StatusLine, button, confirm, muted, title_label
 from .base import BasePage
 from .catalog_tab import CatalogTab
 from ...security.virustotal import VTResult, lookup as vt_lookup
@@ -142,10 +144,22 @@ class InstallPage(BasePage):
         self.chk_reinstall = QCheckBox(); self.chk_reinstall.setChecked(True)
         self.chk_downgrade = QCheckBox()
         self.chk_grant = QCheckBox()
-        for c in (self.chk_reinstall, self.chk_downgrade, self.chk_grant):
+        self.chk_test = QCheckBox(); self.chk_test.setChecked(bool(self.ctx.settings.install_allow_test))
+        for c in (self.chk_reinstall, self.chk_downgrade, self.chk_grant, self.chk_test):
             opts.addWidget(c)
         opts.addStretch(1)
         self.root.addLayout(opts)
+        mrow = QHBoxLayout()
+        self.lbl_method = QLabel()
+        self.cmb_method = QComboBox()
+        for m in METHODS:
+            self.cmb_method.addItem("", m)
+        idx = self.cmb_method.findData(self.ctx.settings.install_method or "auto")
+        self.cmb_method.setCurrentIndex(max(0, idx))
+        self.cmb_method.currentIndexChanged.connect(self._persist_options)
+        self.chk_test.toggled.connect(self._persist_options)
+        mrow.addWidget(self.lbl_method); mrow.addWidget(self.cmb_method); mrow.addStretch(1)
+        self.root.addLayout(mrow)
 
         split = QSplitter(Qt.Vertical)
         self.table = QTableWidget(0, len(COLS))
@@ -168,16 +182,22 @@ class InstallPage(BasePage):
         bottom = QHBoxLayout()
         self.btn_install_sel = button("", slot=lambda: self._install(selected_only=True))
         self.btn_install = button("", "primary", lambda: self._install(selected_only=False))
+        self.btn_launch_last = button("", slot=self._launch_last); self.btn_launch_last.setVisible(False)
         bottom.addWidget(self.btn_install_sel)
         bottom.addWidget(self.btn_install)
+        bottom.addWidget(self.btn_launch_last)
         self.progress = QProgressBar(); self.progress.setVisible(False)
         bottom.addWidget(self.progress, 1)
         self.root.addLayout(bottom)
         self.status = StatusLine()
         self.root.addWidget(self.status)
+        self.launcher_note = muted("")
+        self.root.addWidget(self.launcher_note)
 
         self.items: list[Item] = []
         self._installing = False
+        self._pending_install: Optional[bool] = None  # selected_only flag while checks finish
+        self._last_installed_package = ""
         self.ctx.device_info_changed.connect(lambda _i: self._recheck_all())
 
     def retranslate(self) -> None:
@@ -195,6 +215,12 @@ class InstallPage(BasePage):
         self.chk_grant.setText(tr("install.grant"))
         self.btn_install_sel.setText(tr("install.run_selected"))
         self.btn_install.setText(tr("install.run"))
+        self.btn_launch_last.setText(tr("install.launch_last"))
+        self.launcher_note.setText(tr("install.launcher_note"))
+        self.lbl_method.setText(tr("install.method"))
+        for i in range(self.cmb_method.count()):
+            self.cmb_method.setItemText(i, tr("install.method." + self.cmb_method.itemData(i)))
+        self.chk_test.setText(tr("install.allow_test"))
         self.table.setHorizontalHeaderLabels([tr(f"install.col.{c}") for c in COLS])
         self._refill()
         self._show_details()
@@ -245,12 +271,14 @@ class InstallPage(BasePage):
             self._show_details()
             if self.ctx.settings.virustotal_enabled and it.info and it.info.sha256 and it.vt is None:
                 self._vt_check(it)
+            self._maybe_run_pending()
 
         def fail(msg):
             it.info = ApkInfo(path=it.path, parse_error=msg)
             it.checks = [Check("error", "parse", msg, msg)]
             it.state = "error"
             self._refill()
+            self._maybe_run_pending()
 
         run_in_background(inspect_path, item.path, sdk, abis, pm, on_done=done, on_error=fail)
 
@@ -362,6 +390,29 @@ class InstallPage(BasePage):
             html.append(f"<br><b>{tr('install.col.status')}:</b> {it.result.message(lang)}<br><pre>{it.result.raw}</pre>")
         self.details.setHtml("".join(html))
 
+    def _maybe_run_pending(self) -> None:
+        if self._pending_install is None or self._installing:
+            return
+        if any(t.state == "checking" for t in self.items):
+            return
+        sel = self._pending_install
+        self._pending_install = None
+        self._install(selected_only=sel)
+
+    def _persist_options(self, *_a) -> None:
+        self.ctx.settings.install_method = self.cmb_method.currentData() or "auto"
+        self.ctx.settings.install_allow_test = self.chk_test.isChecked()
+        self.ctx.settings.save()
+
+    def _launch_last(self) -> None:
+        pkg = self._last_installed_package
+        if not pkg or not self.ctx.device_ready:
+            return
+        self.status.set(tr("working"))
+        run_in_background(self.ctx.pm.launch, pkg,
+                          on_done=lambda r: self.status.set(tr("apps.launched") if r.ok else r.output, "ok" if r.ok else "error"),
+                          on_error=lambda m: self.status.set(m, "error"))
+
     # ---- virustotal -----------------------------------------------------------------
     def _vt_text(self, it: Item) -> str:
         if it.vt_checking:
@@ -416,7 +467,12 @@ class InstallPage(BasePage):
             self.status.set(tr("no_device") if not self.ctx.current_device else tr("device_not_ready"), "warn")
             return
         todo = self._selected_items() if selected_only else list(self.items)
-        todo = [t for t in todo if t.state != "checking"]
+        if any(t.state == "checking" for t in todo):
+            self._pending_install = selected_only
+            self.status.set(tr("install.waiting_checks"), "warn")
+            return
+        self._pending_install = None
+        todo = [t for t in todo if t.state not in ("installing",)]
         if not todo:
             return
         if any(t.state == "error" for t in todo):
@@ -433,8 +489,9 @@ class InstallPage(BasePage):
         self.progress.setValue(0)
         self.btn_install.setEnabled(False)
         self.btn_install_sel.setEnabled(False)
-        opts = dict(reinstall=self.chk_reinstall.isChecked(), downgrade=self.chk_downgrade.isChecked(),
-                    grant_permissions=self.chk_grant.isChecked())
+        options = InstallOptions(reinstall=self.chk_reinstall.isChecked(), downgrade=self.chk_downgrade.isChecked(),
+                                 grant_permissions=self.chk_grant.isChecked(), allow_test=self.chk_test.isChecked(),
+                                 method=self.cmb_method.currentData() or "auto")
         installer = self.ctx.installer()
         device = self.ctx.runner.serial or ""
 
@@ -444,7 +501,7 @@ class InstallPage(BasePage):
                 progress(("start", i, it))
                 pkg = it.info.package if it.info else ""
                 preexisting = it.installed_version is not None
-                res = installer.install(it.path, package=pkg, **opts)
+                res = installer.install(it.path, package=pkg, options=options)
                 if res.success and (res.package or pkg):
                     p = res.package or pkg
                     self.ctx.db.track_install(p, label=it.info.label if it.info else "",
@@ -475,6 +532,14 @@ class InstallPage(BasePage):
             self.status.set(tr("install.summary", ok=ok, fail=len(results) - ok), "ok" if ok == len(results) else "warn")
             self._refill()
             self.ctx.logger.note("batch install finished", f"{ok}/{len(results)} succeeded", success=ok == len(results), device=device)
+            good = [(it, r) for it, r in results if r.success and (r.package or (it.info and it.info.package))]
+            if good:
+                it, r = good[-1]
+                self._last_installed_package = r.package or it.info.package
+                self.btn_launch_last.setVisible(True)
+            failed = [(it, r) for it, r in results if not r.success]
+            if failed:
+                InstallFailureDialog(self, failed).exec()
 
         def on_error(msg):
             self._installing = False
@@ -483,3 +548,39 @@ class InstallPage(BasePage):
             self._refill()
 
         run_in_background(work, on_done=on_done, on_error=on_error, on_progress=on_progress)
+
+
+class InstallFailureDialog(QDialog):
+    """Explains each failure: cause, what to do, and the exact commands/output. Copy button for support."""
+
+    def __init__(self, parent, failed: list[tuple[Item, InstallResult]]):
+        super().__init__(parent)
+        self.setWindowTitle(tr("install.failed_title"))
+        self.resize(760, 520)
+        lang = current_lang()
+        lay = QVBoxLayout(self)
+        intro = QLabel(tr("install.failed_intro", n=len(failed))); intro.setWordWrap(True)
+        lay.addWidget(intro)
+        self.view = QTextBrowser(); self.view.setOpenExternalLinks(True)
+        parts, plain = [], []
+        for it, r in failed:
+            name = os.path.basename(it.path)
+            parts.append(f"<h3>{name}</h3><p><b style='color:{LEVEL_COLORS['error']}'>{r.message(lang)}</b></p>")
+            parts.append(f"<p><b>{tr('install.hint')}:</b> {r.hint(lang)}</p>")
+            parts.append(f"<p><b>{tr('install.transcript')}:</b></p><pre style='white-space:pre-wrap'>{_esc(r.transcript())}</pre><hr>")
+            plain.append(f"== {name}\n{r.message('en')} / {r.message('ar')}\n{r.hint('en')}\n\n{r.transcript()}\n")
+        self.view.setHtml("".join(parts))
+        self.report_text = "\n".join(plain)
+        lay.addWidget(self.view, 1)
+        row = QHBoxLayout()
+        self.copy_status = StatusLine()
+        row.addWidget(button(tr("install.copy"), slot=self._copy)); row.addWidget(self.copy_status, 1); row.addWidget(button(tr("close"), "primary", self.accept))
+        lay.addLayout(row)
+
+    def _copy(self) -> None:
+        QGuiApplication.clipboard().setText(self.report_text)
+        self.copy_status.set(tr("install.copied"), "ok")
+
+
+def _esc(s: str) -> str:
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

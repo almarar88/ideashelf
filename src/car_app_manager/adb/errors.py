@@ -74,6 +74,80 @@ DEVICE_ERRORS: dict[str, tuple[str, str]] = {
 
 _FAILURE_RE = re.compile(r"((?:INSTALL|DELETE)_(?:PARSE_)?FAILED_[A-Z_]+)")
 
+# Errors where retrying with another install method cannot help.
+DEFINITIVE_INSTALL_CODES: frozenset[str] = frozenset({
+    "INSTALL_FAILED_OLDER_SDK", "INSTALL_FAILED_NEWER_SDK", "INSTALL_FAILED_NO_MATCHING_ABIS",
+    "INSTALL_FAILED_CPU_ABI_INCOMPATIBLE", "INSTALL_FAILED_UPDATE_INCOMPATIBLE", "INSTALL_FAILED_VERSION_DOWNGRADE",
+    "INSTALL_FAILED_INSUFFICIENT_STORAGE", "INSTALL_FAILED_MISSING_SHARED_LIBRARY", "INSTALL_FAILED_MISSING_SPLIT",
+    "INSTALL_FAILED_INVALID_APK", "INSTALL_FAILED_DUPLICATE_PACKAGE", "INSTALL_FAILED_CONFLICTING_PROVIDER",
+    "INSTALL_FAILED_SHARED_USER_INCOMPATIBLE", "INSTALL_FAILED_BAD_SIGNATURE", "INSTALL_FAILED_NO_CERTIFICATES",
+    "INSTALL_FAILED_MISSING_FEATURE", "INSTALL_FAILED_TEST_ONLY", "INSTALL_FAILED_INCOMPATIBLE_SIGNATURE",
+    "INSTALL_PARSE_FAILED_NOT_APK", "INSTALL_PARSE_FAILED_BAD_MANIFEST", "INSTALL_PARSE_FAILED_NO_CERTIFICATES",
+    "INSTALL_PARSE_FAILED_INCONSISTENT_CERTIFICATES", "INSTALL_PARSE_FAILED_CERTIFICATE_ENCODING",
+    "INSTALL_PARSE_FAILED_BAD_PACKAGE_NAME", "INSTALL_PARSE_FAILED_MANIFEST_MALFORMED", "INSTALL_PARSE_FAILED_MANIFEST_EMPTY",
+})
+
+# Practical next steps per error (ar, en). Shown in the failure dialog.
+HINTS: dict[str, tuple[str, str]] = {
+    "INSTALL_FAILED_USER_RESTRICTED": (
+        "انظر إلى شاشة السيارة فوراً: بعض الشاشات تعرض نافذة «السماح بالتثبيت» يجب الموافقة عليها خلال ثوانٍ. إن لم تظهر، جرّب وضع التوافق (push + pm install) من خيارات التثبيت، ثم شغّل «تشخيص» من صفحة الجهاز.",
+        "Look at the car screen now: some units show an “allow install” prompt that must be accepted within seconds. If none appears, try compatibility mode (push + pm install) in the install options, then run Diagnostics on the Device page."),
+    "INSTALL_FAILED_VERIFICATION_FAILURE": (
+        "نظام السيارة يتحقق من التطبيقات القادمة عبر ADB ويرفضها. من صفحة الجهاز ← تشخيص يمكنك تعطيل هذا التحقق مؤقتاً (إعداد نظام قابل للإرجاع)، ثم أعد المحاولة.",
+        "The unit verifies apps installed over ADB and rejected this one. On the Device page → Diagnostics you can temporarily disable that verification (a reversible system setting), then retry."),
+    "INSTALL_FAILED_VERIFICATION_TIMEOUT": (
+        "انتهت مهلة التحقق. تأكد أن السيارة متصلة بالإنترنت أو عطّل التحقق من صفحة التشخيص وأعد المحاولة.",
+        "Verification timed out. Make sure the car has internet, or disable verification from Diagnostics and retry."),
+    "INSTALL_FAILED_INTERNAL_ERROR": (
+        "خطأ داخلي في نظام السيارة. جرّب وضع التوافق، وإن استمر أعد تشغيل الشاشة ثم حاول مرة أخرى.",
+        "Internal error in the car's system. Try compatibility mode; if it persists, reboot the head unit and retry."),
+    "INSTALL_FAILED_ABORTED": (
+        "أُلغي التثبيت من جهة السيارة (غالباً نافذة تأكيد رُفضت أو أُغلقت). أعد المحاولة وراقب شاشة السيارة، أو استخدم وضع التوافق.",
+        "The car side aborted the install (usually a confirmation dialog that was dismissed). Retry while watching the car screen, or use compatibility mode."),
+    "INSTALL_FAILED_INSUFFICIENT_STORAGE": (
+        "حرّر مساحة على الشاشة (احذف تطبيقات أو ملفات) ثم أعد المحاولة.",
+        "Free up space on the unit (remove apps or files) and retry."),
+    "INSTALL_FAILED_OLDER_SDK": (
+        "ابحث عن إصدار أقدم من التطبيق يدعم أندرويد 10 (API 29) أو أقل.",
+        "Find an older build of the app that supports Android 10 (API 29) or lower."),
+    "INSTALL_FAILED_NO_MATCHING_ABIS": (
+        "هذا الملف لا يحوي مكتبات arm64-v8a/armeabi-v7a. نزّل نسخة arm64 من المصدر الرسمي.",
+        "This file has no arm64-v8a/armeabi-v7a libraries. Download the arm64 build from the official source."),
+    "INSTALL_FAILED_UPDATE_INCOMPATIBLE": (
+        "النسخة المثبّتة موقّعة بمفتاح مختلف. ألغِ تثبيت التطبيق من صفحة التطبيقات (ستُحذف بياناته) ثم ثبّت من جديد.",
+        "The installed copy is signed with a different key. Uninstall it from the Apps page (its data will be lost) and install again."),
+    "INSTALL_FAILED_VERSION_DOWNGRADE": (
+        "فعّل خيار «السماح بالرجوع لنسخة أقدم (-d)» في خيارات التثبيت.",
+        "Enable “Allow downgrade (-d)” in the install options."),
+    "INSTALL_FAILED_MISSING_SPLIT": (
+        "ثبّت الحزمة الكاملة (.apks/.xapk) بدل ملف split واحد.",
+        "Install the complete bundle (.apks/.xapk) instead of a single split."),
+    "INSTALL_FAILED_INVALID_APK": (
+        "الملف تالف أو ليس APK. أعد تنزيله وتحقق من بصمة SHA-256.",
+        "The file is corrupt or not an APK. Re-download it and check the SHA-256."),
+    "INSTALL_FAILED_TEST_ONLY": (
+        "فعّل خيار «السماح بحزم الاختبار (-t)».",
+        "Enable “Allow test packages (-t)”."),
+    "NOT_FOUND_AFTER_INSTALL": (
+        "أبلغ النظام بالنجاح لكن الحزمة غير موجودة بعد التثبيت. غالباً تطبيق حماية في السيارة يحذف التطبيقات المثبّتة خارجياً. شغّل التشخيص وأرسل التقرير.",
+        "The system reported success but the package is not present afterwards. A protection app on the unit is probably removing sideloaded apps. Run Diagnostics and share the report."),
+    "PUSH_FAILED": (
+        "تعذّر نسخ الملف إلى الشاشة. تحقق من المساحة والاتصال (الكابل / Wi-Fi) وأعد المحاولة.",
+        "Could not copy the file to the unit. Check storage and the connection (cable / Wi-Fi) and retry."),
+    "no_device": ("وصّل السيارة (USB أو Wi-Fi) واختر الجهاز من صفحة الجهاز.", "Connect the car (USB or Wi-Fi) and select it on the Device page."),
+    "unauthorized": ("وافق على طلب تصحيح USB الظاهر على شاشة السيارة ثم أعد المحاولة.", "Accept the USB debugging prompt on the car screen and retry."),
+    "offline": ("افصل الكابل وأعد توصيله أو أعد تشغيل خادم ADB من صفحة الجهاز.", "Unplug/replug the cable or restart the ADB server from the Device page."),
+    "timeout": ("انتهت المهلة. لملفات كبيرة استخدم USB بدل Wi-Fi، وراقب شاشة السيارة لأي نافذة تأكيد.", "Timed out. For large files use USB instead of Wi-Fi and watch the car screen for a confirmation prompt."),
+}
+GENERIC_HINT = (
+    "لم يُتعرَّف على سبب محدد. انسخ المخرجات أدناه وشغّل «تشخيص» من صفحة الجهاز ثم صدّر التقرير. جرّب أيضاً وضع التوافق من خيارات التثبيت.",
+    "No specific cause recognized. Copy the output below, run Diagnostics on the Device page and export the report. Also try compatibility mode in the install options.")
+
+
+def hint_for(code: str, lang: str) -> str:
+    pair = HINTS.get(code, GENERIC_HINT)
+    return pair[0] if lang == "ar" else pair[1]
+
 
 @dataclass
 class ExplainedError:
@@ -84,6 +158,13 @@ class ExplainedError:
 
     def text(self, lang: str) -> str:
         return self.ar if lang == "ar" else self.en
+
+    def hint(self, lang: str) -> str:
+        return hint_for(self.code, lang)
+
+    @property
+    def definitive(self) -> bool:
+        return self.code in DEFINITIVE_INSTALL_CODES
 
 
 def parse_failure(output: str) -> Optional[ExplainedError]:

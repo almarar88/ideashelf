@@ -2,6 +2,19 @@
 
 All notable changes to Car App Manager are documented here.
 
+## [0.5.0] - Install reliability & diagnostics
+### Fixed
+- Pressing Install while files were still being checked was silently ignored. The install now waits for the checks and starts automatically.
+- The adb server is started once, detached, at startup so no captured call can block on a freshly spawned daemon (Windows).
+### Added
+- **Install engine v2** with automatic fallback: streamed `adb install` first, then compatibility mode (`adb push` to `/data/local/tmp` or `/sdcard/Download` + `pm install`; a `pm install-create/write/commit` session for split bundles). Definitive errors (wrong SDK/ABI/signature/space, …) are not retried. `-t` (allow test packages) is on by default. Method selectable: auto / streamed / compatibility.
+- **Post-install verification**: after a reported success the package is looked up with `pm path`; a missing package is reported as `NOT_FOUND_AFTER_INSTALL` (typical of guard apps on head units).
+- **Failure dialog** for every failed file: cause in Arabic/English, a concrete next step per error code (e.g. watch the car screen for a confirmation prompt, disable ADB install verification, use compatibility mode), and the exact commands with the device output; one-click copy of the report.
+- **Diagnostics dialog** (Device page): adb, shell access, build info, free space, users, `verifier_verify_adb_installs` / `package_verifier_enable`, temp dir writability, package-manager session test, `cmd package` availability, adb features, and a scan for guard/protection packages. Export report. Reversible **Disable / Re-enable ADB install verification** buttons (global settings only, no system app touched, explicit confirmation, logged).
+- "Launch installed app" button after a successful install plus a note that some head-unit launchers hide sideloaded apps.
+- Apps page: multi-select with batch uninstall (protected packages are skipped) and batch export; catalog names used as labels.
+- Tests: fallback path, definitive-error no-retry, sdcard push fallback, verification failure, split sessions (commit and abandon), diagnostics report, GUI tests for the pending install, failure dialog, diagnostics dialog and batch uninstall (92 tests).
+
 ## [0.4.0] - Phase 4 (AI features, Claude API)
 ### Added
 - **AI Assistant page** (official `anthropic` Python SDK, the user's own key stored in Windows Credential Manager via `keyring`; never written to disk, logs or the repo):

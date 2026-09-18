@@ -15,6 +15,8 @@ if "df -k" in line:
     print("Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block/dm-4 60000000 20000000 40000000 34% /data"); sys.exit(0)
 if "wlan0" in line:
     print("    inet 192.168.1.50/24 brd 192.168.1.255 scope global wlan0"); sys.exit(0)
+if "pm list packages" in line and "-s" not in line and "-3" not in line:
+    print("package:com.android.settings\npackage:com.chery.appguard\npackage:com.spotify.music"); sys.exit(0)
 if "pm list packages -s" in line:
     print("package:com.android.systemui\npackage:com.chery.hmi\npackage:com.oem.radio"); sys.exit(0)
 if "pm list packages -3" in line:
@@ -29,7 +31,38 @@ if "stat -c" in line:
         print(f"12345678 {p}")
     sys.exit(0)
 if a[:1] == ["install"] or a[:1] == ["install-multiple"]:
+    target = " ".join(a)
+    if "olddk" in target:
+        print("Performing Streamed Install"); print("adb: failed to install: Failure [INSTALL_FAILED_OLDER_SDK: Requires development platform 33 but this is a development platform 29]", file=sys.stderr); sys.exit(1)
+    if "fail" in target:
+        print("Performing Streamed Install"); print("adb: failed to install: Failure [INSTALL_FAILED_INTERNAL_ERROR: Permission Denied]", file=sys.stderr); sys.exit(1)
     print("Performing Streamed Install\nSuccess"); sys.exit(0)
+if "pm install-create" in line:
+    print("Success: created install session [42]"); sys.exit(0)
+if "pm install-write" in line or "pm install-commit" in line or "pm install-abandon" in line:
+    print("Success"); sys.exit(0)
+if "pm install " in line:
+    print("Success"); sys.exit(0)
+if "echo ok" in line:
+    print("ok"); sys.exit(0)
+if "settings get global" in line:
+    print("1"); sys.exit(0)
+if "settings put global" in line:
+    sys.exit(0)
+if "pm list users" in line:
+    print("Users:\n\tUserInfo{0:Owner:c13} running"); sys.exit(0)
+if "am get-current-user" in line:
+    print("0"); sys.exit(0)
+if "touch /data/local/tmp" in line:
+    print("writable"); sys.exit(0)
+if "cmd package help" in line:
+    print("Package manager (package) commands:\n  install [-r] ..."); sys.exit(0)
+if a[:1] == ["features"]:
+    print("shell_v2,cmd,stat_v2,abb_exec"); sys.exit(0)
+if a[:1] == ["push"]:
+    print("1 file pushed, 0 skipped."); sys.exit(0)
+if a[:1] == ["start-server"]:
+    sys.exit(0)
 if a[:1] == ["uninstall"]:
     print("Success"); sys.exit(0)
 if a[:1] == ["pull"]:

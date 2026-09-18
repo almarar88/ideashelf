@@ -31,7 +31,7 @@ class AppsPage(BasePage):
 
         self.table = QTableWidget(0, len(COLS))
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
@@ -115,10 +115,17 @@ class AppsPage(BasePage):
         self.btn_refresh.setEnabled(True)
         ours = self.ctx.db.tracked_packages()
         tracked = {t.package: t for t in self.ctx.db.tracked_apps()}
+        try:
+            from ...catalog import Catalog
+            names = {e.package: e.name for e in Catalog().entries if e.package}
+        except Exception:
+            names = {}
         for a in apps:
             a.installed_by_us = a.package in ours
             if not a.label and a.package in tracked and tracked[a.package].label:
                 a.label = tracked[a.package].label
+            if not a.label and a.package in names:
+                a.label = names[a.package]
         self.apps = apps
         self.status.set("")
         self._fill()
@@ -156,26 +163,38 @@ class AppsPage(BasePage):
             text = " ".join((self.table.item(r, c).text() if self.table.item(r, c) else "") for c in (0, 1)).lower()
             self.table.setRowHidden(r, bool(q) and q not in text)
 
-    def _selected(self) -> AppInfo | None:
+    def _selected_all(self) -> list[AppInfo]:
         rows = self.table.selectionModel().selectedRows() if self.table.selectionModel() else []
-        if not rows:
-            return None
-        pkg = self.table.item(rows[0].row(), 0).data(Qt.UserRole + 1)
-        return next((a for a in self.apps if a.package == pkg), None)
+        pkgs = [self.table.item(r.row(), 0).data(Qt.UserRole + 1) for r in rows]
+        return [a for a in self.apps if a.package in pkgs]
+
+    def _selected(self) -> AppInfo | None:
+        sel = self._selected_all()
+        return sel[0] if sel else None
 
     def _update_buttons(self) -> None:
-        a = self._selected()
+        sel = self._selected_all()
+        a = sel[0] if sel else None
         ok = a is not None and self.ctx.device_ready
-        modifiable = ok and not a.protected
-        self.btn_launch.setEnabled(ok)
+        modifiable = ok and not any(x.protected for x in sel)
+        self.btn_launch.setEnabled(ok and len(sel) == 1)
         self.btn_export.setEnabled(ok)
-        for b in (self.btn_stop, self.btn_clear, self.btn_uninstall):
-            b.setEnabled(modifiable)
-        if a is not None and a.protected:
+        for b in (self.btn_stop, self.btn_clear):
+            b.setEnabled(modifiable and len(sel) == 1)
+        self.btn_uninstall.setEnabled(modifiable)
+        if len(sel) > 1:
+            self.count_lbl.set(tr("apps.selected", n=len(sel)))
+        else:
+            self.count_lbl.set(tr("apps.count", n=len(self.apps)))
+        if a is not None and any(x.protected for x in sel):
             self.status.set(tr("apps.protected_msg"), "warn")
 
     # ---- actions ----------------------------------------------------------------------
     def _act(self, action: str) -> None:
+        sel = self._selected_all()
+        if action == "uninstall" and len(sel) > 1:
+            self._uninstall_many(sel)
+            return
         a = self._selected()
         if not a:
             return
@@ -210,6 +229,39 @@ class AppsPage(BasePage):
 
         run_in_background(self._safe_call, fn, a.package, on_done=done, on_error=fail)
 
+    def _uninstall_many(self, apps: list[AppInfo]) -> None:
+        apps = [a for a in apps if not a.protected]
+        if not apps:
+            return
+        listing = "\n".join(f"• {a.display_name} ({a.package})" for a in apps)
+        if not confirm(self, tr("apps.confirm.uninstall_many", n=len(apps), list=listing), danger=True):
+            return
+        self.ctx.logger.note("user confirmed batch uninstall", ", ".join(a.package for a in apps), device=self.ctx.runner.serial or "")
+        self.setEnabled(False)
+        self.status.set(tr("working"))
+
+        def work(progress):
+            out = []
+            for a in apps:
+                r = self.ctx.pm.uninstall(a.package)
+                if r.ok:
+                    self.ctx.db.untrack(a.package)
+                out.append((a, r))
+                progress(a.package)
+            return out
+
+        def done(results):
+            self.setEnabled(True)
+            ok = sum(1 for _, r in results if r.ok)
+            removed = {a.package for a, r in results if r.ok}
+            self.apps = [x for x in self.apps if x.package not in removed]
+            self._fill()
+            fails = [f"{a.package}: {explain(r.output, current_lang())}" for a, r in results if not r.ok]
+            self.status.set(tr("apps.batch_done", ok=ok, fail=len(results) - ok) + ("\n" + "\n".join(fails) if fails else ""), "ok" if not fails else "warn")
+
+        run_in_background(work, on_done=done, on_error=lambda m: (self.setEnabled(True), self.status.set(m, "error")),
+                          on_progress=lambda pkg: self.status.set(f"{tr('apps.uninstall')}: {pkg}"))
+
     @staticmethod
     def _safe_call(fn, package):
         try:
@@ -218,13 +270,19 @@ class AppsPage(BasePage):
             raise RuntimeError(tr("apps.protected_msg")) from e
 
     def _export(self) -> None:
-        a = self._selected()
-        if not a:
+        sel = self._selected_all()
+        if not sel:
             return
         d = QFileDialog.getExistingDirectory(self, tr("apps.export_dir"))
         if not d:
             return
         self.status.set(tr("working"))
-        run_in_background(self.ctx.pm.export_apk, a.package, d, a.apk_paths,
-                          on_done=lambda files: self.status.set(tr("apps.exported", n=len(files), dir=d), "ok" if files else "error"),
+
+        def work():
+            files = []
+            for a in sel:
+                files += self.ctx.pm.export_apk(a.package, d, a.apk_paths)
+            return files
+
+        run_in_background(work, on_done=lambda files: self.status.set(tr("apps.exported", n=len(files), dir=d), "ok" if files else "error"),
                           on_error=lambda m: self.status.set(m, "error"))

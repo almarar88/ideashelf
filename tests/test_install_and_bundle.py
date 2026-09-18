@@ -67,7 +67,7 @@ def test_install_apk_success(runner, fake, tmp_path):
     apk = tmp_path / "a.apk"; apk.write_bytes(b"x")
     fake.when("install", out="Performing Streamed Install\nSuccess\n")
     res = Installer(runner).install(apk)
-    assert res.success and fake.calls[-1][3:] == ["install", "-r", str(apk)]
+    assert res.success and res.method_used == "streamed" and fake.calls[-1][3:] == ["install", "-r", "-t", str(apk)]
 
 
 def test_install_apk_failure_parsed(runner, fake, tmp_path):
@@ -86,10 +86,11 @@ def test_install_bundle_uses_install_multiple_and_pushes_obb(runner, fake, tmp_p
                extra={"Android/obb/com.game/main.obb": b"obb"})
     fake.when("install-multiple", out="Success\n")
     fake.when("push", out="1 file pushed")
+    fake.when("pm path com.game", out="package:/data/app/com.game/base.apk\n")
     res = Installer(runner, device_abis=["arm64-v8a"]).install(b)
     assert res.success and res.package == "com.game"
     im = next(c for c in fake.calls if "install-multiple" in c)
-    names = [Path(x).name for x in im[im.index("install-multiple") + 2:]]
+    names = [Path(x).name for x in im[im.index("install-multiple") + 1:] if x.endswith(".apk")]
     assert names == ["com.game.apk", "config.arm64_v8a.apk"]
     push = next(c for c in fake.calls if "push" in c)
     assert push[-1] == "/sdcard/Android/obb/com.game/main.obb"
@@ -100,3 +101,73 @@ def test_install_bundle_empty(runner, fake, tmp_path):
     _mk_bundle(b, [])
     res = Installer(runner).install(b)
     assert not res.success and res.error.code == "EMPTY_BUNDLE"
+
+
+def test_install_falls_back_to_legacy(runner, fake, tmp_path):
+    apk = tmp_path / "a.apk"; apk.write_bytes(b"x" * 10)
+    fake.when("TESTSERIAL install -r -t", rc=1, err="adb: failed to install a.apk: Failure [INSTALL_FAILED_INTERNAL_ERROR]")
+    fake.when("push", out="1 file pushed")
+    fake.when("pm install -r -t /data/local/tmp/cam_a.apk", out="Success\n")
+    fake.when("pm path com.a", out="package:/data/app/a/base.apk\n")
+    res = Installer(runner).install(apk, package="com.a")
+    assert res.success and res.method_used == "legacy" and res.verified
+    assert [a.method for a in res.attempts] == ["streamed", "legacy"]
+    assert any("rm -f /data/local/tmp/cam_a.apk" in " ".join(c) for c in fake.calls)
+    assert "INSTALL_FAILED_INTERNAL_ERROR" in res.transcript() and "pm install" in res.transcript()
+
+
+def test_definitive_error_does_not_retry(runner, fake, tmp_path):
+    apk = tmp_path / "a.apk"; apk.write_bytes(b"x")
+    fake.when("install", rc=1, err="Failure [INSTALL_FAILED_OLDER_SDK]")
+    res = Installer(runner).install(apk)
+    assert not res.success and res.error.code == "INSTALL_FAILED_OLDER_SDK" and res.error.definitive
+    assert not fake.called("push") and "API 29" in res.hint("en")
+
+
+def test_legacy_push_falls_back_to_sdcard(runner, fake, tmp_path):
+    apk = tmp_path / "a.apk"; apk.write_bytes(b"x")
+    fake.when("pm install -r -t /sdcard/Download/cam_a.apk", out="Success")
+    fake.when("/data/local/tmp/cam_a.apk", rc=1, err="adb: error: failed to copy: remote couldn't create file: Permission denied")
+    fake.when("push", out="1 file pushed")
+    from car_app_manager.adb.install import InstallOptions
+    res = Installer(runner).install(apk, options=InstallOptions(method="legacy"))
+    assert res.success and res.method_used == "legacy"
+
+
+def test_verify_detects_missing_package(runner, fake, tmp_path):
+    apk = tmp_path / "a.apk"; apk.write_bytes(b"x")
+    fake.when("install", out="Success\n")
+    fake.when("pm path com.gone", out="")
+    res = Installer(runner).install(apk, package="com.gone")
+    assert not res.success and res.error.code == "NOT_FOUND_AFTER_INSTALL"
+    assert "Diagnostics" in res.hint("en")
+
+
+def test_legacy_session_for_splits(runner, fake, tmp_path):
+    base = tmp_path / "base.apk"; base.write_bytes(b"b" * 5)
+    split = tmp_path / "split_config.arm64_v8a.apk"; split.write_bytes(b"s" * 3)
+    fake.when("install-multiple", rc=1, err="Failure [INSTALL_FAILED_INTERNAL_ERROR]")
+    fake.when("push", out="1 file pushed")
+    fake.when("pm install-create", out="Success: created install session [77]\n")
+    fake.when("pm install-write", out="Success: streamed 5 bytes\n")
+    fake.when("pm install-commit 77", out="Success\n")
+    fake.when("pm path com.s", out="package:/data/app/s/base.apk\n")
+    res = Installer(runner, ["arm64-v8a"]).install_multiple([base, split], package="com.s")
+    assert res.success and res.method_used == "legacy"
+    create = next(c for c in fake.calls if "pm install-create" in " ".join(c))
+    assert "-S 8" in " ".join(create)
+    writes = [c for c in fake.calls if "pm install-write" in " ".join(c)]
+    assert len(writes) == 2 and "77" in " ".join(writes[0])
+    assert any("rm -rf /data/local/tmp/cam_split" in " ".join(c) for c in fake.calls)
+
+
+def test_legacy_session_abandons_on_write_failure(runner, fake, tmp_path):
+    base = tmp_path / "base.apk"; base.write_bytes(b"b")
+    split = tmp_path / "split_config.ar.apk"; split.write_bytes(b"s")
+    fake.when("push", out="1 file pushed")
+    fake.when("pm install-create", out="Success: created install session [5]\n")
+    fake.when("pm install-write", rc=1, out="Error: Failure [INSTALL_FAILED_INVALID_APK]")
+    from car_app_manager.adb.install import InstallOptions
+    res = Installer(runner).install_multiple([base, split], package="com.s", options=InstallOptions(method="legacy"))
+    assert not res.success and res.error.code == "INSTALL_FAILED_INVALID_APK"
+    assert fake.called("pm install-abandon 5") and not fake.called("pm install-commit")

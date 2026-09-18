@@ -28,11 +28,13 @@ class DevicePage(BasePage):
         self.chk_auto = QCheckBox()
         self.chk_auto.setChecked(True)
         self.btn_restart = button("", slot=self._restart_adb)
+        self.btn_diag = button("", slot=self._diagnostics)
         row.addWidget(self.lbl_select)
         row.addWidget(self.combo, 1)
         row.addWidget(self.btn_refresh)
         row.addWidget(self.chk_auto)
         row.addWidget(self.btn_restart)
+        row.addWidget(self.btn_diag)
         tl.addLayout(row)
         self.status = StatusLine()
         tl.addWidget(self.status)
@@ -106,6 +108,7 @@ class DevicePage(BasePage):
         self.btn_refresh.setText(tr("refresh"))
         self.chk_auto.setText(tr("device.auto"))
         self.btn_restart.setText(tr("device.restart_adb"))
+        self.btn_diag.setText(tr("diag.button"))
         for k, lbl in self.info_keys.items():
             lbl.setText(tr(f"device.{k}"))
         self.wifi_group.setTitle(tr("device.wifi_group"))
@@ -289,6 +292,13 @@ class DevicePage(BasePage):
         if it:
             self.ctx.db.forget_device(it.data(Qt.UserRole + 1))
             self._load_known()
+
+    def _diagnostics(self) -> None:
+        from ..diagnostics_dialog import DiagnosticsDialog
+        d = DiagnosticsDialog(self.ctx, self)
+        if self.ctx.device_ready:
+            d.run()
+        d.exec()
 
     def _restart_adb(self) -> None:
         self.status.set(tr("working"))
