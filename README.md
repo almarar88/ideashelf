@@ -14,4 +14,9 @@
 - سياسة الخصوصية: [`mahami/PRIVACY.md`](mahami/PRIVACY.md) — والنسخة المنشورة: [`privacy.html`](privacy.html)
 - نصوص وصور المتجر: `mahami/fastlane/metadata/android/ar/` و `mahami/docs/store/`
 - نموذج الاشتراك والتسعير: [`mahami/MONETIZATION.md`](mahami/MONETIZATION.md)
-- ملف تثبيت للتجربة: `mahami/dist/mahami-1.1.0.apk`
+- إعداد الحساب والمزامنة: [`mahami/SYNC-SETUP.md`](mahami/SYNC-SETUP.md)
+- ملف تثبيت للتجربة: [`mahami/dist/mahami-1.2.0.apk`](mahami/dist/mahami-1.2.0.apk)
+
+> ملف التجربة موقّع بمفتاح مؤقت، فإن كانت نسخة سابقة مثبّتة على جهازك احذفها أولاً.
+> لنشر التطبيق على المتجر أنشئ مفتاحك الدائم بـ `mahami/tools/create-keystore.sh`
+> أو فعّل «توقيع تطبيقات Play».
