@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="new_task"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_add"
+        android:shortcutShortLabel="@string/shortcut_new_task_short"
+        android:shortcutLongLabel="@string/shortcut_new_task">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.almarar.mahami"
+            android:targetClass="com.almarar.mahami.MainActivity">
+            <extra android:name="destination" android:value="new_task" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="today"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_today"
+        android:shortcutShortLabel="@string/shortcut_today_short"
+        android:shortcutLongLabel="@string/shortcut_today">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.almarar.mahami"
+            android:targetClass="com.almarar.mahami.MainActivity">
+            <extra android:name="destination" android:value="today" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="calendar"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_calendar"
+        android:shortcutShortLabel="@string/shortcut_calendar_short"
+        android:shortcutLongLabel="@string/shortcut_calendar">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.almarar.mahami"
+            android:targetClass="com.almarar.mahami.MainActivity">
+            <extra android:name="destination" android:value="calendar" />
+        </intent>
+    </shortcut>
+</shortcuts>

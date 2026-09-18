@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mahami</string>
+    <string name="widget_label">Mahami — Upcoming tasks</string>
+    <string name="widget_description">Your nearest tasks and deadlines, completed in one tap.</string>
+    <string name="shortcut_new_task">New task</string>
+    <string name="shortcut_new_task_short">New task</string>
+    <string name="shortcut_today">Today\'s tasks</string>
+    <string name="shortcut_today_short">Today</string>
+    <string name="shortcut_calendar">Calendar</string>
+    <string name="shortcut_calendar_short">Calendar</string>
+</resources>

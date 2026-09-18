@@ -1,0 +1,12 @@
+# ملفات البناء
+build/
+.gradle/
+.kotlin/
+*.iml
+.idea/
+
+# أسرار التوقيع — لا تُرفع إلى المستودع أبداً
+local.properties
+keystore.properties
+*.jks
+*.keystore

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">مهامي</string>
+    <string name="widget_label">مهامي — المهام القادمة</string>
+    <string name="widget_description">أقرب المهام ومواعيدها مع إنجازها بضغطة واحدة.</string>
+    <string name="shortcut_new_task">مهمة جديدة</string>
+    <string name="shortcut_new_task_short">مهمة جديدة</string>
+    <string name="shortcut_today">مهام اليوم</string>
+    <string name="shortcut_today_short">اليوم</string>
+    <string name="shortcut_calendar">التقويم</string>
+    <string name="shortcut_calendar_short">التقويم</string>
+</resources>
