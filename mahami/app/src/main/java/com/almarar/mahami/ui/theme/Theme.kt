@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import com.almarar.mahami.data.AccentColor
 import com.almarar.mahami.data.ThemeMode
 
 val LocalMahamiPalette = staticCompositionLocalOf { LightPalette }
@@ -20,6 +21,7 @@ object MahamiTheme {
 @Composable
 fun MahamiAppTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
+    accent: AccentColor = AccentColor.BLUE,
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (themeMode) {
@@ -27,7 +29,8 @@ fun MahamiAppTheme(
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
-    val palette = if (darkTheme) DarkPalette else LightPalette
+    val accentColor = Color(accent.argb)
+    val palette = (if (darkTheme) DarkPalette else LightPalette).copy(accent = accentColor)
 
     val scheme = if (darkTheme) {
         darkColorScheme(

@@ -4,6 +4,7 @@ import android.content.Context
 import com.almarar.mahami.core.BackupContent
 import com.almarar.mahami.notify.ReminderScheduler
 import com.almarar.mahami.widget.MahamiWidget
+import com.almarar.mahami.widget.TodayWidget
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -15,11 +16,15 @@ class Repository(
     private val context: Context,
     private val taskDao: TaskDao,
     private val projectDao: ProjectDao,
-    private val activityDao: ActivityDao
+    private val activityDao: ActivityDao,
+    private val focusDao: FocusDao,
+    private val customTemplateDao: CustomTemplateDao
 ) {
 
     val tasks: Flow<List<Task>> = taskDao.observeAll()
     val projects: Flow<List<Project>> = projectDao.observeAll()
+    val customTemplates: Flow<List<CustomTemplate>> = customTemplateDao.observeAll()
+    val focusSessions: Flow<List<FocusSession>> = focusDao.observeRecent()
 
     fun activityFor(taskId: Long): Flow<List<ActivityEntry>> = activityDao.observeForTask(taskId)
 
@@ -50,6 +55,7 @@ class Repository(
     suspend fun delete(task: Task) {
         taskDao.delete(task)
         activityDao.deleteForTask(task.id)
+        focusDao.deleteForTask(task.id)
         ReminderScheduler.cancel(context, task.id)
         refresh()
     }
@@ -143,7 +149,8 @@ class Repository(
     }
 
     private suspend fun spawnNextOccurrence(task: Task) {
-        val nextDate = nextOccurrence(task.dueDate, task.repeat) ?: return
+        val nextDate = nextOccurrence(task.dueDate, task.repeat, task.repeatInterval, task.repeatDays)
+            ?: return
         taskDao.insert(
             task.copy(
                 id = 0,
@@ -152,6 +159,50 @@ class Repository(
                 completedAt = null,
                 createdAt = LocalDateTime.now(),
                 subTasks = task.subTasks.map { it.copy(done = false) }
+            )
+        )
+    }
+
+    // ---------- التركيز ----------
+
+    /** يسجّل جلسة تركيز على مهمة ويضيف دقائقها إلى إجماليها */
+    suspend fun logFocusSession(taskId: Long, minutes: Int) {
+        if (minutes <= 0) return
+        val task = taskDao.getById(taskId) ?: return
+        focusDao.insert(FocusSession(taskId = taskId, minutes = minutes))
+        taskDao.update(task.copy(focusMinutes = task.focusMinutes + minutes))
+        log(
+            ActivityEntry(
+                taskId = taskId,
+                type = ActivityType.STEP,
+                text = "جلسة تركيز $minutes دقيقة"
+            )
+        )
+    }
+
+    suspend fun allFocusSessions(): List<FocusSession> = focusDao.getAll()
+
+    // ---------- القوالب المخصصة ----------
+
+    suspend fun saveCustomTemplate(template: CustomTemplate): Long = customTemplateDao.insert(template)
+
+    suspend fun deleteCustomTemplate(template: CustomTemplate) = customTemplateDao.delete(template)
+
+    suspend fun customTemplateCount(): Int = customTemplateDao.count()
+
+    /** يحوّل مهمة قائمة إلى قالب قابل لإعادة الاستخدام */
+    suspend fun templateFromTask(task: Task, emoji: String = "⭐"): Long {
+        val offset = java.time.temporal.ChronoUnit.DAYS
+            .between(LocalDate.now(), task.dueDate)
+            .coerceIn(0, 365)
+        return customTemplateDao.insert(
+            CustomTemplate(
+                name = task.title,
+                emoji = emoji,
+                hint = task.details.take(120),
+                offsetDays = offset,
+                priority = task.priority,
+                steps = task.subTasks.map { it.title }
             )
         )
     }
@@ -181,6 +232,7 @@ class Repository(
         taskDao.getAll().forEach { ReminderScheduler.cancel(context, it.id) }
         taskDao.deleteAll()
         activityDao.deleteAll()
+        focusDao.deleteAll()
         refresh()
     }
 
@@ -212,17 +264,40 @@ class Repository(
         val all = taskDao.getAll()
         ReminderScheduler.rescheduleAll(context, all)
         MahamiWidget.refresh(context)
+        TodayWidget.refresh(context)
     }
 
     private suspend fun log(entry: ActivityEntry) = runCatching { activityDao.insert(entry) }
 
     companion object {
-        /** التاريخ التالي لمهمة متكررة، أو null إن كانت غير متكررة */
-        fun nextOccurrence(from: LocalDate, repeat: Repeat): LocalDate? = when (repeat) {
+        /**
+         * التاريخ التالي لمهمة متكررة، أو null إن كانت غير متكررة.
+         * يدعم التكرار كل عدة أيام، والتكرار في أيام محددة من الأسبوع.
+         */
+        fun nextOccurrence(
+            from: LocalDate,
+            repeat: Repeat,
+            interval: Int = 2,
+            days: List<Int> = emptyList()
+        ): LocalDate? = when (repeat) {
             Repeat.NONE -> null
             Repeat.DAILY -> from.plusDays(1)
             Repeat.WEEKLY -> from.plusWeeks(1)
             Repeat.MONTHLY -> from.plusMonths(1)
+            Repeat.EVERY_N_DAYS -> from.plusDays(interval.coerceIn(1, 365).toLong())
+            Repeat.WEEKDAYS -> {
+                val wanted = days.filter { it in 1..7 }.toSortedSet()
+                if (wanted.isEmpty()) from.plusWeeks(1)
+                else {
+                    var candidate = from.plusDays(1)
+                    var guard = 0
+                    while (candidate.dayOfWeek.value !in wanted && guard < 14) {
+                        candidate = candidate.plusDays(1)
+                        guard++
+                    }
+                    candidate
+                }
+            }
         }
 
         @Volatile private var INSTANCE: Repository? = null
@@ -234,7 +309,9 @@ class Repository(
                     context.applicationContext,
                     db.taskDao(),
                     db.projectDao(),
-                    db.activityDao()
+                    db.activityDao(),
+                    db.focusDao(),
+                    db.customTemplateDao()
                 ).also { INSTANCE = it }
             }
         }

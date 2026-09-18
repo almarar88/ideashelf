@@ -19,6 +19,16 @@ enum class CalendarView(val label: String) {
     MONTH("شهري"), WEEK("أسبوعي")
 }
 
+/** ألوان التمييز المتاحة في النسخة المدفوعة */
+enum class AccentColor(val label: String, val argb: Long) {
+    BLUE("أزرق", 0xFF2E9BF0),
+    GREEN("أخضر", 0xFF3BA55D),
+    VIOLET("بنفسجي", 0xFF7C6BD4),
+    ORANGE("برتقالي", 0xFFF08A24),
+    TEAL("فيروزي", 0xFF00A3A3),
+    ROSE("وردي", 0xFFD4548E)
+}
+
 data class Settings(
     val onboarded: Boolean = false,
     val userName: String = "",
@@ -28,7 +38,14 @@ data class Settings(
     val digestHour: Int = 8,
     val defaultReminderOffsets: List<Int> = listOf(1, 0),
     val calendarView: CalendarView = CalendarView.MONTH,
-    val appLock: Boolean = false
+    val appLock: Boolean = false,
+    val accentColor: AccentColor = AccentColor.BLUE,
+    /** طول جلسة التركيز بالدقائق */
+    val focusMinutes: Int = 25,
+    /** طول الاستراحة بالدقائق */
+    val breakMinutes: Int = 5,
+    /** عدد مرات فتح شاشة الاشتراك — لتفادي إزعاج المستخدم */
+    val paywallSeen: Int = 0
 )
 
 class Prefs(private val context: Context) {
@@ -43,6 +60,10 @@ class Prefs(private val context: Context) {
         val REMINDERS = stringPreferencesKey("default_reminders")
         val CALENDAR_VIEW = stringPreferencesKey("calendar_view")
         val APP_LOCK = booleanPreferencesKey("app_lock")
+        val ACCENT = stringPreferencesKey("accent_color")
+        val FOCUS_MINUTES = intPreferencesKey("focus_minutes")
+        val BREAK_MINUTES = intPreferencesKey("break_minutes")
+        val PAYWALL_SEEN = intPreferencesKey("paywall_seen")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { p ->
@@ -58,7 +79,12 @@ class Prefs(private val context: Context) {
                 .split(",").mapNotNull { it.trim().toIntOrNull() }.ifEmpty { listOf(0) },
             calendarView = runCatching { CalendarView.valueOf(p[Keys.CALENDAR_VIEW] ?: "MONTH") }
                 .getOrDefault(CalendarView.MONTH),
-            appLock = p[Keys.APP_LOCK] ?: false
+            appLock = p[Keys.APP_LOCK] ?: false,
+            accentColor = runCatching { AccentColor.valueOf(p[Keys.ACCENT] ?: "BLUE") }
+                .getOrDefault(AccentColor.BLUE),
+            focusMinutes = p[Keys.FOCUS_MINUTES] ?: 25,
+            breakMinutes = p[Keys.BREAK_MINUTES] ?: 5,
+            paywallSeen = p[Keys.PAYWALL_SEEN] ?: 0
         )
     }
 
@@ -73,6 +99,12 @@ class Prefs(private val context: Context) {
     suspend fun setCalendarView(v: CalendarView) =
         context.dataStore.edit { it[Keys.CALENDAR_VIEW] = v.name }
     suspend fun setAppLock(v: Boolean) = context.dataStore.edit { it[Keys.APP_LOCK] = v }
+    suspend fun setAccentColor(v: AccentColor) = context.dataStore.edit { it[Keys.ACCENT] = v.name }
+    suspend fun setFocusMinutes(v: Int) = context.dataStore.edit { it[Keys.FOCUS_MINUTES] = v }
+    suspend fun setBreakMinutes(v: Int) = context.dataStore.edit { it[Keys.BREAK_MINUTES] = v }
+    suspend fun markPaywallSeen() = context.dataStore.edit {
+        it[Keys.PAYWALL_SEEN] = (it[Keys.PAYWALL_SEEN] ?: 0) + 1
+    }
 
     companion object {
         @Volatile private var INSTANCE: Prefs? = null

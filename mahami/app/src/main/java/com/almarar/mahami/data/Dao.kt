@@ -82,3 +82,36 @@ interface ActivityDao {
     @Query("DELETE FROM activity")
     suspend fun deleteAll()
 }
+
+@Dao
+interface FocusDao {
+    @Query("SELECT * FROM focus_sessions ORDER BY at DESC LIMIT :limit")
+    fun observeRecent(limit: Int = 120): Flow<List<FocusSession>>
+
+    @Query("SELECT * FROM focus_sessions ORDER BY at DESC")
+    suspend fun getAll(): List<FocusSession>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(session: FocusSession)
+
+    @Query("DELETE FROM focus_sessions WHERE taskId = :taskId")
+    suspend fun deleteForTask(taskId: Long)
+
+    @Query("DELETE FROM focus_sessions")
+    suspend fun deleteAll()
+}
+
+@Dao
+interface CustomTemplateDao {
+    @Query("SELECT * FROM custom_templates ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<CustomTemplate>>
+
+    @Query("SELECT COUNT(*) FROM custom_templates")
+    suspend fun count(): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(template: CustomTemplate): Long
+
+    @Delete
+    suspend fun delete(template: CustomTemplate)
+}

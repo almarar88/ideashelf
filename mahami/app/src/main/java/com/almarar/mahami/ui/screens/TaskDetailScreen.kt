@@ -25,7 +25,9 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Icon
@@ -68,7 +70,8 @@ fun TaskDetailScreen(
     vm: MahamiViewModel,
     taskId: Long,
     onBack: () -> Unit,
-    onEdit: (Long) -> Unit
+    onEdit: (Long) -> Unit,
+    onOpenFocus: (Long) -> Unit = {}
 ) {
     val colors = MahamiTheme.colors
     val context = LocalContext.current
@@ -420,6 +423,46 @@ fun TaskDetailScreen(
                                 Backup.shareText(context, task.title, rendered)
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        item {
+            SoftCard(Modifier.fillMaxWidth(), corner = 24.dp) {
+                Column(Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Rounded.Timer, null,
+                            tint = colors.accent, modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("وضع التركيز", style = MaterialTheme.typography.titleMedium, color = colors.ink)
+                        Spacer(Modifier.weight(1f))
+                        if (task.focusMinutes > 0) {
+                            Text(
+                                "${task.focusMinutes} دقيقة",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.inkMuted
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "جلسة مركّزة بمؤقت، وتُسجَّل دقائقها على المهمة",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.inkMuted
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SmallAction("ابدأ جلسة", Modifier.weight(1f), filled = true) {
+                            onOpenFocus(task.id)
+                        }
+                        SmallAction(
+                            "حفظ كقالب",
+                            Modifier.weight(1f),
+                            icon = Icons.Rounded.BookmarkAdd
+                        ) { vm.saveTaskAsTemplate(task) }
                     }
                 }
             }

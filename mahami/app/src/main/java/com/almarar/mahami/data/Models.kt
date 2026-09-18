@@ -20,7 +20,15 @@ enum class TaskStatus(val label: String) {
 
 /** تكرار المهمة بعد إنجازها */
 enum class Repeat(val label: String) {
-    NONE("بدون"), DAILY("يومي"), WEEKLY("أسبوعي"), MONTHLY("شهري")
+    NONE("بدون"),
+    DAILY("يومي"),
+    WEEKLY("أسبوعي"),
+    MONTHLY("شهري"),
+    EVERY_N_DAYS("كل عدة أيام"),
+    WEEKDAYS("أيام محددة");
+
+    /** الأنواع المتقدمة متاحة في النسخة المدفوعة */
+    val isAdvanced: Boolean get() = this == EVERY_N_DAYS || this == WEEKDAYS
 }
 
 /** خطوة فرعية داخل المهمة */
@@ -58,6 +66,28 @@ data class ActivityEntry(
     val at: LocalDateTime = LocalDateTime.now()
 )
 
+/** جلسة تركيز مسجّلة على مهمة */
+@Entity(tableName = "focus_sessions")
+data class FocusSession(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val taskId: Long,
+    val minutes: Int,
+    val at: LocalDateTime = LocalDateTime.now()
+)
+
+/** قالب يصنعه المستخدم من مهمة قائمة */
+@Entity(tableName = "custom_templates")
+data class CustomTemplate(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val emoji: String = "⭐",
+    val hint: String = "",
+    val offsetDays: Long = 1,
+    val priority: Priority = Priority.MEDIUM,
+    val steps: List<String> = emptyList(),
+    val createdAt: LocalDateTime = LocalDateTime.now()
+)
+
 @Entity(tableName = "tasks")
 data class Task(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -82,6 +112,12 @@ data class Task(
     /** أيام التنبيه قبل الموعد، مثل [3,1,0] */
     val reminderOffsetsDays: List<Int> = listOf(1, 0),
     val repeat: Repeat = Repeat.NONE,
+    /** الفاصل للتكرار «كل عدة أيام» */
+    val repeatInterval: Int = 2,
+    /** أيام الأسبوع للتكرار المحدد: 1 = الاثنين ... 7 = الأحد */
+    val repeatDays: List<Int> = emptyList(),
+    /** مجموع دقائق التركيز المسجّلة على المهمة */
+    val focusMinutes: Int = 0,
     val pinned: Boolean = false,
     val createdAt: LocalDateTime = LocalDateTime.now(),
     val completedAt: LocalDateTime? = null,

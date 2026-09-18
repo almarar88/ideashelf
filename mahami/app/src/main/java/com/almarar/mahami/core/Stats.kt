@@ -17,6 +17,17 @@ data class ProjectStat(
 
 data class DayLoad(val date: LocalDate, val count: Int, val isToday: Boolean)
 
+/** دقائق التركيز في يوم */
+data class FocusDay(val date: LocalDate, val minutes: Int)
+
+data class FocusSummary(
+    val totalMinutes: Int = 0,
+    val todayMinutes: Int = 0,
+    val weekMinutes: Int = 0,
+    val sessions: Int = 0,
+    val perDay: List<FocusDay> = emptyList()
+)
+
 data class Insight(val title: String, val body: String, val severity: Severity)
 
 enum class Severity { HIGH, MEDIUM, INFO }
@@ -86,6 +97,36 @@ object Stats {
         }
         return current to longest
     }
+
+    /** ملخص جلسات التركيز لآخر سبعة أيام */
+    fun focusSummary(
+        sessions: List<com.almarar.mahami.data.FocusSession>,
+        today: LocalDate = LocalDate.now()
+    ): FocusSummary {
+        if (sessions.isEmpty()) return FocusSummary()
+        val week = (6 downTo 0).map { today.minusDays(it.toLong()) }
+        val perDay = week.map { date ->
+            FocusDay(date, sessions.filter { it.at.toLocalDate() == date }.sumOf { it.minutes })
+        }
+        return FocusSummary(
+            totalMinutes = sessions.sumOf { it.minutes },
+            todayMinutes = sessions.filter { it.at.toLocalDate() == today }.sumOf { it.minutes },
+            weekMinutes = perDay.sumOf { it.minutes },
+            sessions = sessions.size,
+            perDay = perDay
+        )
+    }
+
+    /** عدد المهام المنجزة في كل شهر من آخر ستة أشهر */
+    fun monthlyCompleted(tasks: List<Task>, today: LocalDate = LocalDate.now()): List<Pair<String, Int>> =
+        (5 downTo 0).map { back ->
+            val month = today.minusMonths(back.toLong())
+            val count = tasks.count {
+                val done = it.completedAt?.toLocalDate()
+                done != null && done.year == month.year && done.monthValue == month.monthValue
+            }
+            Ar.monthName(month.monthValue) to count
+        }
 
     /** توزيع المهام على الأيام السبعة القادمة */
     fun weekLoad(tasks: List<Task>, today: LocalDate = LocalDate.now()): List<DayLoad> =

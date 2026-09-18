@@ -26,8 +26,8 @@ android {
         applicationId = "com.almarar.mahami"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
         resourceConfigurations += listOf("ar", "en")
         vectorDrawables { useSupportLibrary = true }
     }
@@ -119,6 +119,7 @@ dependencies {
 
     implementation("androidx.datastore:datastore-preferences:1.1.7")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
+    implementation("com.android.billingclient:billing-ktx:8.3.0")
     implementation("androidx.biometric:biometric:1.1.0")
     // biometric يجرّ نسخة قديمة من fragment لا تدعم ActivityResult بشكل صحيح
     implementation("androidx.fragment:fragment-ktx:1.8.9")

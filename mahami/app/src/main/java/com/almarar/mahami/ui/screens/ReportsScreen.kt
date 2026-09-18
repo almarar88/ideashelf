@@ -56,6 +56,8 @@ fun ReportsScreen(vm: MahamiViewModel) {
     val tasks by vm.tasks.collectAsStateWithLifecycle()
     val projects by vm.projects.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
+    val focus by vm.focusSummary.collectAsStateWithLifecycle()
+    val entitlement by vm.entitlement.collectAsStateWithLifecycle()
     var range by remember { mutableIntStateOf(1) }
     val today = LocalDate.now()
 
@@ -232,6 +234,51 @@ fun ReportsScreen(vm: MahamiViewModel) {
                                 )
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        item {
+            SoftCard(Modifier.fillMaxWidth(), corner = 30.dp) {
+                Column(Modifier.padding(18.dp)) {
+                    Text("وقت التركيز", style = MaterialTheme.typography.titleMedium, color = colors.ink)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (focus.totalMinutes == 0) "ابدأ جلسة تركيز من صفحة أي مهمة"
+                        else "${focus.weekMinutes} دقيقة هذا الأسبوع • ${focus.sessions} جلسة",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.inkMuted
+                    )
+                    if (focus.perDay.isNotEmpty()) {
+                        Spacer(Modifier.height(16.dp))
+                        DottedBars(
+                            data = focus.perDay.map {
+                                BarDatum(Ar.dayShort(it.date), it.minutes.toFloat(), it.date == today)
+                            },
+                            barHeight = 110.dp
+                        )
+                    }
+                }
+            }
+        }
+
+        if (entitlement.isPro) {
+            item {
+                SoftCard(Modifier.fillMaxWidth(), corner = 30.dp) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text(
+                            "الإنجاز خلال ستة أشهر",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = colors.ink
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        DottedBars(
+                            data = Stats.monthlyCompleted(tasks, today).map { (month, count) ->
+                                BarDatum(month.take(4), count.toFloat(), false)
+                            },
+                            barHeight = 110.dp
+                        )
                     }
                 }
             }

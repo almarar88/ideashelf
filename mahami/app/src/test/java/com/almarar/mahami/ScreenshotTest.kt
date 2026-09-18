@@ -20,6 +20,8 @@ import com.almarar.mahami.ui.screens.AboutScreen
 import com.almarar.mahami.ui.screens.CalendarScreen
 import com.almarar.mahami.ui.screens.HomeScreen
 import com.almarar.mahami.ui.screens.OnboardingScreen
+import com.almarar.mahami.ui.screens.ArchiveScreen
+import com.almarar.mahami.ui.screens.PaywallScreen
 import com.almarar.mahami.ui.screens.ProjectsScreen
 import com.almarar.mahami.ui.screens.ReportsScreen
 import com.almarar.mahami.ui.screens.SettingsScreen
@@ -122,6 +124,13 @@ class ScreenshotTest {
     }
 
     @Test fun about() = shot("11-about") { AboutScreen {} }
+
+    @Test fun paywall() {
+        org.robolectric.RuntimeEnvironment.setQualifiers("+h1700dp")
+        shot("13-paywall") { PaywallScreen(vm) {} }
+    }
+
+    @Test fun archive() = shot("14-archive") { ArchiveScreen(vm, onOpenTask = {}, onBack = {}) }
 
     @Test fun homeDark() = shot("12-home-dark", dark = true) {
         HomeScreen(

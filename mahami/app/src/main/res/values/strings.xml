@@ -9,4 +9,6 @@
     <string name="shortcut_today_short">اليوم</string>
     <string name="shortcut_calendar">التقويم</string>
     <string name="shortcut_calendar_short">التقويم</string>
+    <string name="today_widget_label">مهامي — اليوم</string>
+    <string name="today_widget_description">عدد مهام اليوم وأقرب مهمة في مربع صغير.</string>
 </resources>

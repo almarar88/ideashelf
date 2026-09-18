@@ -39,9 +39,12 @@ import androidx.navigation.navArgument
 import com.almarar.mahami.ui.components.BottomNavPill
 import com.almarar.mahami.ui.components.NavItem
 import com.almarar.mahami.ui.screens.AboutScreen
+import com.almarar.mahami.ui.screens.ArchiveScreen
 import com.almarar.mahami.ui.screens.CalendarScreen
+import com.almarar.mahami.ui.screens.FocusScreen
 import com.almarar.mahami.ui.screens.HomeScreen
 import com.almarar.mahami.ui.screens.OnboardingScreen
+import com.almarar.mahami.ui.screens.PaywallScreen
 import com.almarar.mahami.ui.screens.ProjectsScreen
 import com.almarar.mahami.ui.screens.ReportsScreen
 import com.almarar.mahami.ui.screens.SettingsScreen
@@ -62,10 +65,14 @@ object Routes {
     const val PROJECTS = "projects"
     const val TEMPLATES = "templates"
     const val ABOUT = "about"
+    const val PAYWALL = "paywall"
+    const val ARCHIVE = "archive"
+    const val FOCUS = "focus/{taskId}"
     const val DETAIL = "detail/{taskId}"
     const val EDIT = "edit?taskId={taskId}"
 
     fun detail(id: Long) = "detail/$id"
+    fun focus(id: Long) = "focus/$id"
     fun edit(id: Long? = null) = "edit?taskId=${id ?: -1}"
 }
 
@@ -90,7 +97,7 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
     val vm: MahamiViewModel = viewModel()
     val settings by vm.settings.collectAsStateWithLifecycle()
 
-    MahamiAppTheme(themeMode = settings.themeMode) {
+    MahamiAppTheme(themeMode = settings.themeMode, accent = settings.accentColor) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             val navController = rememberNavController()
             val backStack by navController.currentBackStackEntryAsState()
@@ -102,6 +109,13 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
             val showNav = route in setOf(
                 Routes.HOME, Routes.TASKS, Routes.CALENDAR, Routes.REPORTS
             )
+
+            val lockedFeature by vm.lockedFeature.collectAsStateWithLifecycle()
+            LaunchedEffect(lockedFeature) {
+                if (lockedFeature != null && route != Routes.PAYWALL) {
+                    navController.navigate(Routes.PAYWALL)
+                }
+            }
 
             LaunchedEffect(toast?.id) {
                 val current = toast ?: return@LaunchedEffect
@@ -155,7 +169,8 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                             onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                             onOpenTasks = { navController.navigate(Routes.TASKS) },
                             onOpenTemplates = { navController.navigate(Routes.TEMPLATES) },
-                            onNewTask = { navController.navigate(Routes.edit()) }
+                            onNewTask = { navController.navigate(Routes.edit()) },
+                            onOpenPaywall = { navController.navigate(Routes.PAYWALL) }
                         )
                     }
                     composable(Routes.TASKS) {
@@ -175,7 +190,9 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                             vm = vm,
                             onBack = { navController.popBackStack() },
                             onOpenProjects = { navController.navigate(Routes.PROJECTS) },
-                            onOpenAbout = { navController.navigate(Routes.ABOUT) }
+                            onOpenAbout = { navController.navigate(Routes.ABOUT) },
+                            onOpenPaywall = { navController.navigate(Routes.PAYWALL) },
+                            onOpenArchive = { navController.navigate(Routes.ARCHIVE) }
                         )
                     }
                     composable(Routes.PROJECTS) {
@@ -183,6 +200,26 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                     }
                     composable(Routes.ABOUT) {
                         AboutScreen { navController.popBackStack() }
+                    }
+                    composable(Routes.PAYWALL) {
+                        PaywallScreen(vm) { navController.popBackStack() }
+                    }
+                    composable(Routes.ARCHIVE) {
+                        ArchiveScreen(
+                            vm = vm,
+                            onOpenTask = { navController.navigate(Routes.detail(it)) },
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+                    composable(
+                        Routes.FOCUS,
+                        arguments = listOf(navArgument("taskId") { type = NavType.LongType })
+                    ) { entry ->
+                        FocusScreen(
+                            vm = vm,
+                            taskId = entry.arguments?.getLong("taskId") ?: -1L,
+                            onBack = { navController.popBackStack() }
+                        )
                     }
                     composable(Routes.TEMPLATES) {
                         TemplatesScreen(
@@ -202,7 +239,8 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                             vm = vm,
                             taskId = entry.arguments?.getLong("taskId") ?: -1L,
                             onBack = { navController.popBackStack() },
-                            onEdit = { navController.navigate(Routes.edit(it)) }
+                            onEdit = { navController.navigate(Routes.edit(it)) },
+                            onOpenFocus = { navController.navigate(Routes.focus(it)) }
                         )
                     }
                     composable(

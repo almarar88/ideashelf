@@ -9,4 +9,6 @@
     <string name="shortcut_today_short">Today</string>
     <string name="shortcut_calendar">Calendar</string>
     <string name="shortcut_calendar_short">Calendar</string>
+    <string name="today_widget_label">Mahami — Today</string>
+    <string name="today_widget_description">Today\'s task count and your next task in a small tile.</string>
 </resources>

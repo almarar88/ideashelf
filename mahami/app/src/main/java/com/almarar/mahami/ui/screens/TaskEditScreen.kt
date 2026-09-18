@@ -82,6 +82,10 @@ fun TaskEditScreen(
     var time by remember(existing) { mutableStateOf(existing?.dueTime ?: LocalTime.of(9, 0)) }
     var priority by remember(existing) { mutableStateOf(existing?.priority ?: Priority.MEDIUM) }
     var repeat by remember(existing) { mutableStateOf(existing?.repeat ?: Repeat.NONE) }
+    var repeatInterval by remember(existing) { mutableStateOf(existing?.repeatInterval ?: 2) }
+    val repeatDays = remember(existing) {
+        mutableStateListOf<Int>().apply { addAll(existing?.repeatDays.orEmpty()) }
+    }
     var reminders by remember(existing) { mutableStateOf(existing?.remindersEnabled ?: true) }
     var newStep by remember { mutableStateOf("") }
     var newTag by remember { mutableStateOf("") }
@@ -231,17 +235,15 @@ fun TaskEditScreen(
                 Column(Modifier.padding(16.dp)) {
                     Text("التكرار", style = MaterialTheme.typography.labelMedium, color = colors.inkMuted)
                     Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Repeat.entries.forEach { value ->
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(Repeat.entries.toList()) { value ->
                             val selected = value == repeat
                             Box(
                                 Modifier
-                                    .weight(1f)
                                     .clip(RoundedCornerShape(18.dp))
                                     .background(if (selected) colors.ink else colors.surfaceMuted)
                                     .clickable { repeat = value }
-                                    .padding(vertical = 10.dp),
-                                contentAlignment = Alignment.Center
+                                    .padding(horizontal = 14.dp, vertical = 10.dp)
                             ) {
                                 Text(
                                     value.label,
@@ -249,6 +251,76 @@ fun TaskEditScreen(
                                     color = if (selected) Color.White else colors.inkMuted
                                 )
                             }
+                        }
+                    }
+
+                    if (repeat == Repeat.EVERY_N_DAYS) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "كل كم يوم؟",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.inkMuted
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(2, 3, 5, 10, 14).forEach { value ->
+                                val selected = repeatInterval == value
+                                Box(
+                                    Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(
+                                            if (selected) colors.accent.copy(alpha = 0.18f)
+                                            else colors.surfaceMuted
+                                        )
+                                        .clickable { repeatInterval = value }
+                                        .padding(vertical = 9.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        "$value",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (selected) colors.accent else colors.inkMuted
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (repeat == Repeat.WEEKDAYS) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "أيام التكرار",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.inkMuted
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            // 6 = السبت ... 5 = الجمعة حسب ترقيم ISO
+                            listOf(6 to "س", 7 to "ح", 1 to "ن", 2 to "ث", 3 to "ر", 4 to "خ", 5 to "ج")
+                                .forEach { (day, label) ->
+                                    val selected = repeatDays.contains(day)
+                                    Box(
+                                        Modifier
+                                            .weight(1f)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (selected) colors.accent else colors.surfaceMuted
+                                            )
+                                            .clickable {
+                                                if (selected) repeatDays.remove(day)
+                                                else repeatDays.add(day)
+                                            }
+                                            .padding(vertical = 10.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            label,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (selected) Color.White else colors.inkMuted
+                                        )
+                                    }
+                                }
                         }
                     }
                 }
@@ -462,6 +534,8 @@ fun TaskEditScreen(
                             dueTime = time,
                             priority = priority,
                             repeat = repeat,
+                            repeatInterval = repeatInterval,
+                            repeatDays = repeatDays.toList(),
                             remindersEnabled = reminders,
                             reminderOffsetsDays = offsets.toList().ifEmpty { listOf(0) },
                             subTasks = steps.toList(),

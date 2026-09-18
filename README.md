@@ -13,4 +13,5 @@
 - دليل النشر خطوة بخطوة: [`mahami/RELEASE.md`](mahami/RELEASE.md)
 - سياسة الخصوصية: [`mahami/PRIVACY.md`](mahami/PRIVACY.md) — والنسخة المنشورة: [`privacy.html`](privacy.html)
 - نصوص وصور المتجر: `mahami/fastlane/metadata/android/ar/` و `mahami/docs/store/`
-- ملف تثبيت للتجربة: `mahami/dist/mahami-1.0.0.apk`
+- نموذج الاشتراك والتسعير: [`mahami/MONETIZATION.md`](mahami/MONETIZATION.md)
+- ملف تثبيت للتجربة: `mahami/dist/mahami-1.1.0.apk`

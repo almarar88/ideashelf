@@ -4,11 +4,22 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.almarar.mahami.billing.BillingManager
+import com.almarar.mahami.billing.Entitlement
+import com.almarar.mahami.billing.EntitlementStore
+import com.almarar.mahami.billing.FreeLimits
+import com.almarar.mahami.billing.PlanOffer
+import com.almarar.mahami.billing.ProFeature
 import com.almarar.mahami.core.Backup
+import com.almarar.mahami.core.Export
+import com.almarar.mahami.core.FocusSummary
 import com.almarar.mahami.core.Stats
 import com.almarar.mahami.core.TaskStats
+import com.almarar.mahami.data.AccentColor
 import com.almarar.mahami.data.ActivityEntry
 import com.almarar.mahami.data.CalendarView
+import com.almarar.mahami.data.CustomTemplate
+import com.almarar.mahami.data.FocusSession
 import com.almarar.mahami.data.Prefs
 import com.almarar.mahami.data.Project
 import com.almarar.mahami.data.Repository
@@ -16,6 +27,7 @@ import com.almarar.mahami.data.Settings
 import com.almarar.mahami.data.Task
 import com.almarar.mahami.data.TaskStatus
 import com.almarar.mahami.data.TaskTemplate
+import com.almarar.mahami.data.Templates
 import com.almarar.mahami.data.ThemeMode
 import com.almarar.mahami.notify.DailyDigestWorker
 import kotlinx.coroutines.flow.Flow
@@ -25,7 +37,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
@@ -45,6 +60,8 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = Repository.get(app)
     private val prefs = Prefs.get(app)
+    private val billing = BillingManager.get(app)
+    private val entitlementStore = EntitlementStore.get(app)
 
     val settings: StateFlow<Settings> = prefs.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, Settings())
@@ -54,6 +71,49 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
 
     val projects: StateFlow<List<Project>> = repo.projects
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val customTemplates: StateFlow<List<CustomTemplate>> = repo.customTemplates
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val focusSessions: StateFlow<List<FocusSession>> = repo.focusSessions
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val focusSummary: StateFlow<FocusSummary> = focusSessions
+        .map { Stats.focusSummary(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FocusSummary())
+
+    // ---------- الاشتراك ----------
+
+    val entitlement: StateFlow<Entitlement> = entitlementStore.entitlement
+        .stateIn(viewModelScope, SharingStarted.Eagerly, Entitlement())
+
+    val billingState = billing.state
+
+    val isPro: Boolean get() = entitlement.value.isPro
+
+    /** آخر ميزة مدفوعة حاول المستخدم استخدامها — تُبرز في شاشة الاشتراك */
+    private val _lockedFeature = MutableStateFlow<ProFeature?>(null)
+    val lockedFeature = _lockedFeature.asStateFlow()
+
+    fun requestPro(feature: ProFeature) { _lockedFeature.value = feature }
+    fun clearLockedFeature() { _lockedFeature.value = null }
+
+    fun startBilling() = billing.start()
+
+    fun purchase(activity: android.app.Activity, offer: PlanOffer) {
+        billing.purchase(activity, offer)
+        viewModelScope.launch { prefs.markPaywallSeen() }
+    }
+
+    fun restorePurchases() = billing.restore()
+
+    fun clearBillingMessage() = billing.clearMessage()
+
+    /** حد المشاريع في النسخة المجانية */
+    fun canAddProject(): Boolean = isPro || projects.value.size < FreeLimits.PROJECTS
+
+    /** حد التنبيهات لكل مهمة */
+    fun maxRemindersPerTask(): Int = if (isPro) 5 else FreeLimits.REMINDERS_PER_TASK
 
     private val _filter = MutableStateFlow(TaskFilter.ALL)
     val filter = _filter.asStateFlow()
@@ -178,8 +238,22 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    fun save(task: Task, onSaved: (Long) -> Unit = {}) = viewModelScope.launch {
-        onSaved(repo.upsert(task))
+    /**
+     * يحفظ المهمة بعد تطبيق حدود النسخة المجانية:
+     * التكرار مدفوع، وعدد التنبيهات محدود.
+     */
+    fun save(task: Task, onSaved: (Long) -> Unit = {}) {
+        if (!isPro && task.repeat != com.almarar.mahami.data.Repeat.NONE) {
+            requestPro(ProFeature.REPEATING_TASKS)
+            return
+        }
+        val limited = if (isPro) task else task.copy(
+            reminderOffsetsDays = task.reminderOffsetsDays
+                .sortedBy { it }
+                .take(FreeLimits.REMINDERS_PER_TASK)
+                .ifEmpty { listOf(0) }
+        )
+        viewModelScope.launch { onSaved(repo.upsert(limited)) }
     }
 
     fun createFromTemplate(template: TaskTemplate, projectId: Long?, onCreated: (Long) -> Unit = {}) =
@@ -194,7 +268,13 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------- المشاريع ----------
 
-    fun saveProject(project: Project) = viewModelScope.launch { repo.upsertProject(project) }
+    fun saveProject(project: Project) {
+        if (project.id == 0L && !canAddProject()) {
+            requestPro(ProFeature.UNLIMITED_PROJECTS)
+            return
+        }
+        viewModelScope.launch { repo.upsertProject(project) }
+    }
 
     fun deleteProject(project: Project) = viewModelScope.launch {
         repo.deleteProject(project)
@@ -208,8 +288,20 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
     fun setUserName(value: String) = viewModelScope.launch { prefs.setUserName(value) }
     fun setThemeMode(value: ThemeMode) = viewModelScope.launch { prefs.setThemeMode(value) }
     fun setCalendarView(value: CalendarView) = viewModelScope.launch { prefs.setCalendarView(value) }
-    fun setAppLock(value: Boolean) = viewModelScope.launch { prefs.setAppLock(value) }
-    fun setDefaultReminders(value: List<Int>) = viewModelScope.launch { prefs.setDefaultReminders(value) }
+    fun setAppLock(value: Boolean) {
+        if (value && !isPro) {
+            requestPro(ProFeature.APP_LOCK)
+            return
+        }
+        viewModelScope.launch { prefs.setAppLock(value) }
+    }
+    fun setDefaultReminders(value: List<Int>) {
+        if (!isPro && value.size > FreeLimits.REMINDERS_PER_TASK) {
+            requestPro(ProFeature.MULTI_REMINDERS)
+            return
+        }
+        viewModelScope.launch { prefs.setDefaultReminders(value) }
+    }
 
     fun setNotifications(value: Boolean) = viewModelScope.launch {
         prefs.setNotifications(value)
@@ -244,7 +336,15 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
         }.onFailure { showToast("تعذّر التصدير: ${it.message}") }
     }
 
-    fun exportCalendar() = viewModelScope.launch {
+    fun exportCalendar() {
+        if (!isPro) {
+            requestPro(ProFeature.EXPORT)
+            return
+        }
+        exportCalendarInternal()
+    }
+
+    private fun exportCalendarInternal() = viewModelScope.launch {
         runCatching {
             val app = getApplication<Application>()
             val uri = Backup.writeShareable(app, "mahami.ics", Backup.toIcs(repo.allTasks()))
@@ -270,6 +370,167 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
                 showToast("استُوردت ${com.almarar.mahami.core.Ar.countTasks(count)}")
             }
         }.onFailure { showToast("تعذّر الاستيراد: ${it.message}") }
+    }
+
+    // ---------- مؤقت التركيز ----------
+
+    private val _focus = MutableStateFlow(FocusState())
+    val focus = _focus.asStateFlow()
+
+    private var focusJob: Job? = null
+
+    fun startFocus(task: Task) {
+        focusJob?.cancel()
+        val minutes = settings.value.focusMinutes.coerceIn(5, 120)
+        _focus.value = FocusState(
+            taskId = task.id,
+            taskTitle = task.title,
+            totalSeconds = minutes * 60,
+            remainingSeconds = minutes * 60,
+            running = true
+        )
+        tick()
+    }
+
+    fun pauseFocus() {
+        focusJob?.cancel()
+        _focus.value = _focus.value.copy(running = false)
+    }
+
+    fun resumeFocus() {
+        if (_focus.value.taskId == 0L || _focus.value.remainingSeconds <= 0) return
+        _focus.value = _focus.value.copy(running = true)
+        tick()
+    }
+
+    /** ينهي الجلسة ويسجّل الدقائق المكتملة */
+    fun stopFocus(save: Boolean = true) {
+        focusJob?.cancel()
+        val current = _focus.value
+        val elapsed = (current.totalSeconds - current.remainingSeconds) / 60
+        if (save && current.taskId > 0 && elapsed > 0) {
+            viewModelScope.launch {
+                repo.logFocusSession(current.taskId, elapsed)
+                showToast("سُجّلت $elapsed دقيقة تركيز")
+            }
+        }
+        _focus.value = FocusState()
+    }
+
+    private fun tick() {
+        focusJob = viewModelScope.launch {
+            while (_focus.value.running && _focus.value.remainingSeconds > 0) {
+                delay(1_000)
+                val current = _focus.value
+                if (!current.running) break
+                _focus.value = current.copy(remainingSeconds = current.remainingSeconds - 1)
+            }
+            if (_focus.value.remainingSeconds <= 0 && _focus.value.taskId > 0) {
+                val finished = _focus.value
+                repo.logFocusSession(finished.taskId, finished.totalSeconds / 60)
+                _focus.value = FocusState(completedJustNow = true)
+                showToast("انتهت جلسة التركيز — خذ استراحة")
+            }
+        }
+    }
+
+    fun setFocusMinutes(value: Int) = viewModelScope.launch { prefs.setFocusMinutes(value) }
+    fun setBreakMinutes(value: Int) = viewModelScope.launch { prefs.setBreakMinutes(value) }
+
+    // ---------- القوالب المخصصة ----------
+
+    fun saveTaskAsTemplate(task: Task) {
+        if (!isPro) {
+            requestPro(ProFeature.CUSTOM_TEMPLATES)
+            return
+        }
+        viewModelScope.launch {
+            repo.templateFromTask(task)
+            showToast("حُفظت المهمة كقالب")
+        }
+    }
+
+    fun createFromCustomTemplate(template: CustomTemplate, projectId: Long?, onCreated: (Long) -> Unit = {}) =
+        viewModelScope.launch {
+            val task = Task(
+                title = template.name,
+                details = template.hint,
+                projectId = projectId,
+                dueDate = LocalDate.now().plusDays(template.offsetDays),
+                priority = template.priority,
+                subTasks = template.steps.map { com.almarar.mahami.data.SubTask(it) },
+                reminderOffsetsDays = prefs.settings.first().defaultReminderOffsets
+            )
+            onCreated(repo.upsert(task))
+            showToast("أُنشئت مهمة من قالبك")
+        }
+
+    fun deleteCustomTemplate(template: CustomTemplate) = viewModelScope.launch {
+        repo.deleteCustomTemplate(template)
+    }
+
+    // ---------- إضافة سريعة ----------
+
+    /** ينشئ مهمة من سطر واحد مع موعد مختصر */
+    fun quickAdd(title: String, daysFromToday: Long) {
+        val clean = title.trim()
+        if (clean.isBlank()) return
+        viewModelScope.launch {
+            val defaults = prefs.settings.first().defaultReminderOffsets
+            val id = repo.upsert(
+                Task(
+                    title = clean,
+                    dueDate = LocalDate.now().plusDays(daysFromToday),
+                    projectId = _projectFilter.value,
+                    reminderOffsetsDays = if (isPro) defaults else defaults.take(1)
+                )
+            )
+            showToast(
+                "أُضيفت المهمة",
+                undo = { viewModelScope.launch { repo.taskById(id)?.let { repo.delete(it) } } }
+            )
+        }
+    }
+
+    // ---------- المظهر ----------
+
+    fun setAccentColor(color: AccentColor) {
+        if (!isPro && color != AccentColor.BLUE) {
+            requestPro(ProFeature.THEMES)
+            return
+        }
+        viewModelScope.launch { prefs.setAccentColor(color) }
+    }
+
+    // ---------- تصدير متقدم ----------
+
+    fun exportCsv() {
+        if (!isPro) {
+            requestPro(ProFeature.EXPORT)
+            return
+        }
+        viewModelScope.launch {
+            runCatching {
+                val app = getApplication<Application>()
+                val csv = Export.toCsv(repo.allTasks(), repo.allProjects())
+                val uri = Backup.writeShareable(app, "mahami-tasks.csv", csv)
+                Backup.shareFile(app, uri, "text/csv", "تصدير المهام إلى CSV")
+            }.onFailure { showToast("تعذّر التصدير: ${it.message}") }
+        }
+    }
+
+    fun exportPdf() {
+        if (!isPro) {
+            requestPro(ProFeature.EXPORT)
+            return
+        }
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            val tasks = repo.allTasks()
+            val uri = Export.writeReportPdf(app, tasks, repo.allProjects(), Stats.summarize(tasks))
+            if (uri == null) showToast("تعذّر إنشاء ملف PDF على هذا الجهاز")
+            else Backup.shareFile(app, uri, "application/pdf", "تقرير المهام PDF")
+        }
     }
 
     // ---------- الرسائل ----------

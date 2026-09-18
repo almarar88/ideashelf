@@ -7,7 +7,13 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(
-    entities = [Task::class, Project::class, ActivityEntry::class],
+    entities = [
+        Task::class,
+        Project::class,
+        ActivityEntry::class,
+        FocusSession::class,
+        CustomTemplate::class
+    ],
     version = 1,
     exportSchema = false
 )
@@ -17,6 +23,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
     abstract fun projectDao(): ProjectDao
     abstract fun activityDao(): ActivityDao
+    abstract fun focusDao(): FocusDao
+    abstract fun customTemplateDao(): CustomTemplateDao
 
     companion object {
         private const val NAME = "mahami-tasks.db"

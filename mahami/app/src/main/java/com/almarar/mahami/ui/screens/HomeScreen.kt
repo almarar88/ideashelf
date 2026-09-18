@@ -26,16 +26,22 @@ import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PriorityHigh
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material.icons.rounded.Today
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,13 +75,16 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     onOpenTasks: () -> Unit,
     onOpenTemplates: () -> Unit,
-    onNewTask: () -> Unit
+    onNewTask: () -> Unit,
+    onOpenPaywall: () -> Unit = {}
 ) {
     val colors = MahamiTheme.colors
     val settings by vm.settings.collectAsStateWithLifecycle()
     val tasks by vm.tasks.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
+    val entitlement by vm.entitlement.collectAsStateWithLifecycle()
     val today = LocalDate.now()
+    var quickTitle by remember { mutableStateOf("") }
 
     val open = tasks.filter { it.status != TaskStatus.DONE }
         .sortedWith(compareBy({ it.dueDate }, { it.dueTime }))
@@ -125,6 +134,88 @@ fun HomeScreen(
                 }
                 Spacer(Modifier.width(8.dp))
                 CircleIconButton(Icons.Rounded.Settings, "الإعدادات") { onOpenSettings() }
+            }
+        }
+
+        item {
+            SoftCard(Modifier.fillMaxWidth(), corner = 26.dp, elevation = 6.dp) {
+                Column(Modifier.padding(14.dp)) {
+                    Box(Modifier.fillMaxWidth()) {
+                        if (quickTitle.isEmpty()) {
+                            Text(
+                                "أضف مهمة بسرعة...",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = colors.inkMuted.copy(alpha = 0.7f)
+                            )
+                        }
+                        BasicTextField(
+                            value = quickTitle,
+                            onValueChange = { quickTitle = it },
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.ink),
+                            cursorBrush = SolidColor(colors.accent),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if (quickTitle.isNotBlank()) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            QuickChip("اليوم", Modifier.weight(1f)) {
+                                vm.quickAdd(quickTitle, 0); quickTitle = ""
+                            }
+                            QuickChip("غداً", Modifier.weight(1f)) {
+                                vm.quickAdd(quickTitle, 1); quickTitle = ""
+                            }
+                            QuickChip("بعد أسبوع", Modifier.weight(1f)) {
+                                vm.quickAdd(quickTitle, 7); quickTitle = ""
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!entitlement.isPro) {
+            item {
+                SoftCard(
+                    Modifier.fillMaxWidth(),
+                    color = colors.tileSand(),
+                    corner = 24.dp,
+                    elevation = 4.dp,
+                    onClick = onOpenPaywall
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(AccentYellow.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Rounded.WorkspacePremium, null,
+                                tint = AccentYellow, modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "مهامي بلس",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = colors.ink
+                            )
+                            Text(
+                                "مشاريع بلا حدود، مهام متكررة، تقارير وتصدير",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.inkMuted
+                            )
+                        }
+                        Icon(
+                            Icons.Rounded.ChevronLeft, null,
+                            tint = colors.inkMuted, modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -484,3 +575,23 @@ private fun StatTile(
         }
     }
 }
+
+@Composable
+private fun QuickChip(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val colors = MahamiTheme.colors
+    Box(
+        modifier
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+            .background(colors.accent.copy(alpha = 0.12f))
+            .clickable { onClick() }
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = colors.accent)
+    }
+}
+
+/** لون بطاقة الترقية — رملي فاتح يتكيّف مع الوضع الداكن */
+@Composable
+private fun com.almarar.mahami.ui.theme.MahamiPalette.tileSand(): Color =
+    if (isDark) Color(0xFF2B2519) else Color(0xFFFBF3E2)

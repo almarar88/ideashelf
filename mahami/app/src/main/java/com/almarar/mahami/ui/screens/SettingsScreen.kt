@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.almarar.mahami.data.AccentColor
 import com.almarar.mahami.data.ThemeMode
 import com.almarar.mahami.notify.NotificationHelper
 import com.almarar.mahami.notify.ReminderScheduler
@@ -51,6 +53,8 @@ import com.almarar.mahami.ui.MahamiViewModel
 import com.almarar.mahami.ui.components.CircleIconButton
 import com.almarar.mahami.ui.components.ConfirmDialog
 import com.almarar.mahami.ui.components.SoftCard
+import com.almarar.mahami.ui.theme.AccentGreen
+import com.almarar.mahami.ui.theme.AccentYellow
 import com.almarar.mahami.ui.theme.MahamiTheme
 
 @Composable
@@ -58,12 +62,15 @@ fun SettingsScreen(
     vm: MahamiViewModel,
     onBack: () -> Unit,
     onOpenProjects: () -> Unit,
-    onOpenAbout: () -> Unit
+    onOpenAbout: () -> Unit,
+    onOpenPaywall: () -> Unit = {},
+    onOpenArchive: () -> Unit = {}
 ) {
     val colors = MahamiTheme.colors
     val context = LocalContext.current
     val settings by vm.settings.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
+    val entitlement by vm.entitlement.collectAsStateWithLifecycle()
     var confirmClear by remember { mutableStateOf(false) }
 
     val importLauncher = rememberLauncherForActivityResult(
@@ -131,6 +138,63 @@ fun SettingsScreen(
             }
         }
 
+        item {
+            SoftCard(
+                Modifier.fillMaxWidth(),
+                corner = 26.dp,
+                color = if (entitlement.isPro) colors.surface else colors.surface,
+                onClick = onOpenPaywall
+            ) {
+                Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (entitlement.isPro) AccentGreen.copy(alpha = 0.16f)
+                                else AccentYellow.copy(alpha = 0.18f)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Rounded.WorkspacePremium, null,
+                            tint = if (entitlement.isPro) AccentGreen else AccentYellow,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (entitlement.isPro) "مهامي بلس مفعّل" else "مهامي بلس",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = colors.ink
+                        )
+                        Text(
+                            if (entitlement.isPro) {
+                                "خطتك: ${entitlement.planLabel.ifBlank { "مفعّلة" }} — شكراً لدعمك"
+                            } else {
+                                "مشاريع بلا حدود، مهام متكررة، تقارير وتصدير احترافي"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.inkMuted
+                        )
+                    }
+                    Icon(
+                        Icons.Rounded.ChevronLeft, null,
+                        tint = colors.inkMuted, modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        if (!entitlement.isPro) {
+            item {
+                ActionRow("استعادة المشتريات", "إن سبق أن اشتركت بنفس حساب جوجل") {
+                    vm.restorePurchases()
+                }
+            }
+        }
+
         item { SectionTitle("المظهر") }
 
         item {
@@ -156,6 +220,44 @@ fun SettingsScreen(
                                     color = if (selected) Color.White else colors.inkMuted
                                 )
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            SoftCard(Modifier.fillMaxWidth(), corner = 24.dp) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("لون التطبيق", style = MaterialTheme.typography.titleSmall, color = colors.ink)
+                        if (!entitlement.isPro) {
+                            Spacer(Modifier.width(8.dp))
+                            Box(
+                                Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(AccentYellow.copy(alpha = 0.18f))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    "بلس",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = AccentYellow
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        AccentColor.entries.forEach { accent ->
+                            val selected = settings.accentColor == accent
+                            Box(
+                                Modifier
+                                    .size(if (selected) 36.dp else 30.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(accent.argb))
+                                    .clickable { vm.setAccentColor(accent) }
+                            )
                         }
                     }
                 }
@@ -305,6 +407,7 @@ fun SettingsScreen(
         item { SectionTitle("البيانات") }
 
         item { ActionRow("المشاريع", "إضافة المشاريع وتلوينها وحذفها") { onOpenProjects() } }
+        item { ActionRow("الأرشيف", "المهام المكتملة مرتبة حسب الشهر") { onOpenArchive() } }
         item {
             ActionRow("تصدير نسخة احتياطية", "ملف JSON يحتوي المهام والمشاريع والخطوات") {
                 vm.exportBackup()
@@ -316,9 +419,15 @@ fun SettingsScreen(
             }
         }
         item {
-            ActionRow("تصدير إلى التقويم", "ملف ICS يفتح في تقويم جوجل أو أبل أو أوتلوك") {
+            ActionRow("تصدير إلى التقويم", "ملف ICS يفتح في تقويم جوجل أو أبل أو أوتلوك · بلس") {
                 vm.exportCalendar()
             }
+        }
+        item {
+            ActionRow("تصدير إلى Excel", "ملف CSV بكل تفاصيل المهام · بلس") { vm.exportCsv() }
+        }
+        item {
+            ActionRow("تقرير PDF", "تقرير منسّق جاهز للطباعة أو الإرسال · بلس") { vm.exportPdf() }
         }
         item {
             ActionRow("إضافة مهام تجريبية", "بيانات عامة لاستعراض التطبيق، يمكن حذفها") {
