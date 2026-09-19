@@ -90,7 +90,8 @@ class MahamiGlanceWidget : GlanceAppWidget() {
                 )
                 Spacer(GlanceModifier.width(8.dp))
                 Text(
-                    text = if (doneToday > 0) "أنجزت $doneToday اليوم" else "${openCount} مهمة مفتوحة",
+                    text = if (doneToday > 0) "أنجزت $doneToday اليوم"
+                    else "$openCount ${Ar.taskWord(openCount)} مفتوحة",
                     style = TextStyle(color = ColorProvider(Color(0xFF6B7280)), fontSize = 11.sp)
                 )
             }

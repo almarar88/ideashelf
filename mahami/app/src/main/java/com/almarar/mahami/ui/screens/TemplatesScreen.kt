@@ -251,7 +251,7 @@ private fun KitCard(kit: ProjectKit, today: LocalDate, onCreate: () -> Unit) {
 
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill("${kit.tasks.size} مهام", tint.copy(alpha = 0.12f), tint)
+                Pill(Ar.countTasks(kit.tasks.size), tint.copy(alpha = 0.12f), tint)
                 Pill(Ar.countDays(kit.durationDays), colors.surfaceMuted, colors.inkMuted)
                 Pill(
                     "ينتهي ${Ar.shortDate(today.plusDays(kit.durationDays))}",
@@ -288,7 +288,7 @@ private fun KitCard(kit: ProjectKit, today: LocalDate, onCreate: () -> Unit) {
             }
             if (!expanded && kit.tasks.size > 3) {
                 Text(
-                    "و${kit.tasks.size - 3} مهام أخرى — اضغط للعرض",
+                    "و${Ar.countTasks(kit.tasks.size - 3)} أخرى — اضغط للعرض",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.accent
                 )

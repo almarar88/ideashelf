@@ -238,7 +238,7 @@ fun HomeScreen(
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                "مهمة مفتوحة",
+                                "${Ar.taskWord(stats.total - stats.done)} مفتوحة",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = colors.inkMuted,
                                 modifier = Modifier.padding(bottom = 3.dp)

@@ -3,20 +3,26 @@ package com.almarar.mahami
 import android.app.Application
 import android.os.Looper
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.testing.WorkManagerTestInitHelper
+import com.almarar.mahami.data.CalendarView
 import com.almarar.mahami.data.Repository
 import com.almarar.mahami.data.ThemeMode
 import com.almarar.mahami.ui.MahamiViewModel
 import com.almarar.mahami.ui.components.LocalAnimationsEnabled
+import com.almarar.mahami.ui.components.SlidingTabs
 import com.almarar.mahami.ui.screens.AboutScreen
 import com.almarar.mahami.ui.screens.AccountScreen
 import com.almarar.mahami.ui.screens.ImportScreen
@@ -156,6 +162,40 @@ class ScreenshotTest {
         )
         idle()
         shot("17-import") { ImportScreen(vm, onBack = {}, onDone = {}) }
+    }
+
+    /**
+     * كل مواضع مؤشر التبويبات في لقطة واحدة.
+     * اللقطات الأخرى تصوّر التبويب الأول فقط، فلا تكشف خللاً في الإزاحة.
+     */
+    @Test fun tabs() = shot("18-tabs") {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            listOf(0, 1).forEach { index ->
+                SlidingTabs(
+                    options = listOf("شهري", "أسبوعي"),
+                    selectedIndex = index,
+                    onSelect = {}
+                )
+            }
+            listOf(0, 1, 2).forEach { index ->
+                SlidingTabs(
+                    options = listOf("يومي", "أسبوعي", "شهري"),
+                    selectedIndex = index,
+                    onSelect = {}
+                )
+            }
+        }
+    }
+
+    @Test fun calendarWeek() {
+        vm.setCalendarView(CalendarView.WEEK)
+        idle()
+        shot("19-calendar-week") { CalendarScreen(vm) {} }
     }
 
     @Test fun homeDark() = shot("12-home-dark", dark = true) {

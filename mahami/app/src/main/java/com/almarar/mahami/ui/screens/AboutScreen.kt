@@ -69,7 +69,7 @@ fun AboutScreen(onBack: () -> Unit) {
         }
 
         item {
-            SoftCard(Modifier.fillMaxWidth(), color = colors.tileSky, corner = 28.dp) {
+            SoftCard(Modifier.fillMaxWidth(), color = colors.tileSand, corner = 28.dp) {
                 Column(
                     Modifier
                         .fillMaxWidth()

@@ -146,7 +146,7 @@ fun TaskDetailScreen(
         }
 
         item {
-            SoftCard(Modifier.fillMaxWidth(), color = colors.tileSky, corner = 30.dp) {
+            SoftCard(Modifier.fillMaxWidth(), color = colors.tileSand, corner = 30.dp) {
                 Column(Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (project != null) {

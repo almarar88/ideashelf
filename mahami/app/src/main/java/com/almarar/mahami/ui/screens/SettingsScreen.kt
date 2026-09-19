@@ -50,6 +50,7 @@ import com.almarar.mahami.data.ThemeMode
 import com.almarar.mahami.notify.NotificationHelper
 import com.almarar.mahami.notify.ReminderScheduler
 import com.almarar.mahami.ui.MahamiViewModel
+import com.almarar.mahami.core.Ar
 import com.almarar.mahami.ui.components.CircleIconButton
 import com.almarar.mahami.ui.components.ConfirmDialog
 import com.almarar.mahami.ui.components.SoftCard
@@ -108,7 +109,7 @@ fun SettingsScreen(
         }
 
         item {
-            SoftCard(Modifier.fillMaxWidth(), color = colors.tileSky, corner = 28.dp) {
+            SoftCard(Modifier.fillMaxWidth(), color = colors.tileSand, corner = 28.dp) {
                 Column(Modifier.padding(20.dp)) {
                     Text("الاسم المعروض", style = MaterialTheme.typography.labelMedium, color = colors.inkMuted)
                     Spacer(Modifier.height(8.dp))
@@ -131,7 +132,7 @@ fun SettingsScreen(
                     }
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        "${stats.total} مهمة • ${stats.done} مكتملة • ${stats.late} متأخرة",
+                        "${Ar.countTasks(stats.total)} • ${stats.done} مكتملة • ${stats.late} متأخرة",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.inkMuted
                     )

@@ -232,13 +232,15 @@ fun SlidingTabs(
             animationSpec = tween(320, easing = FastOutSlowInEasing),
             label = "tab"
         )
-        // المؤشر المنزلق
+        // المؤشر المنزلق.
+        // slideFraction يجب أن يسبق fillMaxWidth ليقيس نسبة الإزاحة من عرض
+        // الشريط كاملاً، لا من عرض المؤشر نفسه.
         Box(
             Modifier
+                .slideFraction(offset)
                 .fillMaxWidth(weight)
                 .height(44.dp)
                 .padding(horizontal = 2.dp)
-                .slideFraction(offset)
                 .clip(RoundedCornerShape(26.dp))
                 .background(indicatorColor)
         )
@@ -332,11 +334,18 @@ fun RingMeter(
     }
 }
 
+/**
+ * يزيح العنصر أفقياً بنسبة من العرض المتاح له من الأب.
+ * يُوضع أول المعدِّلات حتى تصل إليه قيود الأب كاملة؛ ولو جاء بعد
+ * fillMaxWidth لحُسبت النسبة من عرض العنصر نفسه فاختلّ موضع المؤشر.
+ * placeRelative يتكفّل بالانعكاس في الواجهة العربية.
+ */
 private fun Modifier.slideFraction(fraction: Float): Modifier = this.then(
     Modifier.layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
-        layout(placeable.width, placeable.height) {
-            placeable.placeRelative((constraints.maxWidth * fraction).roundToInt(), 0)
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth else placeable.width
+        layout(width, placeable.height) {
+            placeable.placeRelative((width * fraction).roundToInt(), 0)
         }
     }
 )

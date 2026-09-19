@@ -445,7 +445,7 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
             ProjectTemplates.buildTasks(kit, projectId, LocalDate.now(), defaults).forEach {
                 repo.upsert(it)
             }
-            showToast("أُنشئ مشروع «${kit.name}» بـ ${kit.tasks.size} مهام")
+            showToast("أُنشئ مشروع «${kit.name}» بـ ${com.almarar.mahami.core.Ar.countTasks(kit.tasks.size)}")
             onDone(projectId)
         }
     }

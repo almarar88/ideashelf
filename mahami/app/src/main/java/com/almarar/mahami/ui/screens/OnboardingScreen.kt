@@ -89,7 +89,7 @@ fun OnboardingScreen(onFinish: (String) -> Unit) {
         Modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(listOf(colors.tileSky, colors.background, colors.background))
+                Brush.verticalGradient(listOf(colors.tileSand, colors.background, colors.background))
             )
     ) {
         Column(

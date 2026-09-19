@@ -78,7 +78,7 @@ fun PaywallScreen(vm: MahamiViewModel, onClose: () -> Unit) {
         Modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(listOf(colors.tileSky, colors.background, colors.background))
+                Brush.verticalGradient(listOf(colors.tileSand, colors.background, colors.background))
             ),
         contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)

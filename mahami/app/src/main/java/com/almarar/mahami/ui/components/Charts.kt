@@ -45,7 +45,9 @@ fun GaugeArc(
     centerUnit: String,
     centerCaption: String,
     modifier: Modifier = Modifier,
-    strokeWidth: Dp = 20.dp
+    strokeWidth: Dp = 20.dp,
+    /** موضع المقبض على القوس من 0 إلى 1؛ null يعني بلا مقبض */
+    markerFraction: Float? = null
 ) {
     val colors = MahamiTheme.colors
     val total = segments.sumOf { it.value.toDouble() }.toFloat().takeIf { it > 0f } ?: 1f
@@ -92,31 +94,45 @@ fun GaugeArc(
                 angle += sweep
             }
 
-            // المقبض في نهاية القوس
-            val endAngle = (startAngle + totalSweep * progress) * PI / 180f
-            val radius = diameter / 2f
-            val cx = topLeft.x + radius + cos(endAngle).toFloat() * radius
-            val cy = topLeft.y + radius + sin(endAngle).toFloat() * radius
-            drawCircle(color = Color.White, radius = stroke * 0.42f, center = Offset(cx, cy))
-            val knobColor = segments.lastOrNull { it.value >= 1f }?.color
-                ?: segments.lastOrNull()?.color ?: colors.accent
-            drawCircle(
-                color = knobColor,
-                radius = stroke * 0.42f,
-                center = Offset(cx, cy),
-                style = Stroke(width = stroke * 0.22f)
-            )
+            // المقبض يقف عند القيمة المعروضة في المنتصف، لا عند نهاية القوس،
+            // وإلا بدا كأنه مؤشر يشير إلى 100% مهما كانت النسبة.
+            markerFraction?.let { fraction ->
+                val marked = fraction.coerceIn(0f, 1f) * progress
+                val markerAngle = (startAngle + totalSweep * marked) * PI / 180f
+                val radius = diameter / 2f
+                val cx = topLeft.x + radius + cos(markerAngle).toFloat() * radius
+                val cy = topLeft.y + radius + sin(markerAngle).toFloat() * radius
+                drawCircle(color = Color.White, radius = stroke * 0.42f, center = Offset(cx, cy))
+                // لون المقبض يتبع الشريحة التي يقف عندها
+                var walked = 0f
+                val knobColor = segments.firstOrNull { seg ->
+                    walked += seg.value / total
+                    marked <= walked + 0.0001f
+                }?.color ?: segments.lastOrNull()?.color ?: colors.accent
+                drawCircle(
+                    color = knobColor,
+                    radius = stroke * 0.42f,
+                    center = Offset(cx, cy),
+                    style = Stroke(width = stroke * 0.22f)
+                )
+            }
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(centerValue, style = MaterialTheme.typography.displayLarge, color = colors.ink)
-                Spacer(Modifier.width(4.dp))
+            // المحاذاة على خط القاعدة، فلا تهبط علامة النسبة تحت الرقم
+            Row {
+                Text(
+                    centerValue,
+                    style = MaterialTheme.typography.displayLarge,
+                    color = colors.ink,
+                    modifier = Modifier.alignByBaseline()
+                )
+                Spacer(Modifier.width(3.dp))
                 Text(
                     centerUnit,
                     style = MaterialTheme.typography.titleMedium,
                     color = colors.inkMuted,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.alignByBaseline()
                 )
             }
             Text(centerCaption, style = MaterialTheme.typography.bodyMedium, color = colors.inkMuted)

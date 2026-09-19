@@ -194,7 +194,7 @@ fun CalendarScreen(vm: MahamiViewModel, onOpenTask: (Long) -> Unit) {
                 )
                 Spacer(Modifier.weight(1f))
                 Pill(
-                    text = "${dayTasks.size} مهمة",
+                    text = Ar.countTasks(dayTasks.size),
                     background = colors.surface,
                     textColor = colors.inkMuted
                 )

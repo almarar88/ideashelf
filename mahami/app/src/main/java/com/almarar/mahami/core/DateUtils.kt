@@ -85,6 +85,9 @@ object Ar {
         else -> "$n مهمة"
     }
 
+    /** اسم «مهمة» مطابقاً للعدد حين يُعرض الرقم منفصلاً عنه */
+    fun taskWord(n: Int): String = if (n in 2..10) "مهام" else "مهمة"
+
     fun countDays(n: Long): String = when (n) {
         0L -> "اليوم"
         1L -> "يوم واحد"

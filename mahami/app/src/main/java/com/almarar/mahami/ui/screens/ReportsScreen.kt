@@ -114,6 +114,7 @@ fun ReportsScreen(vm: MahamiViewModel) {
                     else (done * 100 / scoped.size).toString(),
                     centerUnit = "%",
                     centerCaption = "نسبة الإنجاز",
+                    markerFraction = if (scoped.isEmpty()) 0f else done.toFloat() / scoped.size,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(228.dp)
@@ -289,7 +290,7 @@ fun ReportsScreen(vm: MahamiViewModel) {
                 .filter { it.status != TaskStatus.DONE && !it.dueDate.isBefore(today) }
                 .groupBy { it.dueDate }
                 .maxByOrNull { it.value.size }
-            SoftCard(Modifier.fillMaxWidth(), corner = 30.dp, color = colors.tileSky) {
+            SoftCard(Modifier.fillMaxWidth(), corner = 30.dp, color = colors.tileSand) {
                 Column(Modifier.padding(18.dp)) {
                     Text("أثقل الأيام", style = MaterialTheme.typography.titleMedium, color = colors.ink)
                     Spacer(Modifier.height(6.dp))
