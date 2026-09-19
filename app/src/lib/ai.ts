@@ -1,8 +1,33 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ModelId, Source, Usage } from "./types";
+import { getState } from "./store";
+import { accessToken } from "./account";
+import { API_URL, HOSTED_ENABLED } from "../config";
 
-export function makeClient(apiKey: string): Anthropic {
-  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 4, timeout: 10 * 60 * 1000 });
+/** Hosted mode: talk to the Majlis server with the user's session; BYOK: talk to Anthropic directly. */
+export function makeClient(): Anthropic {
+  const st = getState().settings;
+  const common = { dangerouslyAllowBrowser: true, maxRetries: 4, timeout: 10 * 60 * 1000 };
+  if (st.aiMode === "hosted" && HOSTED_ENABLED) {
+    return new Anthropic({ ...common, baseURL: API_URL, apiKey: null, authToken: accessToken() ?? "" });
+  }
+  return new Anthropic({ ...common, apiKey: st.apiKey });
+}
+
+/** True when the app can make AI calls right now. */
+export function hasAI(): boolean {
+  const st = getState().settings;
+  if (st.aiMode === "hosted" && HOSTED_ENABLED) return Boolean(accessToken());
+  return Boolean(st.apiKey);
+}
+
+/** Thrown-by-server quota error (HTTP 402) → tell the UI to show the paywall. */
+export function quotaCodeOf(e: unknown): string | null {
+  if (e instanceof Anthropic.APIError && e.status === 402) {
+    const body = e.error as { error?: { code?: string } } | undefined;
+    return body?.error?.code ?? "quota";
+  }
+  return null;
 }
 
 export function webSearchTool(model: ModelId, maxUses: number): Anthropic.ToolUnion {
@@ -26,6 +51,8 @@ export interface TurnOpts {
   effort?: "low" | "medium" | "high" | "xhigh";
   maxTokens?: number;
   signal?: AbortSignal;
+  /** Marks the request that counts as one "user message" for plan limits (hosted mode). */
+  countMessage?: boolean;
   onText?: (full: string) => void;
   onPhase?: (p: Phase) => void;
   /** Execute a client tool. Throw to report an error result. */
@@ -108,7 +135,7 @@ export async function runTurn(o: TurnOpts): Promise<TurnResult> {
     const searchesBefore = searches;
     const final = await withStreamRetry(o.signal, async (signal, touch) => {
       text = textBefore; searches = searchesBefore;
-      const stream = o.client.messages.stream(params, { signal });
+      const stream = o.client.messages.stream(params, { signal, ...(o.countMessage && iter === 0 ? { headers: { "x-majlis-message": "1" } } : {}) });
       let sawText = false;
       for await (const ev of stream) {
         touch();
@@ -175,6 +202,7 @@ export async function runTurn(o: TurnOpts): Promise<TurnResult> {
 export function describeError(e: unknown): string {
   if (e instanceof Anthropic.AuthenticationError) return "Invalid API key (401)";
   if (e instanceof Anthropic.RateLimitError) return "Rate limited (429) — try again shortly";
+  if (e instanceof Anthropic.APIError && e.status === 402) { window.dispatchEvent(new CustomEvent("majlis:quota", { detail: quotaCodeOf(e) })); return "Plan limit reached — upgrade to continue"; }
   if (e instanceof Anthropic.BadRequestError) return "Bad request: " + e.message;
   if (e instanceof Anthropic.APIConnectionError) return "Connection error — check your internet";
   if (e instanceof Anthropic.APIError) return `API error ${e.status}: ${e.message}`;

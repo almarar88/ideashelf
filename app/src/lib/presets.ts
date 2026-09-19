@@ -54,6 +54,17 @@ export function defaultJudge(lang: Lang): JudgeConfig {
   };
 }
 
+/** One-tap teams: a group name + which presets to put in it. */
+export const TEAM_PRESETS: { key: string; emoji: string; name: Record<Lang, string>; agents: string[] }[] = [
+  { key: "startup", emoji: "🚀", name: { ar: "مجلس شركة ناشئة", en: "Startup council" }, agents: ["strategist", "cfo", "marketer", "vc", "devil"] },
+  { key: "store", emoji: "🏪", name: { ar: "متجر إلكتروني", en: "E-commerce store" }, agents: ["marketer", "ops", "designer", "cfo"] },
+  { key: "invest", emoji: "📈", name: { ar: "قرار استثماري", en: "Investment decision" }, agents: ["vc", "cfo", "researcher", "devil"] },
+  { key: "tech", emoji: "🛠️", name: { ar: "بناء منتج تقني", en: "Build a tech product" }, agents: ["cto", "designer", "strategist", "marketer"] },
+  { key: "health", emoji: "🏥", name: { ar: "استشارة صحية", en: "Health consult" }, agents: ["doctor", "researcher", "psych"] },
+  { key: "legal", emoji: "⚖️", name: { ar: "مراجعة قانونية", en: "Legal review" }, agents: ["legal", "researcher", "strategist"] },
+  { key: "friends", emoji: "🎯", name: { ar: "ربع للسوالف والمشورة", en: "Friends & advice" }, agents: ["psych", "devil", "marketer", "strategist"] },
+];
+
 export const SESSION_EXAMPLES: Record<Lang, string[]> = {
   ar: [
     "هلا الربع، شو الأخبار؟ عندي فكرة يديدة أبا رايكم فيها",

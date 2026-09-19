@@ -1,0 +1,74 @@
+name: Build Google Play bundle (AAB)
+
+# Builds a Play-ready, signed Android App Bundle. Requires repository secrets:
+#   ANDROID_UPLOAD_KEYSTORE_B64  – base64 of your PRIVATE upload keystore (never the dev one in the repo)
+#   ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+# and repository variables for hosted mode (VITE_API_URL, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_REVENUECAT_ANDROID_KEY).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    env:
+      VITE_API_URL: ${{ vars.VITE_API_URL }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+      VITE_REVENUECAT_ANDROID_KEY: ${{ vars.VITE_REVENUECAT_ANDROID_KEY }}
+      VITE_PRIVACY_URL: ${{ vars.VITE_PRIVACY_URL }}
+      VITE_TERMS_URL: ${{ vars.VITE_TERMS_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install Android SDK 36
+        run: |
+          SDKM=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)
+          yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+          "$SDKM" --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" > /dev/null
+      - name: Restore upload keystore
+        if: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_B64 != '' }}
+        run: echo "${{ secrets.ANDROID_UPLOAD_KEYSTORE_B64 }}" | base64 -d > android/app/upload.keystore
+      - name: Install dependencies and build web app
+        run: npm ci && npm run build
+      - name: Sync Capacitor
+        run: npx cap sync android
+      - name: Build signed bundle
+        env:
+          UPLOAD_KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_B64 != '' && 'upload.keystore' || '' }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: cd android && chmod +x gradlew && ./gradlew bundleRelease assembleRelease --no-daemon
+      - name: Collect outputs
+        run: |
+          cp android/app/build/outputs/bundle/release/app-release.aab MajlisAI.aab
+          cp android/app/build/outputs/apk/release/app-release.apk MajlisAI-hosted.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MajlisAI-play-bundle
+          path: |
+            app/MajlisAI.aab
+            app/MajlisAI-hosted.apk
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            app/MajlisAI.aab
+            app/MajlisAI-hosted.apk

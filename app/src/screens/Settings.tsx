@@ -5,7 +5,40 @@ import { MODELS, type ControlLevel, type Dialect, type Speed, type Vibe } from "
 import { detectPlatform } from "../lib/platform";
 
 const platform = detectPlatform();
-import { Toggle } from "../components/ui";
+import { Sheet, Toggle } from "../components/ui";
+import { useState } from "react";
+import { HOSTED_ENABLED, PRIVACY_URL, TERMS_URL } from "../config";
+import { deleteAccount, refreshMe, signOut, useAccount, usageRatio } from "../lib/account";
+import Paywall from "./Paywall";
+
+function AccountCard() {
+  const lang = useStore((x) => x.settings.lang);
+  const { session, me } = useAccount();
+  const [pay, setPay] = useState(false);
+  if (!session) return null;
+  return (
+    <div className="card stack">
+      <div className="row between"><div><div className="h3">{t(lang, "account")}</div><div className="small muted" dir="ltr">{session.user.email}</div></div><span className="pill orange">{me?.plan.name ?? "…"}</span></div>
+      {me && (
+        <div>
+          <div className="row between small"><span>{t(lang, "usageThisMonth")}</span><span>{Math.round(usageRatio(me) * 100)}%{me.plan.daily_messages ? ` · ${t(lang, "dailyLeft")} ${Math.max(0, me.plan.daily_messages - me.usage.day_messages)}/${me.plan.daily_messages}` : ""}</span></div>
+          <div className="score-bar" style={{ marginTop: 6 }}><div style={{ width: `${usageRatio(me) * 100}%` }} /></div>
+        </div>
+      )}
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn orange grow" onClick={() => setPay(true)}><Icon name="star" size={16} /> {t(lang, "upgrade")}</button>
+        <button className="btn light" onClick={() => refreshMe(true)}><Icon name="refresh" size={16} /></button>
+        <button className="btn light" onClick={() => signOut()}>{t(lang, "signOut")}</button>
+      </div>
+      <div className="row between small muted">
+        <span><a href={PRIVACY_URL} target="_blank" rel="noreferrer">{t(lang, "legal")}</a></span>
+        <button style={{ color: "var(--red)" }} onClick={async () => { if (confirm(t(lang, "confirmDeleteAccount"))) { const e = await deleteAccount(); if (e) alert(e); } }}>{t(lang, "deleteAccount")}</button>
+      </div>
+      <Sheet open={pay} onClose={() => setPay(false)}><Paywall onClose={() => setPay(false)} /></Sheet>
+    </div>
+  );
+}
+void TERMS_URL;
 import { filesDB, messagesDB } from "../lib/db";
 
 export default function Settings() {
@@ -15,12 +48,20 @@ export default function Settings() {
     <div className="screen">
       <div className="hdr-light"><h1 className="h1" style={{ margin: 0 }}>{t(lang, "settings")}</h1></div>
       <div className="pad stack">
+        {HOSTED_ENABLED && <AccountCard />}
         <div className="card stack">
-          <div className="field">
-            <label>{t(lang, "apiKey")}</label>
-            <input className="input" dir="ltr" type="password" value={s.apiKey} onChange={(e) => actions.updateSettings({ apiKey: e.target.value.trim() })} placeholder="sk-ant-..." autoCapitalize="off" />
-            <span className="small muted">{t(lang, "apiKeyDesc")} · <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">{t(lang, "getKey")}</a></span>
-          </div>
+          {HOSTED_ENABLED && (
+            <div className="field"><label>{t(lang, "aiSource")}</label>
+              <div className="seg"><button className={s.aiMode === "hosted" ? "on" : ""} onClick={() => actions.updateSettings({ aiMode: "hosted" })}>{t(lang, "aiHosted")}</button><button className={s.aiMode === "byok" ? "on" : ""} onClick={() => actions.updateSettings({ aiMode: "byok" })}>{t(lang, "aiByok")}</button></div>
+            </div>
+          )}
+          {(!HOSTED_ENABLED || s.aiMode === "byok") && (
+            <div className="field">
+              <label>{t(lang, "apiKey")}</label>
+              <input className="input" dir="ltr" type="password" value={s.apiKey} onChange={(e) => actions.updateSettings({ apiKey: e.target.value.trim() })} placeholder="sk-ant-..." autoCapitalize="off" />
+              <span className="small muted">{t(lang, "apiKeyDesc")} · <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">{t(lang, "getKey")}</a></span>
+            </div>
+          )}
           <div className="field"><label>{t(lang, "yourName")}</label><input className="input" value={s.userName} onChange={(e) => actions.updateSettings({ userName: e.target.value })} /></div>
         </div>
         <div className="card stack">
@@ -64,7 +105,7 @@ export default function Settings() {
           <div className="row between"><span className="muted">{t(lang, "concurrency")}</span><div className="row"><button className="round-btn" onClick={() => actions.updateSettings({ concurrency: Math.max(1, s.concurrency - 1) })}><Icon name="minus" size={16} /></button><b style={{ minWidth: 24, textAlign: "center" }}>{s.concurrency}</b><button className="round-btn" onClick={() => actions.updateSettings({ concurrency: Math.min(6, s.concurrency + 1) })}><Icon name="plus" size={16} /></button></div></div>
         </div>
         <button className="btn block" style={{ background: "var(--red)" }} onClick={async () => { if (confirm(t(lang, "confirmReset"))) { await messagesDB.clear(); await filesDB.clear(); actions.resetAll(); actions.updateSettings({ onboarded: true }); } }}><Icon name="trash" size={18} /> {t(lang, "resetAll")}</button>
-        <div className="small muted" style={{ textAlign: "center" }}>Majlis AI · {t(lang, "version")} 1.4.0</div>
+        <div className="small muted" style={{ textAlign: "center" }}>Majlis AI · {t(lang, "version")} 2.0.0</div>
       </div>
     </div>
   );

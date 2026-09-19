@@ -27,12 +27,17 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - name: Build web app
         working-directory: app
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
         run: npm ci && npm run build
       - name: Assemble site (existing root site + app under /app/)
         run: |
           mkdir -p _site/app
           cp -r app/dist/. _site/app/
           for f in index.html vite.svg *.js *.css; do [ -e "$f" ] && cp "$f" _site/ || true; done
+          mkdir -p _site/legal && cp -r docs/legal/. _site/legal/
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { Agent, AppState, Group, JudgeConfig, Memory, Settings, UsageEntry } from "./types";
 import { defaultAgents, defaultJudge } from "./presets";
+import { HOSTED_ENABLED } from "../config";
 
 const KEY = "majlis:state:v2";
 
@@ -11,6 +12,7 @@ const defaultSettings: Settings = {
   dialect: "emirati", vibe: "friends", humanDelay: true,
   control: { level: "ask", shell: true, files: true, screen: true, device: true, webFetch: true },
   speed: "fast",
+  aiMode: HOSTED_ENABLED ? "hosted" : "byok",
 };
 
 function load(): AppState {

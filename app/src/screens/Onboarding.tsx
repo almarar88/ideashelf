@@ -3,6 +3,7 @@ import { RobotAvatar } from "../lib/avatars";
 import { actions, getState, useStore } from "../lib/store";
 import { t } from "../lib/i18n";
 import { defaultAgents, defaultJudge } from "../lib/presets";
+import { HOSTED_ENABLED } from "../config";
 
 export default function Onboarding({ onDone }: { onDone: () => void }) {
   const settings = useStore((s) => s.settings);
@@ -37,11 +38,11 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       </div>
       <div className="pad stack" style={{ marginTop: 18 }}>
         <div className="field"><label>{t(lang, "yourName")}</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={lang === "ar" ? "مثال: أحمد" : "e.g. Ahmed"} /></div>
-        <div className="field">
+        {!HOSTED_ENABLED && <div className="field">
           <label>{t(lang, "apiKey")}</label>
           <input className="input" dir="ltr" value={key} onChange={(e) => setKey(e.target.value)} placeholder="sk-ant-..." autoCapitalize="off" autoCorrect="off" />
           <span className="small muted">{t(lang, "apiKeyDesc")} · <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">{t(lang, "getKey")}</a></span>
-        </div>
+        </div>}
         <button className="btn block" style={{ marginTop: 8, padding: 18 }} onClick={finish}>{t(lang, "getStarted")}</button>
       </div>
     </div>

@@ -7,8 +7,8 @@ android {
         applicationId "com.ideashelf.majlis"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 7
-        versionName "1.4"
+        versionCode 8
+        versionName "2.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,12 +16,22 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Play Store builds use a PRIVATE upload keystore passed via env (see .github/workflows/build-aab.yml).
+    // Side-loaded builds fall back to the shared dev keystore in the repo.
     signingConfigs {
         release {
-            storeFile file("majlis-release.keystore")
-            storePassword "majlis2026"
-            keyAlias "majlis"
-            keyPassword "majlis2026"
+            def uploadKs = System.getenv("UPLOAD_KEYSTORE")
+            if (uploadKs) {
+                storeFile file(uploadKs)
+                storePassword System.getenv("UPLOAD_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("UPLOAD_KEY_ALIAS")
+                keyPassword System.getenv("UPLOAD_KEY_PASSWORD")
+            } else {
+                storeFile file("majlis-release.keystore")
+                storePassword "majlis2026"
+                keyAlias "majlis"
+                keyPassword "majlis2026"
+            }
         }
     }
     buildTypes {

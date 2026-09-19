@@ -9,13 +9,18 @@ import Files from "./screens/Files";
 import Analytics from "./screens/Analytics";
 import Settings from "./screens/Settings";
 import Onboarding from "./screens/Onboarding";
+import Auth from "./screens/Auth";
 import { App as CapApp } from "@capacitor/app";
+import { useAccount } from "./lib/account";
+import { HOSTED_ENABLED } from "./config";
+import { Spinner } from "./components/ui";
 
 export type Tab = "home" | "agents" | "files" | "analytics" | "settings";
 export interface Nav { tab: Tab; chatId?: string; }
 
 export default function App() {
   const settings = useStore((s) => s.settings);
+  const account = useAccount();
   const [nav, setNav] = useState<Nav>({ tab: "home" });
   const lang = settings.lang;
 
@@ -34,6 +39,11 @@ export default function App() {
   }, []);
 
   if (!settings.onboarded) return <Onboarding onDone={() => actions.updateSettings({ onboarded: true })} />;
+
+  if (HOSTED_ENABLED && settings.aiMode === "hosted") {
+    if (!account.ready) return <div className="empty" style={{ paddingTop: "40vh" }}><Spinner size={28} /></div>;
+    if (!account.session) return <Auth onSkipToKey={() => actions.updateSettings({ aiMode: "byok" })} />;
+  }
 
   if (nav.chatId) return <Chat groupId={nav.chatId} onBack={() => setNav({ tab: nav.tab })} />;
 

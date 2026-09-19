@@ -265,7 +265,7 @@ function newMsg(groupId: string, role: Message["role"], agentId?: string, extra:
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-async function runAgentReply(ctx: ChatCtx, client: Anthropic, a: Agent, members: Agent[], judge: JudgeConfig, userMsg: Message, prompt: string, council: boolean, replyTo?: string, opts: { reaction?: boolean; maxTokens?: number } = {}): Promise<Message> {
+async function runAgentReply(ctx: ChatCtx, client: Anthropic, a: Agent, members: Agent[], judge: JudgeConfig, userMsg: Message, prompt: string, council: boolean, replyTo?: string, opts: { reaction?: boolean; maxTokens?: number; countMessage?: boolean } = {}): Promise<Message> {
   if (getState().settings.humanDelay) { const [lo, hi] = profile().delay; await sleep(lo + Math.random() * (hi - lo)); }
   if (ctx.signal.aborted) return newMsg(ctx.group.id, "agent", a.id, { status: "error", error: "Stopped" });
   const msg = newMsg(ctx.group.id, "agent", a.id, { replyTo: replyTo ?? userMsg.id, council, reaction: opts.reaction });
@@ -286,7 +286,7 @@ async function runAgentReply(ctx: ChatCtx, client: Anthropic, a: Agent, members:
     const r = await runTurn({
       client, model, system: agentSystem(a, ctx.group, members, judge, catalog, council),
       messages: [{ role: "user", content }],
-      tools: opts.reaction ? [] : toolsFor(a, model), effort: opts.reaction ? "low" : capEffort(effortFor(a.creativity), profile().effortCap), signal: ctx.signal, maxTokens: opts.maxTokens,
+      tools: opts.reaction ? [] : toolsFor(a, model), effort: opts.reaction ? "low" : capEffort(effortFor(a.creativity), profile().effortCap), signal: ctx.signal, maxTokens: opts.maxTokens, countMessage: opts.countMessage,
       onText: (t) => push({ text: t }),
       onPhase: (p) => push({ phase: p }),
       onToolCall: async (name, input, toolset) => {
@@ -331,7 +331,7 @@ export async function regenerateReply(ctx: ChatCtx, agentMsg: Message): Promise<
   const userMsg = ctx.getMessages().find((m) => m.id === agentMsg.replyTo);
   if (!a || !userMsg) return;
   ctx.remove(agentMsg.id);
-  const client = makeClient(st.settings.apiKey);
+  const client = makeClient();
   await runAgentReply(ctx, client, a, members, st.judge, userMsg, `The boss asked (answer it again, fresh, better than before):\n"""${userMsg.text}"""`, !!agentMsg.council);
 }
 
@@ -408,7 +408,7 @@ async function runJudge(ctx: ChatCtx, client: Anthropic, judge: JudgeConfig, mem
 /** Main entry: the boss sent a message; make the team respond. */
 export async function handleUserMessage(ctx: ChatCtx, userMsg: Message, council: boolean): Promise<void> {
   const st = getState();
-  const client = makeClient(st.settings.apiKey);
+  const client = makeClient();
   const judge = st.judge;
   const members = st.agents.filter((a) => ctx.group.memberIds.includes(a.id) && a.active);
   const mentions = (userMsg.mentions ?? []).filter((id) => id === JUDGE_ID || members.some((m) => m.id === id));
@@ -438,12 +438,14 @@ export async function handleUserMessage(ctx: ChatCtx, userMsg: Message, council:
 
   const agents = responders.map((id) => members.find((m) => m.id === id)!).filter(Boolean);
   const replies: Message[] = [];
+  let counted = false;
   await pool(agents, st.settings.concurrency, async (a) => {
     if (ctx.signal.aborted) return;
     const prompt = council
       ? `The boss asked the whole council:\n"""${userMsg.text}"""\nGive your position.`
       : `New message from the boss${mentions.length ? " (addressed to you)" : ""}:\n"""${userMsg.text}"""`;
-    const m = await runAgentReply(ctx, client, a, members, judge, userMsg, prompt, council);
+    const countMessage = !counted; counted = true;
+    const m = await runAgentReply(ctx, client, a, members, judge, userMsg, prompt, council, undefined, { countMessage });
     if (m.status === "done") replies.push(m);
   });
 

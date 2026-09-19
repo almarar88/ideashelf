@@ -128,6 +128,7 @@ export interface Settings {
   humanDelay: boolean;
   control: ControlSettings;
   speed: Speed;
+  aiMode: "hosted" | "byok";   // hosted = Majlis account + subscription; byok = bring your own Anthropic key
 }
 
 export type Speed = "fast" | "balanced" | "quality";

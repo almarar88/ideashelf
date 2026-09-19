@@ -1,15 +1,18 @@
 import { useState } from "react";
 import { RobotAvatar } from "../lib/avatars";
-import { actions, useStore } from "../lib/store";
+import { actions, getState, useStore } from "../lib/store";
 import { t } from "../lib/i18n";
 import { Icon, Sheet, Toggle, fmtDate, fmtNum } from "../components/ui";
 import { JUDGE_ID, costUSD, uid, type Group } from "../lib/types";
-import { SESSION_EXAMPLES } from "../lib/presets";
+import { SESSION_EXAMPLES, TEAM_PRESETS, materialize, presetAgents } from "../lib/presets";
+import { useAccount, usageRatio } from "../lib/account";
+import { HOSTED_ENABLED } from "../config";
 
 const EMOJIS = ["🚀", "💼", "🏪", "📈", "🧠", "🏥", "⚖️", "🎯", "🛠️", "✈️", "🏠", "🎨"];
 
 export default function Home({ openChat, goAgents, goSettings }: { openChat: (id: string) => void; goAgents: () => void; goSettings: () => void }) {
   const { settings, agents, groups, usageLog, judge } = useStore((s) => s);
+  const { me } = useAccount();
   const lang = settings.lang;
   const [creating, setCreating] = useState(false);
   const [gName, setGName] = useState("");
@@ -25,6 +28,18 @@ export default function Home({ openChat, goAgents, goSettings }: { openChat: (id
     const g: Group = { id: uid(), name: gName.trim() || (lang === "ar" ? "مجموعة جديدة" : "New group"), emoji: gEmoji, memberIds: gMembers, judgeEnabled: gJudge, debate: false, banter: true, createdAt: Date.now(), updatedAt: Date.now(), lastPreview: "", lastSender: "", msgCount: 0 };
     actions.upsertGroup(g); setCreating(false); setGName(""); openChat(g.id);
   };
+  /** One-tap team: adds any missing preset agents, then creates the group. */
+  const createTeam = (tp: (typeof TEAM_PRESETS)[number]) => {
+    const all = presetAgents(lang);
+    const ids = tp.agents.map((key) => {
+      const preset = all.find((p) => p.id === "preset-" + key)!;
+      const existing = getState().agents.find((a) => a.name === preset.name && a.title === preset.title);
+      if (existing) return existing.id;
+      const a = materialize(preset); actions.upsertAgent(a); return a.id;
+    });
+    const g: Group = { id: uid(), name: tp.name[lang], emoji: tp.emoji, memberIds: ids, judgeEnabled: true, debate: false, banter: true, createdAt: Date.now(), updatedAt: Date.now(), lastPreview: "", lastSender: "", msgCount: 0 };
+    actions.upsertGroup(g); setCreating(false); openChat(g.id);
+  };
 
   return (
     <div className="screen">
@@ -33,7 +48,7 @@ export default function Home({ openChat, goAgents, goSettings }: { openChat: (id
           <div className="row">
             <div style={{ position: "relative" }}>
               <div style={{ width: 54, height: 54, borderRadius: "50%", background: "linear-gradient(135deg,#f47a4b,#e9b43a)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 22, color: "#fff" }}>{(settings.userName || "M").slice(0, 1).toUpperCase()}</div>
-              <span className="pill orange" style={{ position: "absolute", bottom: -6, insetInlineStart: 8, padding: "2px 8px", fontSize: 10 }}>Pro</span>
+              <span className="pill orange" style={{ position: "absolute", bottom: -6, insetInlineStart: 8, padding: "2px 8px", fontSize: 10 }}>{me?.plan.name ?? (HOSTED_ENABLED ? "Free" : "Pro")}</span>
             </div>
           </div>
           <button className="icon-btn" onClick={goSettings}><Icon name="settings" /></button>
@@ -59,8 +74,18 @@ export default function Home({ openChat, goAgents, goSettings }: { openChat: (id
         <div className="card row" style={{ padding: "14px 16px" }}>
           <span className="icon-btn" style={{ background: "var(--orange-soft)", color: "var(--orange)" }}><Icon name="bolt" /></span>
           <div className="grow">
-            <div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1 }}>{fmtNum(tokens)}<span className="small muted"> {t(lang, "tokens")}</span></div>
-            <div className="small muted">{t(lang, "totalCost")} ≈ ${cost.toFixed(2)} · {usageLog.length} {t(lang, "requests")}</div>
+            {me ? (
+              <>
+                <div className="row between"><span style={{ fontSize: 16, fontWeight: 600 }}>{t(lang, "usageThisMonth")}</span><span className="small muted">{Math.round(usageRatio(me) * 100)}%</span></div>
+                <div className="score-bar" style={{ marginTop: 6 }}><div style={{ width: `${usageRatio(me) * 100}%` }} /></div>
+                <div className="small muted" style={{ marginTop: 4 }}>{me.plan.name}{me.plan.daily_messages ? ` · ${t(lang, "dailyLeft")} ${Math.max(0, me.plan.daily_messages - me.usage.day_messages)}/${me.plan.daily_messages}` : ""}</div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1 }}>{fmtNum(tokens)}<span className="small muted"> {t(lang, "tokens")}</span></div>
+                <div className="small muted">{t(lang, "totalCost")} ≈ ${cost.toFixed(2)} · {usageLog.length} {t(lang, "requests")}</div>
+              </>
+            )}
           </div>
         </div>
 
@@ -103,6 +128,11 @@ export default function Home({ openChat, goAgents, goSettings }: { openChat: (id
 
       <Sheet open={creating} onClose={() => setCreating(false)} title={t(lang, "newGroup")}>
         <div className="stack">
+          <div className="small muted">{t(lang, "teams")}</div>
+          <div className="row" style={{ overflowX: "auto", paddingBottom: 4, gap: 8 }}>
+            {TEAM_PRESETS.map((tp) => <button key={tp.key} className="chip" style={{ flexShrink: 0 }} onClick={() => createTeam(tp)}>{tp.emoji} {tp.name[lang]}</button>)}
+          </div>
+          <div className="divider" />
           <div className="row" style={{ overflowX: "auto", paddingBottom: 4 }}>
             {EMOJIS.map((e) => <button key={e} onClick={() => setGEmoji(e)} style={{ fontSize: 24, width: 46, height: 46, borderRadius: 14, flexShrink: 0, background: gEmoji === e ? "var(--orange-soft)" : "var(--white)" }}>{e}</button>)}
           </div>

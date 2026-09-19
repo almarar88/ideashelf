@@ -9,6 +9,10 @@ import { messagesDB } from "../lib/db";
 import { ingestUpload, pickCamera, pickFiles, shareText } from "../lib/files";
 import { handleUserMessage, regenerateReply } from "../lib/chat";
 import { keepAlive, notifyDone } from "../lib/background";
+import { hasAI } from "../lib/ai";
+import { refreshMe } from "../lib/account";
+import { listenOnce, stopListening, voiceAvailable } from "../lib/voice";
+import Paywall from "./Paywall";
 import { JUDGE_ID, uid, type Agent, type FileRef, type JudgeConfig, type Message, type Verdict } from "../lib/types";
 import { SESSION_EXAMPLES } from "../lib/presets";
 
@@ -30,6 +34,22 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
   const [uploading, setUploading] = useState(false);
   const [attachMenu, setAttachMenu] = useState(false);
   const [permReq, setPermReq] = useState<{ agent: string; desc: string; resolve: (ok: boolean) => void } | null>(null);
+  const [paywall, setPaywall] = useState<string | null>(null);
+  const [listening, setListening] = useState(false);
+  const [voiceOk, setVoiceOk] = useState(false);
+  useEffect(() => { voiceAvailable().then(setVoiceOk); }, []);
+  useEffect(() => {
+    const h = (e: Event) => { setPaywall((e as CustomEvent<string>).detail || "quota"); refreshMe(); };
+    window.addEventListener("majlis:quota", h);
+    return () => window.removeEventListener("majlis:quota", h);
+  }, []);
+  const speakToType = async () => {
+    if (listening) { await stopListening(); setListening(false); return; }
+    setListening(true);
+    try { const txt = await listenOnce(lang, (p) => setText(p)); if (txt) setText(txt); }
+    catch (e) { console.warn(e); }
+    finally { setListening(false); }
+  };
   const allowAllRef = useRef(false);
   const askPermission = useCallback((agent: string, desc: string) => new Promise<boolean>((resolve) => {
     if (allowAllRef.current) { resolve(true); return; }
@@ -74,7 +94,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
   const send = async () => {
     const body = text.trim();
     if (!body && !pending.length) return;
-    if (!settings.apiKey) { alert(t(lang, "needKey")); return; }
+    if (!hasAI()) { alert(t(lang, "needKey")); return; }
     const m: Message = { id: uid(), groupId, role: "user", text: body, files: pending, sources: [], status: "done", createdAt: Date.now(), mentions: mention ? [mention] : undefined, replyTo: replyTo?.id, council };
     upsert(m);
     setText(""); setPending([]); setReplyTo(null);
@@ -89,7 +109,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
 
   // Auto-resume replies that were cut by a network drop (e.g. app was sent to background).
   const resumeBroken = useCallback(async () => {
-    if (abortRef.current || !getState().settings.apiKey) return;
+    if (abortRef.current || !hasAI()) return;
     const broken = msgsRef.current.filter((m) => m.role === "agent" && m.status === "error" && m.replyTo && /Connection error|network|fetch|Stopped/i.test(m.error ?? "") && Date.now() - m.createdAt < 60 * 60 * 1000);
     if (!broken.length) return;
     const ac = new AbortController(); abortRef.current = ac; setRunning(true);
@@ -126,7 +146,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
   };
   const regen = useCallback(async (m: Message) => {
     setMenuMsg(null);
-    if (!getState().settings.apiKey) { alert(t(lang, "needKey")); return; }
+    if (!hasAI()) { alert(t(lang, "needKey")); return; }
     if (abortRef.current) return;
     const ac = new AbortController(); abortRef.current = ac; setRunning(true);
     await keepAlive.start(t(lang, "workingBg"), getState().groups.find((g) => g.id === groupId)?.name ?? "");
@@ -199,6 +219,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
         </div>
         <div className="row" style={{ alignItems: "flex-end", gap: 8 }}>
           <button className="icon-btn" onClick={() => setAttachMenu(true)} disabled={uploading} title={t(lang, "attachHint")}>{uploading ? <Dots /> : <Icon name="clip" />}</button>
+          {voiceOk && <button className="icon-btn" style={listening ? { background: "var(--red)", color: "#fff" } : {}} onClick={speakToType} title={t(lang, "voice")}>{listening ? <Dots /> : "🎙️"}</button>}
           <textarea className="input" rows={1} value={text} onChange={(e) => setText(e.target.value)} placeholder={t(lang, "chatPlaceholder")} style={{ borderRadius: 24, minHeight: 48, maxHeight: 140, padding: "13px 16px", background: "var(--white)" }}
             onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = Math.min(140, el.scrollHeight) + "px"; }}
             onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send(); }} />
@@ -222,6 +243,10 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
             <button className="list-item" style={{ color: "var(--red)" }} onClick={() => deleteMsg(menuMsg)}><Icon name="trash" /> {t(lang, "delete")}</button>
           </div>
         )}
+      </Sheet>
+
+      <Sheet open={!!paywall} onClose={() => setPaywall(null)}>
+        <Paywall reason={paywall} onClose={() => setPaywall(null)} />
       </Sheet>
 
       <Sheet open={!!permReq} onClose={() => answerPerm(false)} title={t(lang, "approveTitle")}>
