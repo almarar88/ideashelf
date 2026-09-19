@@ -123,7 +123,7 @@ export function InsightsScreen({ navigate }: { navigate: (r: Route) => void }) {
           {perBook.length === 0 && <p className="py-6 text-center text-xs text-ink-muted">لا توجد بيانات بعد. ابدأ بالقراءة.</p>}
           <div className="space-y-2">
             {perBook.map(({ b, seconds, count }) => (
-              <button key={b.id} onClick={() => navigate({ name: "reader", bookId: b.id })} className="flex w-full items-center gap-3 rounded-2xl bg-cream-soft p-3 text-start">
+              <button key={b.id} onClick={() => navigate({ name: "reader", target: { kind: "local", bookId: b.id } })} className="flex w-full items-center gap-3 rounded-2xl bg-cream-soft p-3 text-start">
                 <span className="h-11 w-9 shrink-0 overflow-hidden rounded-lg bg-white">{b.cover && <img src={b.cover} alt="" className="h-full w-full object-cover" />}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{b.title}</span>

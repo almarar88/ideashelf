@@ -12,3 +12,8 @@ android/.idea
 android/app/release
 *.tsbuildinfo
 public/pdfjs
+.env
+.env.local
+.env.localdev
+supabase/.temp
+supabase/.branches

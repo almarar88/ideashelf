@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronDown, ChevronRight, Copy, Send, Square, Trash2 } from "lucide-react";
-import { db, uid, type Analysis, type Book } from "@/lib/db";
-import { TEXT_VERSION, looksScanned } from "@/lib/pdf";
-import { chatWithBook, describeError, runTask, scopeLabel, type Scope, type TaskKind } from "@/lib/ai";
+import { db, uid, type Analysis } from "@/lib/db";
+import { looksScanned } from "@/lib/pdf";
+import { chatWithBook, describeError, runTask, scopeLabel, type AiBook, type Scope, type TaskKind, type TextGetter } from "@/lib/ai";
 import type { Settings } from "@/lib/settings";
 import { Markdown } from "@/components/Markdown";
 import { Button, IconButton, Spinner } from "@/components/ui";
@@ -21,18 +21,23 @@ const MODE_META: Record<Mode, { title: string; hint: string }> = {
 
 export function AIPanel({
   book,
+  getText,
   page,
   mode,
   setMode,
   settings,
   onClose,
+  textStale = false,
 }: {
-  book: Book;
+  book: AiBook;
+  getText: TextGetter;
   page: number;
   mode: Mode;
   setMode: (m: Mode) => void;
   settings: Settings;
   onClose?: () => void;
+  /** Local books imported before the Arabic extraction fix are being redone. */
+  textStale?: boolean;
 }) {
   const [scopeKind, setScopeKind] = useState<Scope["kind"]>("page");
   const [from, setFrom] = useState(1);
@@ -40,12 +45,16 @@ export function AIPanel({
   const scope: Scope = scopeKind === "page" ? { kind: "page", page } : scopeKind === "range" ? { kind: "range", from, to } : { kind: "book" };
 
   const analyses = useLiveQuery(() => db.analyses.where("bookId").equals(book.id).reverse().sortBy("createdAt"), [book.id]) ?? [];
-  const bookText = useLiveQuery(async () => {
-    const rows = await db.pageTexts.where("bookId").equals(book.id).toArray();
-    return rows.map((r) => r.text).join("");
-  }, [book.id]);
-  const scanned = book.textExtracted && bookText !== undefined && looksScanned(bookText, book.pages);
-  const textStale = book.textVersion !== TEXT_VERSION;
+  const [scanned, setScanned] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    getText(1, Number.MAX_SAFE_INTEGER)
+      .then((rows) => alive && setScanned(looksScanned(rows.map((r) => r.text).join(""), Math.max(1, book.pages))))
+      .catch(() => alive && setScanned(false));
+    return () => {
+      alive = false;
+    };
+  }, [getText, book.pages]);
   const [output, setOutput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -65,7 +74,7 @@ export function AIPanel({
     const ac = new AbortController();
     abortRef.current = ac;
     try {
-      const text = await runTask(book, scope, mode, { signal: ac.signal, onDelta: (_, full) => setOutput(full) }, extra.trim() || undefined);
+      const text = await runTask(book, getText, scope, mode, { signal: ac.signal, onDelta: (_: string, full: string) => setOutput(full) }, extra.trim() || undefined);
       const a: Analysis = {
         id: uid(),
         bookId: book.id,
@@ -155,7 +164,7 @@ export function AIPanel({
       )}
 
       {mode === "chat" ? (
-        <ChatView book={book} scope={scope} scopeChips={scopeChips} />
+        <ChatView book={book} getText={getText} scope={scope} scopeChips={scopeChips} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="space-y-3 px-4">
@@ -236,7 +245,7 @@ function SavedCard({ a, open, onToggle }: { a: Analysis; open: boolean; onToggle
   );
 }
 
-function ChatView({ book, scope, scopeChips }: { book: Book; scope: Scope; scopeChips: React.ReactNode }) {
+function ChatView({ book, getText, scope, scopeChips }: { book: AiBook; getText: TextGetter; scope: Scope; scopeChips: React.ReactNode }) {
   const messages = useLiveQuery(() => db.chats.where("bookId").equals(book.id).sortBy("createdAt"), [book.id]) ?? [];
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
@@ -261,7 +270,7 @@ function ChatView({ book, scope, scopeChips }: { book: Book; scope: Scope; scope
     abortRef.current = ac;
     try {
       const history = messages.slice(-12).map((m) => ({ role: m.role, content: m.content }));
-      const answer = await chatWithBook(book, scope, history, question, { signal: ac.signal, onDelta: (_, full) => setDraft(full) });
+      const answer = await chatWithBook(book, getText, scope, history, question, { signal: ac.signal, onDelta: (_: string, full: string) => setDraft(full) });
       await db.chats.add({ id: uid(), bookId: book.id, role: "assistant", content: answer, createdAt: Date.now() });
     } catch (err) {
       if (!(err instanceof Error && err.name === "AbortError")) setError(describeError(err));

@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { Check, ChevronLeft, Eye, EyeOff, KeyRound, ShieldCheck } from "lucide-react";
+import { Check, ChevronLeft, Eye, EyeOff, KeyRound, ShieldCheck, User } from "lucide-react";
 import { MODELS, type Effort, type PageEffect, type Settings } from "@/lib/settings";
 import { testApiKey } from "@/lib/ai";
 import type { Route } from "@/App";
 import { Button, Card } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
-export function SettingsScreen({ settings, update, navigate }: { settings: Settings; update: (p: Partial<Settings>) => void; navigate: (r: Route) => void }) {
+import type { AuthState } from "@/hooks/useAuth";
+import { cloudEnabled } from "@/lib/supabase";
+
+export function SettingsScreen({ settings, update, navigate, auth }: { settings: Settings; update: (p: Partial<Settings>) => void; navigate: (r: Route) => void; auth: AuthState }) {
   const [show, setShow] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
@@ -26,6 +29,21 @@ export function SettingsScreen({ settings, update, navigate }: { settings: Setti
       </header>
 
       <section className="space-y-3 p-4 pb-10">
+        {cloudEnabled && (
+          <Card tone="dark" onClick={() => navigate({ name: auth.session ? "account" : "auth" })} className="flex w-full items-center gap-3 p-5">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-cream/10 text-accent">
+              <User size={18} />
+            </span>
+            <span className="flex-1">
+              <span className="block text-sm font-semibold">{auth.session ? "حسابي" : "تسجيل الدخول"}</span>
+              <span className="block text-[11px] text-cream/60">
+                {auth.session ? (auth.entitlements.subscribed ? "اشتراكك ساري · اضغط لإدارته" : auth.session.user.email) : "للوصول إلى مشترياتك واشتراكك من أي جهاز"}
+              </span>
+            </span>
+            <ChevronLeft size={18} className="text-cream/60" />
+          </Card>
+        )}
+
         <Card tone="white" className="p-5">
           <label className="mb-2 block text-sm font-semibold">اسمك</label>
           <input value={settings.userName} onChange={(e) => update({ userName: e.target.value })} className="h-11 w-full rounded-full bg-cream-soft px-4 text-sm outline-none" placeholder="الاسم الظاهر في الترحيب" />

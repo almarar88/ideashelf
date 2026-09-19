@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { loadSettings, type Effort, type ModelId } from "./settings";
-import { getBookText, type Book } from "./db";
+
 
 /* ----------------------------------------------------------------------------
  * Client
@@ -39,6 +39,17 @@ export function describeError(err: unknown): string {
  * ------------------------------------------------------------------------- */
 export type Scope = { kind: "page"; page: number } | { kind: "range"; from: number; to: number } | { kind: "book" };
 
+/** Minimal book facts the prompts need; works for a local PDF or a store book alike. */
+export interface AiBook {
+  id: string;
+  title: string;
+  author: string;
+  pages: number;
+}
+
+/** Supplies page text for a scope. Local books read Dexie, store books read the server. */
+export type TextGetter = (from: number, to: number) => Promise<{ page: number; text: string }[]>;
+
 export function scopeLabel(scope: Scope): string {
   if (scope.kind === "page") return `صفحة ${scope.page}`;
   if (scope.kind === "range") return `الصفحات ${scope.from}–${scope.to}`;
@@ -51,13 +62,13 @@ export function scopeLabel(scope: Scope): string {
 const MAX_SINGLE_CHARS = 1_600_000;
 const CHUNK_CHARS = 350_000;
 
-export async function buildContext(book: Book, scope: Scope): Promise<string> {
+export async function buildContext(getText: TextGetter, scope: Scope): Promise<string> {
   const rows =
     scope.kind === "page"
-      ? await getBookText(book.id, scope.page, scope.page)
+      ? await getText(scope.page, scope.page)
       : scope.kind === "range"
-        ? await getBookText(book.id, scope.from, scope.to)
-        : await getBookText(book.id);
+        ? await getText(scope.from, scope.to)
+        : await getText(1, Number.MAX_SAFE_INTEGER);
   return rows.map((r) => `<page number="${r.page}">\n${r.text}\n</page>`).join("\n");
 }
 
@@ -155,9 +166,9 @@ async function streamOnce(
 }
 
 /** Run a task (summary / analysis / quiz / explain) on a scope of a book. */
-export async function runTask(book: Book, scope: Scope, kind: TaskKind, opts: StreamOptions, extra?: string): Promise<string> {
+export async function runTask(book: AiBook, getText: TextGetter, scope: Scope, kind: TaskKind, opts: StreamOptions, extra?: string): Promise<string> {
   const client = getClient();
-  const context = await buildContext(book, scope);
+  const context = await buildContext(getText, scope);
   if (!context.trim()) {
     throw new Error("لا يوجد نص قابل للقراءة في هذا النطاق. قد يكون الملف ممسوحًا ضوئيًا (صور) ويحتاج إلى OCR.");
   }
@@ -205,14 +216,15 @@ export async function runTask(book: Book, scope: Scope, kind: TaskKind, opts: St
 
 /** Multi-turn chat grounded in the book text. */
 export async function chatWithBook(
-  book: Book,
+  book: AiBook,
+  getText: TextGetter,
   scope: Scope,
   history: { role: "user" | "assistant"; content: string }[],
   question: string,
   opts: StreamOptions,
 ): Promise<string> {
   const client = getClient();
-  let context = await buildContext(book, scope);
+  let context = await buildContext(getText, scope);
   let truncatedNote = "";
   if (context.length > MAX_SINGLE_CHARS) {
     context = context.slice(0, MAX_SINGLE_CHARS);

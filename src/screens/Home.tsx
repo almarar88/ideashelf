@@ -52,7 +52,7 @@ export function HomeScreen({ settings, navigate }: { settings: Settings; navigat
               return (
                 <button
                   key={b.id}
-                  onClick={() => navigate({ name: "reader", bookId: b.id })}
+                  onClick={() => navigate({ name: "reader", target: { kind: "local", bookId: b.id } })}
                   className="relative h-56 w-[80%] shrink-0 overflow-hidden rounded-3xl bg-cream-deep text-start sm:w-72"
                 >
                   {b.cover && <img src={b.cover} alt="" className="absolute inset-0 h-full w-full object-cover" />}

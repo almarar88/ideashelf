@@ -3,19 +3,24 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronRight, CloudUpload, Database, Download, Eye, EyeOff, FileText, Globe, Heart, Lock, LogOut, Pencil, RefreshCw, Save, Trash2, Upload, X } from "lucide-react";
 import { db, deleteBook, type Book } from "@/lib/db";
 import { TEXT_VERSION, extractBookText, openPdf } from "@/lib/pdf";
+import { publishBookToStore, type PublishProgress } from "@/lib/publish";
+import { cloudEnabled } from "@/lib/supabase";
 import type { Settings } from "@/lib/settings";
 import { downloadCatalogBook, exportBackup, fetchCatalog, importBackup, isLoggedIn, loadTarget, login, logout, publishBook, saveTarget, storageEstimate, wipeAll, type CatalogEntry, type PublishTarget } from "@/lib/admin";
 import { UploadButton, type UploadState } from "@/components/UploadButton";
-import { Button, Card, IconButton } from "@/components/ui";
+import { Button, Card, IconButton, Toggle } from "@/components/ui";
 import { cn, formatBytes, formatDuration } from "@/lib/utils";
 
-export function AdminScreen({ settings, update, onBack }: { settings: Settings; update: (p: Partial<Settings>) => void; onBack: () => void }) {
+import type { AuthState } from "@/hooks/useAuth";
+
+export function AdminScreen({ settings, update, auth, onBack }: { settings: Settings; update: (p: Partial<Settings>) => void; auth: AuthState; onBack: () => void }) {
   const [unlocked, setUnlocked] = useState(isLoggedIn);
   if (!unlocked) return <LoginGate onUnlock={() => setUnlocked(true)} onBack={onBack} />;
   return (
     <Dashboard
       settings={settings}
       update={update}
+      auth={auth}
       onBack={onBack}
       onLogout={() => {
         logout();
@@ -97,7 +102,7 @@ function LoginGate({ onUnlock, onBack }: { onUnlock: () => void; onBack: () => v
 /* ---------------- Dashboard ---------------- */
 type Tab = "overview" | "publish" | "books" | "catalog" | "backup";
 
-function Dashboard({ settings, update, onBack, onLogout }: { settings: Settings; update: (p: Partial<Settings>) => void; onBack: () => void; onLogout: () => void }) {
+function Dashboard({ settings, update, auth, onBack, onLogout }: { settings: Settings; update: (p: Partial<Settings>) => void; auth: AuthState; onBack: () => void; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>("overview");
   const books = useLiveQuery(() => db.books.orderBy("addedAt").reverse().toArray(), []) ?? [];
   const analysesCount = useLiveQuery(() => db.analyses.count(), []) ?? 0;
@@ -170,7 +175,7 @@ function Dashboard({ settings, update, onBack, onLogout }: { settings: Settings;
             <BulkUpload />
           </div>
         )}
-        {tab === "publish" && <PublishManager />}
+        {tab === "publish" && <PublishManager auth={auth} />}
         {tab === "books" && <BooksManager books={books} />}
         {tab === "catalog" && <CatalogManager settings={settings} update={update} books={books} />}
         {tab === "backup" && <BackupManager />}
@@ -221,7 +226,121 @@ function BulkUpload() {
 }
 
 /* ---------------- Publish to GitHub ---------------- */
-function PublishManager() {
+function StorePublisher({ auth }: { auth: AuthState }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [author, setAuthor] = useState("");
+  const [description, setDescription] = useState("");
+  const [price, setPrice] = useState("25");
+  const [preview, setPreview] = useState("5");
+  const [inSub, setInSub] = useState(true);
+  const [tags, setTags] = useState("");
+  const [progress, setProgress] = useState<PublishProgress | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const busy = progress !== null && progress.stage !== "done";
+
+  async function run() {
+    if (!file) return;
+    setResult(null);
+    setProgress({ stage: "opening", page: 0, pages: 0 });
+    try {
+      await publishBookToStore(
+        file,
+        {
+          title: title.trim() || file.name.replace(/\.pdf$/i, ""),
+          author: author.trim(),
+          description: description.trim(),
+          priceMinor: Math.round((parseFloat(price) || 0) * 100),
+          currency: "AED",
+          previewPages: Math.max(0, parseInt(preview, 10) || 0),
+          inSubscription: inSub,
+          tags: tags.split(/[،,]/).map((t) => t.trim()).filter(Boolean),
+        },
+        setProgress,
+      );
+      setResult({ ok: true, text: "نُشر الكتاب في المتجر. الملف الأصلي لم يُرفع — الصفحات فقط كصور محمية." });
+      setFile(null);
+      setTitle("");
+      if (fileRef.current) fileRef.current.value = "";
+    } catch (e) {
+      setResult({ ok: false, text: e instanceof Error ? e.message : "فشل النشر" });
+    } finally {
+      setProgress(null);
+    }
+  }
+
+  if (!cloudEnabled) {
+    return (
+      <Card tone="light" className="p-4 text-[11px] leading-6 text-ink-muted">
+        المتجر غير مفعّل على هذا الإصدار. أضف عنوان مشروع Supabase ومفتاحه في ملف <code dir="ltr">.env</code> ثم أعد البناء.
+      </Card>
+    );
+  }
+  if (!auth.isAdmin) {
+    return (
+      <Card tone="light" className="p-4 text-[11px] leading-6 text-ink-muted">
+        النشر في المتجر يتطلب تسجيل الدخول بحساب دوره <b>مشرف</b> على الخادم. سجّل الدخول من الإعدادات ← حسابي.
+      </Card>
+    );
+  }
+
+  const pct = progress?.pages ? Math.round((progress.page / progress.pages) * 100) : 0;
+
+  return (
+    <Card tone="white" className="p-5">
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+        <CloudUpload size={16} className="text-accent" /> نشر كتاب في المتجر
+      </div>
+      <p className="mb-3 text-[11px] leading-5 text-ink-muted">
+        يحوّل كل صفحة إلى صورة ويستخرج نصها ثم يرفعها إلى تخزين خاص. ملف PDF نفسه لا يُرفع إطلاقًا، فلا يوجد ملف يمكن للقارئ تنزيله.
+      </p>
+      <input ref={fileRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => {
+        const f = e.target.files?.[0] ?? null;
+        setFile(f);
+        if (f && !title) setTitle(f.name.replace(/\.pdf$/i, "").replace(/[_-]+/g, " "));
+      }} />
+      <Button tone="light" className="w-full" onClick={() => fileRef.current?.click()} disabled={busy}>
+        <Upload size={16} /> {file ? `${file.name} (${formatBytes(file.size)})` : "اختيار ملف PDF"}
+      </Button>
+
+      <label className="mb-1 mt-4 block text-xs font-semibold">العنوان</label>
+      <input value={title} onChange={(e) => setTitle(e.target.value)} className="h-11 w-full rounded-full bg-cream-soft px-4 text-sm outline-none" />
+      <label className="mb-1 mt-3 block text-xs font-semibold">المؤلف</label>
+      <input value={author} onChange={(e) => setAuthor(e.target.value)} className="h-11 w-full rounded-full bg-cream-soft px-4 text-sm outline-none" />
+      <label className="mb-1 mt-3 block text-xs font-semibold">الوصف</label>
+      <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-3xl bg-cream-soft px-4 py-3 text-sm outline-none" />
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1 block text-xs font-semibold">السعر بالدرهم</label>
+          <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" dir="ltr" className="h-11 w-full rounded-full bg-cream-soft px-4 text-center text-sm outline-none" />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold">صفحات المعاينة</label>
+          <input value={preview} onChange={(e) => setPreview(e.target.value)} inputMode="numeric" dir="ltr" className="h-11 w-full rounded-full bg-cream-soft px-4 text-center text-sm outline-none" />
+        </div>
+      </div>
+
+      <label className="mb-1 mt-3 block text-xs font-semibold">الوسوم</label>
+      <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="شعر، أدب" className="h-11 w-full rounded-full bg-cream-soft px-4 text-sm outline-none" />
+
+      <label className="mt-4 flex items-center justify-between rounded-2xl bg-cream-soft px-4 py-3 text-xs">
+        <span>مشمول بالاشتراك الشهري</span>
+        <Toggle checked={inSub} onChange={setInSub} label="مشمول بالاشتراك" />
+      </label>
+
+      <Button tone="accent" className="mt-4 w-full" onClick={run} disabled={!file || busy}>
+        <CloudUpload size={16} />
+        {busy ? (progress?.stage === "pages" ? `رفع الصفحات ${pct}%` : "جارٍ التحضير…") : "نشر في المتجر"}
+      </Button>
+      {result && <p className={cn("mt-3 text-xs leading-6", result.ok ? "text-green-700" : "text-red-600")}>{result.text}</p>}
+    </Card>
+  );
+}
+
+function PublishManager({ auth }: { auth: AuthState }) {
   const [target, setTarget] = useState<PublishTarget>(loadTarget);
   const [showTok, setShowTok] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -274,9 +393,11 @@ function PublishManager() {
 
   return (
     <div className="space-y-3">
+      <StorePublisher auth={auth} />
+
       <Card tone="dark" className="p-5">
         <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-          <CloudUpload size={16} className="text-accent" /> نشر كتاب لجميع المستخدمين
+          <CloudUpload size={16} className="text-accent" /> نشر عبر مستودع GitHub (الطريقة القديمة)
         </div>
         <p className="text-[11px] leading-5 text-cream/60">
           يرفع ملف PDF إلى مجلد <code dir="ltr">public/library/</code> في مستودع GitHub ويضيفه إلى الفهرس العام تلقائيًا. يحتاج رمز وصول (Personal Access Token) بصلاحية <b>Contents: Read and write</b> على المستودع. الرمز يُحفظ على هذا الجهاز فقط.

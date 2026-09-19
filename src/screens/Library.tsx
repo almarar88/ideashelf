@@ -72,7 +72,7 @@ export function LibraryScreen({ navigate }: { navigate: (r: Route) => void }) {
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {list.map((b) => (
-              <BookCard key={b.id} book={b} open={() => navigate({ name: "reader", bookId: b.id })} menuOpen={menuFor === b.id} toggleMenu={() => setMenuFor(menuFor === b.id ? null : b.id)} />
+              <BookCard key={b.id} book={b} open={() => navigate({ name: "reader", target: { kind: "local", bookId: b.id } })} menuOpen={menuFor === b.id} toggleMenu={() => setMenuFor(menuFor === b.id ? null : b.id)} />
             ))}
           </div>
         )}
