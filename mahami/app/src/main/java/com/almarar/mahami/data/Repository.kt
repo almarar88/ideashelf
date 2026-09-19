@@ -243,8 +243,21 @@ class Repository(
 
     suspend fun loadDemoData() {
         initializeIfNeeded()
+        val today = LocalDate.now()
         val ids = projectDao.getAll().map { it.id }
-        taskDao.insertAll(SampleData.demoTasks(LocalDate.now(), ids))
+        taskDao.insertAll(SampleData.demoTasks(today, ids))
+        // جلسة تركيز على المهمة المنجزة، ليطابق عدّاد «تركيز اليوم» دقائق المهمة
+        taskDao.getAll()
+            .firstOrNull { it.status == TaskStatus.DONE && it.focusMinutes > 0 }
+            ?.let { done ->
+                focusDao.insert(
+                    FocusSession(
+                        taskId = done.id,
+                        minutes = done.focusMinutes,
+                        at = today.atTime(10, 20)
+                    )
+                )
+            }
         refresh()
     }
 

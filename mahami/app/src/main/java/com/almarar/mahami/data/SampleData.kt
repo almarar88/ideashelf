@@ -1,6 +1,7 @@
 package com.almarar.mahami.data
 
 import java.time.LocalDate
+import java.time.LocalTime
 
 /** مشاريع افتراضية تُنشأ عند أول تشغيل، وبيانات تجريبية اختيارية */
 object SampleData {
@@ -17,40 +18,71 @@ object SampleData {
         val followUp = projectIds.getOrNull(1)
         val personal = projectIds.getOrNull(2)
         return listOf(
+            // مهمة اليوم — مختارة ضمن «أهم ثلاث مهام» ولها خطة تنفيذ
             Task(
                 title = "إعداد التقرير الشهري",
                 details = "تجميع المؤشرات وصياغة التقرير وعرضه على الرئيس المباشر.",
                 projectId = work,
-                dueDate = today.plusDays(2),
+                dueDate = today,
+                dueTime = LocalTime.of(13, 0),
                 priority = Priority.HIGH,
+                important = true,
+                mitDate = today,
+                estimateMinutes = 90,
                 tags = listOf("تقرير"),
                 subTasks = listOf(
-                    SubTask("تجميع البيانات", true),
-                    SubTask("صياغة التقرير"),
-                    SubTask("المراجعة والاعتماد")
+                    SubTask("تجميع البيانات", true, today),
+                    SubTask("صياغة التقرير", false, today),
+                    SubTask("المراجعة والاعتماد", false, today.plusDays(1))
                 )
             ),
+            // مهمة متأخرة — تُظهر بطاقة «متأخرة» والنقطة النابضة
             Task(
                 title = "متابعة رد الجهة على الخطاب",
                 details = "الاتصال بالجهة للتأكد من استلام الخطاب ومعرفة الموقف.",
                 projectId = followUp,
                 owner = "إدارة الشؤون الإدارية",
-                dueDate = today.plusDays(1),
-                priority = Priority.MEDIUM,
+                dueDate = today.minusDays(1),
+                priority = Priority.HIGH,
+                important = true,
+                mitDate = today,
                 tags = listOf("متابعة")
+            ),
+            // مهمة أُنجزت اليوم مع وقت تركيز — تُحيي مؤشرات الإنجاز
+            Task(
+                title = "مراجعة محضر الاجتماع",
+                details = "قراءة المحضر واعتماد التوصيات قبل إرساله.",
+                projectId = work,
+                dueDate = today,
+                priority = Priority.MEDIUM,
+                status = TaskStatus.DONE,
+                completedAt = today.atTime(10, 20),
+                focusMinutes = 50,
+                estimateMinutes = 45,
+                tags = listOf("اجتماعات")
             ),
             Task(
                 title = "تنظيم اجتماع الفريق",
                 details = "تحديد موعد مناسب وإرسال جدول الأعمال.",
                 projectId = work,
-                dueDate = today.plusDays(4),
+                dueDate = today.plusDays(2),
                 flexibleDeadline = true,
                 priority = Priority.MEDIUM,
+                mitDate = today,
+                estimateMinutes = 30,
                 subTasks = listOf(
-                    SubTask("استطلاع المواعيد المناسبة"),
+                    SubTask("استطلاع المواعيد المناسبة", true),
                     SubTask("حجز القاعة"),
                     SubTask("إرسال الدعوة")
                 )
+            ),
+            Task(
+                title = "حصر مناهج دورات تعليم اللغات",
+                details = "جرد المناهج المعتمدة ومطابقتها بالمستويات.",
+                projectId = work,
+                dueDate = today.plusDays(4),
+                priority = Priority.MEDIUM,
+                tags = listOf("تدريب")
             ),
             Task(
                 title = "تجديد الاشتراك السنوي",

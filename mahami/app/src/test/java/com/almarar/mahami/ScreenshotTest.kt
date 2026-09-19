@@ -16,6 +16,7 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import com.almarar.mahami.data.Repository
 import com.almarar.mahami.data.ThemeMode
 import com.almarar.mahami.ui.MahamiViewModel
+import com.almarar.mahami.ui.components.LocalAnimationsEnabled
 import com.almarar.mahami.ui.screens.AboutScreen
 import com.almarar.mahami.ui.screens.AccountScreen
 import com.almarar.mahami.ui.screens.ImportScreen
@@ -71,7 +72,11 @@ class ScreenshotTest {
     @Composable
     private fun Frame(dark: Boolean = false, content: @Composable () -> Unit) {
         MahamiAppTheme(themeMode = if (dark) ThemeMode.DARK else ThemeMode.LIGHT) {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            CompositionLocalProvider(
+                LocalLayoutDirection provides LayoutDirection.Rtl,
+                // الحركة اللانهائية تمنع استقرار الشاشة فيتجمّد الالتقاط
+                LocalAnimationsEnabled provides false
+            ) {
                 Box(
                     Modifier
                         .fillMaxSize()

@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,6 +78,15 @@ fun TickDial(
             val center = Offset(size.width / 2f, size.height / 2f)
             val activeTicks = (tickCount * animated).roundToInt()
 
+            val outer = radius * 0.96f
+
+            // سُمك السن يُشتق من المسافة المتاحة بين سنّين على القوس،
+            // فلا تلتحم الأسنان في كتلة واحدة مهما صغُر القرص أو كثُر عددها.
+            val arcLength = outer * Math.toRadians(sweepDegrees.toDouble()).toFloat()
+            val pitch = arcLength / (tickCount - 1).coerceAtLeast(1)
+            val activeWidth = (pitch * 0.42f).coerceIn(1.2f.dp.toPx(), 5.5f.dp.toPx())
+            val inactiveWidth = (pitch * 0.30f).coerceIn(1f.dp.toPx(), 3.5f.dp.toPx())
+
             repeat(tickCount) { index ->
                 val fraction = index / (tickCount - 1f)
                 val angle = Math.toRadians((startAngle + fraction * sweepDegrees).toDouble())
@@ -84,7 +94,6 @@ fun TickDial(
 
                 // الأسنان النشطة أطول قليلاً فتبدو كأنها تنبض
                 val inner = radius * if (isActive) 0.62f else 0.70f
-                val outer = radius * 0.96f
                 val start = Offset(
                     center.x + cos(angle).toFloat() * inner,
                     center.y + sin(angle).toFloat() * inner
@@ -97,7 +106,7 @@ fun TickDial(
                     color = if (isActive) activeColor else inactiveColor,
                     start = start,
                     end = end,
-                    strokeWidth = if (isActive) 5.5f.dp.toPx() else 3.5f.dp.toPx(),
+                    strokeWidth = if (isActive) activeWidth else inactiveWidth,
                     cap = StrokeCap.Round
                 )
             }
@@ -257,16 +266,21 @@ fun SlidingTabs(
 /** نبضة خفيفة تلفت الانتباه إلى عنصر مهم */
 @Composable
 fun PulsingDot(color: Color, modifier: Modifier = Modifier, size: Dp = 10.dp) {
-    val transition = rememberInfiniteTransition(label = "pulse")
-    val scale by transition.animateFloat(
-        initialValue = 0.75f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
-    )
+    val scale = if (LocalAnimationsEnabled.current) {
+        val transition = rememberInfiniteTransition(label = "pulse")
+        val animated by transition.animateFloat(
+            initialValue = 0.75f,
+            targetValue = 1.15f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(900, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "scale"
+        )
+        animated
+    } else {
+        1f
+    }
     Canvas(modifier.size(size)) {
         drawCircle(color = color.copy(alpha = 0.25f), radius = this.size.minDimension / 2f * scale)
         drawCircle(color = color, radius = this.size.minDimension / 3.2f)
@@ -326,3 +340,10 @@ private fun Modifier.slideFraction(fraction: Float): Modifier = this.then(
         }
     }
 )
+
+/**
+ * تعطيل الحركات اللانهائية عند التقاط اللقطات:
+ * الحركة المستمرة تمنع إطار الاختبار من اعتبار الشاشة «مستقرة»، فيتجمّد الالتقاط.
+ * في التطبيق تبقى القيمة true دائماً.
+ */
+val LocalAnimationsEnabled = staticCompositionLocalOf { true }
