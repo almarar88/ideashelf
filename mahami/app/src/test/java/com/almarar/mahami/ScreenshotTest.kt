@@ -21,7 +21,11 @@ import com.almarar.mahami.data.CalendarView
 import com.almarar.mahami.data.Repository
 import com.almarar.mahami.data.ThemeMode
 import com.almarar.mahami.ui.MahamiViewModel
+import com.almarar.mahami.smart.SmartParser
+import com.almarar.mahami.ui.VoicePhase
+import com.almarar.mahami.ui.VoiceState
 import com.almarar.mahami.ui.components.LocalAnimationsEnabled
+import com.almarar.mahami.ui.components.VoiceSheet
 import com.almarar.mahami.ui.components.SlidingTabs
 import com.almarar.mahami.ui.screens.AboutScreen
 import com.almarar.mahami.ui.screens.AccountScreen
@@ -196,6 +200,46 @@ class ScreenshotTest {
         vm.setCalendarView(CalendarView.WEEK)
         idle()
         shot("19-calendar-week") { CalendarScreen(vm) {} }
+    }
+
+    /** الورقة الصوتية أثناء الاستماع — الموجة عند مستوى صوت متوسط */
+    @Test fun voiceListening() = shot("20-voice-listening") {
+        VoiceSheet(
+            state = VoiceState(
+                phase = VoicePhase.LISTENING,
+                partial = "تسليم التقرير الأربعاء القادم الساعة عشرة عاجل",
+                level = 0.62f
+            ),
+            onStop = {}, onRetry = {}, onToggle = {}, onConfirm = {}, onDismiss = {}
+        )
+    }
+
+    /** المراجعة قبل الحفظ: ثلاث مهام من جملة واحدة */
+    @Test fun voiceReview() {
+        val heard = "تسليم التقرير غداً عاجل ثم اجتماع الفريق بعد 3 أيام " +
+            "ثم مراجعة ملفات المدربين الأسبوع القادم"
+        shot("21-voice-review") {
+            VoiceSheet(
+                state = VoiceState(
+                    phase = VoicePhase.REVIEW,
+                    heard = heard,
+                    candidates = SmartParser.parseSpoken(heard)
+                ),
+                onStop = {}, onRetry = {}, onToggle = {}, onConfirm = {}, onDismiss = {}
+            )
+        }
+    }
+
+    /** حالة الخطأ حين لا يُسمع كلام واضح */
+    @Test fun voiceError() = shot("22-voice-error") {
+        VoiceSheet(
+            state = VoiceState(
+                phase = VoicePhase.ERROR,
+                message = "لم أسمع كلاماً واضحاً — جرّب مرة أخرى.",
+                canRetry = true
+            ),
+            onStop = {}, onRetry = {}, onToggle = {}, onConfirm = {}, onDismiss = {}
+        )
     }
 
     @Test fun homeDark() = shot("12-home-dark", dark = true) {

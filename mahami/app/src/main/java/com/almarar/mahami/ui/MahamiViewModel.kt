@@ -38,6 +38,8 @@ import com.almarar.mahami.smart.ParsedChip
 import com.almarar.mahami.smart.ParsedTask
 import com.almarar.mahami.smart.Planner
 import com.almarar.mahami.smart.SmartParser
+import com.almarar.mahami.voice.VoiceEvent
+import com.almarar.mahami.voice.VoiceRecognizer
 import com.almarar.mahami.sync.AuthClient
 import com.almarar.mahami.sync.AuthResult
 import com.almarar.mahami.sync.Session
@@ -52,6 +54,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
@@ -323,14 +326,105 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** يحوّل نتيجة الإدخال الصوتي إلى مهمة */
-    fun addFromVoice(spoken: String) {
-        val parsed = SmartParser.parse(spoken) ?: return
-        viewModelScope.launch {
-            saveParsed(parsed)
-            showToast("أُضيفت بالصوت: ${parsed.title}")
+    // ---------- الإدخال الصوتي ----------
+
+    private val recognizer = VoiceRecognizer(app)
+
+    private val _voice = MutableStateFlow(VoiceState())
+    val voice = _voice.asStateFlow()
+
+    private var listenJob: Job? = null
+
+    /** هل يوجد محرّك إملاء على الجهاز أصلاً؟ */
+    fun voiceAvailable(): Boolean = recognizer.isAvailable()
+
+    fun voiceNeedsPermission(): Boolean = !recognizer.hasPermission()
+
+    fun startListening() {
+        listenJob?.cancel()
+        _voice.value = VoiceState(phase = VoicePhase.LISTENING)
+        listenJob = viewModelScope.launch {
+            recognizer.listen().collect { event ->
+                when (event) {
+                    VoiceEvent.Ready -> Unit
+                    is VoiceEvent.Level ->
+                        _voice.update { it.copy(level = event.value) }
+                    is VoiceEvent.Partial ->
+                        _voice.update { it.copy(partial = event.text) }
+                    is VoiceEvent.Final -> review(event.text)
+                    is VoiceEvent.Failed -> _voice.value = VoiceState(
+                        phase = VoicePhase.ERROR,
+                        message = event.message,
+                        canRetry = event.recoverable
+                    )
+                }
+            }
         }
     }
+
+    /** ينهي الاستماع ويحلّل ما سُمع حتى الآن */
+    fun stopListening() {
+        val partial = _voice.value.partial
+        listenJob?.cancel()
+        listenJob = null
+        if (partial.isBlank()) {
+            _voice.value = VoiceState(
+                phase = VoicePhase.ERROR,
+                message = VoiceRecognizer.NOTHING_HEARD
+            )
+        } else {
+            review(partial)
+        }
+    }
+
+    private fun review(spoken: String) {
+        val parsed = SmartParser.parseSpoken(spoken)
+        _voice.value = if (parsed.isEmpty()) {
+            VoiceState(
+                phase = VoicePhase.ERROR,
+                heard = spoken,
+                message = "سمعت «$spoken» لكني لم أستخرج منها مهمة."
+            )
+        } else {
+            VoiceState(phase = VoicePhase.REVIEW, heard = spoken, candidates = parsed)
+        }
+    }
+
+    fun toggleVoiceCandidate(index: Int) = _voice.update { state ->
+        state.copy(
+            skipped = if (index in state.skipped) state.skipped - index else state.skipped + index
+        )
+    }
+
+    fun dismissVoice() {
+        listenJob?.cancel()
+        listenJob = null
+        _voice.value = VoiceState()
+    }
+
+    /** يحفظ ما أقرّه المستخدم من المهام المنطوقة */
+    fun confirmVoice() {
+        val chosen = _voice.value.selected
+        if (chosen.isEmpty()) {
+            dismissVoice()
+            return
+        }
+        viewModelScope.launch {
+            val ids = chosen.map { saveParsed(it) }
+            dismissVoice()
+            showToast(
+                "أُضيفت بالصوت: ${com.almarar.mahami.core.Ar.countTasks(ids.size)}",
+                undo = {
+                    viewModelScope.launch {
+                        ids.forEach { id -> repo.taskById(id)?.let { repo.delete(it) } }
+                    }
+                }
+            )
+        }
+    }
+
+    /** المسار الاحتياطي: نتيجة نافذة النظام حين لا يعمل الاستماع المباشر */
+    fun addFromVoice(spoken: String) = review(spoken)
 
     private suspend fun saveParsed(parsed: ParsedTask): Long {
         val defaults = prefs.settings.first().defaultReminderOffsets

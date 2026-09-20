@@ -160,6 +160,31 @@ object SmartParser {
         )
     }
 
+    /**
+     * يقسّم جملة منطوقة واحدة إلى عدة مهام.
+     *
+     * نقسّم على روابط صريحة فقط («ثم»، «وبعدها»، «وأيضاً»…) ولا نقسّم على واو
+     * العطف وحدها: «متابعة الجهة والرد على الخطاب» مهمة واحدة لا اثنتان.
+     */
+    fun splitUtterance(raw: String): List<String> {
+        val separators = Regex(
+            """\s+(?:""" +
+                """ثم|بعدها|وبعدها|وبعدين|بعدين|""" +
+                """وأيضا[ًٍ]?|وايضا[ًٍ]?|أيضا[ًٍ]?\s+|وكمان|""" +
+                """وثاني[ااً]?|والمهمة\s+(?:الثانية|الثالثة|الرابعة|التالية)|""" +
+                """ومهمة\s+(?:ثانية|أخرى|اخرى|جديدة)""" +
+            """)\s+"""
+        )
+        return normalizeDigits(raw)
+            .split(separators)
+            .map { it.trim().trim('،', ',', '.', '-', '—') .trim() }
+            .filter { it.length >= 3 }
+    }
+
+    /** يحلّل ما قيل صوتاً إلى مهمة واحدة أو أكثر */
+    fun parseSpoken(raw: String, today: LocalDate = LocalDate.now()): List<ParsedTask> =
+        splitUtterance(raw).mapNotNull { parse(it, today) }
+
     /** يحلّل نصاً متعدد الأسطر إلى عدة مهام */
     fun parseMany(raw: String, today: LocalDate = LocalDate.now()): List<ParsedTask> {
         val marker = Regex("""^\s*(?:\d{1,2}[).\-]|[-•*–—]|\*\*)\s*""")

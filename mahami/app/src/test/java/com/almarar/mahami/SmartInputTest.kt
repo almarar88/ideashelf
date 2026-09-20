@@ -183,6 +183,56 @@ class SmartInputTest {
         assertEquals("اتصال بالمورد", tasks[2].title)
     }
 
+    // ---------- تقسيم الكلام المنطوق ----------
+
+    @Test
+    fun `spoken sentence splits on explicit connectors`() {
+        val tasks = SmartParser.parseSpoken(
+            "تسليم التقرير غداً ثم اجتماع الفريق بعد 3 أيام وأيضاً مراجعة العقد",
+            today
+        )
+        assertEquals(3, tasks.size)
+        assertEquals("تسليم التقرير", tasks[0].title)
+        assertEquals(today.plusDays(1), tasks[0].dueDate)
+        assertEquals("اجتماع الفريق", tasks[1].title)
+        assertEquals(today.plusDays(3), tasks[1].dueDate)
+        assertEquals("مراجعة العقد", tasks[2].title)
+    }
+
+    @Test
+    fun `plain waw does not split a title`() {
+        // «و» حرف عطف شائع داخل العناوين — لو قسّمنا عليه لتمزّقت المهام
+        val tasks = SmartParser.parseSpoken("متابعة الجهة والرد على الخطاب", today)
+        assertEquals(1, tasks.size)
+        assertEquals("متابعة الجهة والرد على الخطاب", tasks.first().title)
+    }
+
+    @Test
+    fun `single spoken task stays one task`() {
+        val tasks = SmartParser.parseSpoken("اتصال بمنصة التسجيل غداً الساعة 9 صباحاً", today)
+        assertEquals(1, tasks.size)
+        assertEquals(LocalTime.of(9, 0), tasks.first().dueTime)
+    }
+
+    @Test
+    fun `spoken numbers are normalized and fields extracted per task`() {
+        val tasks = SmartParser.parseSpoken(
+            "حصر المناهج ١٦-٠٩-٢٠٢٦ عاجل ثم تجهيز القاعة بعد أسبوع",
+            today
+        )
+        assertEquals(2, tasks.size)
+        assertEquals(LocalDate.of(2026, 9, 16), tasks[0].dueDate)
+        assertEquals(Priority.HIGH, tasks[0].priority)
+        assertEquals(today.plusWeeks(1), tasks[1].dueDate)
+        assertEquals(Priority.MEDIUM, tasks[1].priority)
+    }
+
+    @Test
+    fun `noise and empty speech produce nothing`() {
+        assertTrue(SmartParser.parseSpoken("", today).isEmpty())
+        assertTrue(SmartParser.parseSpoken("ثم", today).isEmpty())
+    }
+
     // ---------- مخطّط التنفيذ ----------
 
     private fun planned(steps: List<String>, due: LocalDate) = Task(

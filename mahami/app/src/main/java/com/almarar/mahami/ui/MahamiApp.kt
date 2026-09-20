@@ -1,5 +1,6 @@
 package com.almarar.mahami.ui
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
@@ -43,6 +44,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.almarar.mahami.ui.components.BottomNavPill
 import com.almarar.mahami.ui.components.NavItem
+import com.almarar.mahami.ui.components.VoiceSheet
+import com.almarar.mahami.voice.VoiceRecognizer
 import com.almarar.mahami.ui.screens.AboutScreen
 import com.almarar.mahami.ui.screens.AccountScreen
 import com.almarar.mahami.ui.screens.ArchiveScreen
@@ -123,6 +126,7 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                 Routes.HOME, Routes.TASKS, Routes.CALENDAR, Routes.REPORTS
             )
 
+            // المسار الاحتياطي: نافذة النظام حين لا يتوفّر الاستماع المباشر
             val voiceLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.StartActivityForResult()
             ) { result ->
@@ -134,7 +138,7 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                         ?.let { vm.addFromVoice(it) }
                 }
             }
-            val startVoice: () -> Unit = {
+            val launchSystemDictation: () -> Unit = {
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(
                         RecognizerIntent.EXTRA_LANGUAGE_MODEL,
@@ -145,7 +149,23 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                     putExtra(RecognizerIntent.EXTRA_PROMPT, "قل مهمتك…")
                 }
                 runCatching { voiceLauncher.launch(intent) }
-                    .onFailure { vm.showToast("لا يوجد محرّك إملاء صوتي على الجهاز") }
+                    .onFailure { vm.showToast(VoiceRecognizer.NO_ENGINE) }
+            }
+
+            val micPermission = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { granted ->
+                if (granted) vm.startListening()
+                else vm.showToast("بدون إذن الميكروفون لا يمكن الإملاء الصوتي")
+            }
+
+            val startVoice: () -> Unit = {
+                when {
+                    !vm.voiceAvailable() -> launchSystemDictation()
+                    vm.voiceNeedsPermission() ->
+                        micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                    else -> vm.startListening()
+                }
             }
 
             val lockedFeature by vm.lockedFeature.collectAsStateWithLifecycle()
@@ -338,6 +358,16 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                         actionColor = colors.accent
                     )
                 }
+
+                val voiceState by vm.voice.collectAsStateWithLifecycle()
+                VoiceSheet(
+                    state = voiceState,
+                    onStop = { vm.stopListening() },
+                    onRetry = startVoice,
+                    onToggle = { vm.toggleVoiceCandidate(it) },
+                    onConfirm = { vm.confirmVoice() },
+                    onDismiss = { vm.dismissVoice() }
+                )
 
                 if (showNav) {
                     Box(
