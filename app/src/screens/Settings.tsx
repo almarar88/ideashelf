@@ -7,7 +7,9 @@ import { detectPlatform } from "../lib/platform";
 const platform = detectPlatform();
 import { Sheet, Toggle } from "../components/ui";
 import { useState } from "react";
-import { HOSTED_ENABLED, PRIVACY_URL, TERMS_URL } from "../config";
+import { APP_BUILD, APP_VERSION, HOSTED_ENABLED, PRIVACY_URL, RELEASE_URL, TERMS_URL } from "../config";
+import { checkForUpdate } from "../lib/updates";
+import { canSpeak } from "../lib/voice";
 import { deleteAccount, refreshMe, signOut, useAccount, usageRatio } from "../lib/account";
 import Paywall from "./Paywall";
 import { billingAvailable, configureBilling, logoutBilling, presentCustomerCenter } from "../lib/billing";
@@ -46,6 +48,12 @@ import { filesDB, messagesDB } from "../lib/db";
 export default function Settings() {
   const s = useStore((x) => x.settings);
   const lang = s.lang;
+  const [upd, setUpd] = useState<string | null>(null);
+  const checkNow = async () => {
+    setUpd("…");
+    const u = await checkForUpdate(true);
+    setUpd(u ? `${t(lang, "updateAvailable")}: ${u.version} (build ${u.build})` : t(lang, "upToDate"));
+  };
   return (
     <div className="screen">
       <div className="hdr-light"><h1 className="h1" style={{ margin: 0 }}>{t(lang, "settings")}</h1></div>
@@ -79,6 +87,7 @@ export default function Settings() {
             <span className="small muted">{t(lang, "vibeDesc")}</span>
           </div>
           <div className="row between"><div><div style={{ fontWeight: 600 }}>{t(lang, "humanDelay")}</div><div className="small muted">{t(lang, "humanDelayDesc")}</div></div><Toggle on={s.humanDelay} onChange={(v) => actions.updateSettings({ humanDelay: v })} /></div>
+          {canSpeak() && <div className="row between"><div><div style={{ fontWeight: 600 }}>🔊 {t(lang, "autoRead")}</div><div className="small muted">{t(lang, "autoReadDesc")}</div></div><Toggle on={s.autoRead} onChange={(v) => actions.updateSettings({ autoRead: v })} /></div>}
         </div>
         <div className="card stack">
           <div><div className="h3">🖥️ {t(lang, "controlTitle")}</div><div className="small muted" style={{ marginTop: 4 }}>{t(lang, "controlDesc")}</div></div>
@@ -107,7 +116,17 @@ export default function Settings() {
           <div className="row between"><span className="muted">{t(lang, "concurrency")}</span><div className="row"><button className="round-btn" onClick={() => actions.updateSettings({ concurrency: Math.max(1, s.concurrency - 1) })}><Icon name="minus" size={16} /></button><b style={{ minWidth: 24, textAlign: "center" }}>{s.concurrency}</b><button className="round-btn" onClick={() => actions.updateSettings({ concurrency: Math.min(6, s.concurrency + 1) })}><Icon name="plus" size={16} /></button></div></div>
         </div>
         <button className="btn block" style={{ background: "var(--red)" }} onClick={async () => { if (confirm(t(lang, "confirmReset"))) { await messagesDB.clear(); await filesDB.clear(); actions.resetAll(); actions.updateSettings({ onboarded: true }); } }}><Icon name="trash" size={18} /> {t(lang, "resetAll")}</button>
-        <div className="small muted" style={{ textAlign: "center" }}>LiwaBot · {t(lang, "version")} 2.0.1</div>
+        {!HOSTED_ENABLED && (
+          <div className="card stack">
+            <div className="row between"><div><div style={{ fontWeight: 600 }}>{t(lang, "checkUpdates")}</div><div className="small muted">{t(lang, "checkUpdatesDesc")}</div></div><Toggle on={s.checkUpdates} onChange={(v) => actions.updateSettings({ checkUpdates: v })} /></div>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn light grow" onClick={checkNow}><Icon name="refresh" size={16} /> {t(lang, "checkUpdates")}</button>
+              <a className="btn light" href={RELEASE_URL} target="_blank" rel="noreferrer"><Icon name="globe" size={16} /></a>
+            </div>
+            {upd && <div className="small muted">{upd}</div>}
+          </div>
+        )}
+        <div className="small muted" style={{ textAlign: "center" }}>LiwaBot · {t(lang, "version")} {APP_VERSION} ({APP_BUILD})</div>
       </div>
     </div>
   );

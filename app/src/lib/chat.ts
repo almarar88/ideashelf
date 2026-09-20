@@ -108,6 +108,12 @@ function profile() {
 const EFFORT_RANK = { low: 0, medium: 1, high: 2, xhigh: 3 } as const;
 function capEffort(e: keyof typeof EFFORT_RANK, cap: keyof typeof EFFORT_RANK) { return EFFORT_RANK[e] <= EFFORT_RANK[cap] ? e : cap; }
 
+/** The group's standing brief (project, goals, constraints) — set by the boss in group settings. */
+function groupBrief(group: Group): string {
+  const c = (group.context ?? "").trim();
+  return c ? `GROUP BRIEF (the boss's standing context for this group — always keep it in mind, never contradict it):\n${c.slice(0, 2000)}\n\n` : "";
+}
+
 /** System prompt as two blocks: a stable, cached prefix (persona + rules) and a small dynamic tail. */
 function agentSystem(a: Agent, group: Group, members: Agent[], judge: JudgeConfig, catalog: string, council: boolean): Anthropic.TextBlockParam[] {
   const st = getState().settings;
@@ -128,7 +134,7 @@ ${VIBE_TEXT[st.vibe]}
 
 ${CHAT_RULES}
 ${controlPromptText(platform, st.control)}`;
-  const dynamic = `What you remember about the boss and their projects:
+  const dynamic = `${groupBrief(group)}What you remember about the boss and their projects:
 ${memoriesText(a.id)}
 
 Files catalog (shared in this group):
@@ -161,7 +167,7 @@ ${VIBE_TEXT[st.vibe]}
 ${CHAT_RULES}
 ${controlPromptText(platform, st.control)}
 As the judge: when several colleagues answered, don't restate everything — synthesize, say who is right and why, give the decision, the next 2-5 concrete steps, and the main risk. If the boss's request was simple and only one person answered, just add a brief managerial note or nothing new. If you need the boss's input to decide, ask ONE precise question.`;
-  const dynamic = `What you remember about the boss and their projects:
+  const dynamic = `${groupBrief(group)}What you remember about the boss and their projects:
 ${memoriesText(JUDGE_ID)}
 
 Files catalog:

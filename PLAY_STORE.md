@@ -21,7 +21,8 @@
 1. supabase.com → New project (اختر منطقة قريبة، مثل فرانكفورت).
 2. SQL Editor → الصق محتوى `server/schema.sql` → Run.
 3. Authentication → Providers → Email: مفعّل. (للبداية عطّل "Confirm email" حتى لا يحتاج المستخدم تأكيد البريد.)
-4. Authentication → URL Configuration → Site URL: `https://almarar88.github.io/ideashelf/app/`.
+4. Authentication → URL Configuration → Site URL: `https://almarar88.github.io/ideashelf/app/`، وأضف في Redirect URLs: `com.ideashelf.liwabot://auth-callback` (رابط عودة التطبيق بعد تسجيل الدخول بجوجل).
+4b. **تسجيل الدخول بجوجل** (زر "المتابعة بحساب Google" في التطبيق): console.cloud.google.com → APIs & Services → Credentials → OAuth client ID (Web application) → Authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`. ثم Supabase → Authentication → Providers → Google: فعّله وضع Client ID وClient Secret.
 5. Settings → API: انسخ `Project URL` و`anon public` (للتطبيق) و`service_role` (للخادم فقط، سرّي).
 
 ## 2. الخادم — 10 دقائق

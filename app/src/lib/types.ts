@@ -109,6 +109,8 @@ export interface Group {
   lastPreview: string;
   lastSender: string;
   msgCount: number;
+  context?: string;       // standing brief for this group: project, goals, constraints — injected into every reply
+  pinned?: boolean;
 }
 
 export interface UsageEntry { ts: number; agentId: string; model: ModelId; input: number; output: number; groupId: string; }
@@ -129,6 +131,8 @@ export interface Settings {
   control: ControlSettings;
   speed: Speed;
   aiMode: "hosted" | "byok";   // hosted = Majlis account + subscription; byok = bring your own Anthropic key
+  autoRead: boolean;           // read every finished reply aloud (TTS)
+  checkUpdates: boolean;       // look for a newer APK / installer on the release page
 }
 
 export type Speed = "fast" | "balanced" | "quality";

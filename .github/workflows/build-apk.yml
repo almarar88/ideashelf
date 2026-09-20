@@ -41,6 +41,15 @@ jobs:
         run: cd android && chmod +x gradlew && ./gradlew assembleRelease --no-daemon
       - name: Rename APK
         run: cp android/app/build/outputs/apk/release/app-release.apk LiwaBot.apk
+      - name: Write version.json (read by the in-app update checker)
+        id: ver
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          BUILD=$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' android/app/build.gradle)
+          printf '{"version":"%s","build":%s,"date":"%s"}\n' "$VERSION" "$BUILD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > version.json
+          cat version.json
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
           name: LiwaBot.apk
@@ -49,9 +58,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: LiwaBot — latest builds
+          name: LiwaBot ${{ steps.ver.outputs.version }} (build ${{ steps.ver.outputs.build }})
           body: |
             **Android:** LiwaBot.apk — ثبّته مباشرة.
             **iPhone:** LiwaBot-unsigned.ipa — غير موقّع؛ ثبّته عبر Sideloadly أو AltStore بحساب Apple ID.
-          files: app/LiwaBot.apk
+            **Windows:** LiwaBot-Setup-x.y.z.exe (مثبّت) أو LiwaBot-Portable-x.y.z.exe (بدون تثبيت).
+          files: |
+            app/LiwaBot.apk
+            app/version.json
           prerelease: false

@@ -37,6 +37,19 @@ export async function listenOnce(lang: "ar" | "en", onPartial?: (t: string) => v
   });
 }
 
+/** Text-to-speech through the WebView's speech synthesis (available on Android, iOS and desktop). */
+export const canSpeak = () => typeof window !== "undefined" && "speechSynthesis" in window;
+export function speakText(text: string, lang: "ar" | "en"): void {
+  if (!canSpeak()) return;
+  const clean = text.replace(/```[\s\S]*?```/g, " ").replace(/https?:\/\/\S+/g, " ").replace(/[*#`_>|]/g, "").trim();
+  if (!clean) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(clean.slice(0, 1500));
+  u.lang = lang === "ar" ? "ar-AE" : "en-US";
+  window.speechSynthesis.speak(u);
+}
+export function stopSpeaking(): void { if (canSpeak()) window.speechSynthesis.cancel(); }
+
 export async function stopListening(): Promise<void> {
   if (Capacitor.isNativePlatform()) { try { const { SpeechRecognition } = await import("@capacitor-community/speech-recognition"); await SpeechRecognition.stop(); } catch { /* ignore */ } }
 }

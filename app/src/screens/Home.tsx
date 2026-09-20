@@ -1,12 +1,17 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RobotAvatar } from "../lib/avatars";
 import { actions, getState, useStore } from "../lib/store";
 import { t } from "../lib/i18n";
 import { Icon, Sheet, Toggle, fmtDate, fmtNum } from "../components/ui";
-import { JUDGE_ID, costUSD, uid, type Group } from "../lib/types";
+import { JUDGE_ID, costUSD, uid, type Group, type Message } from "../lib/types";
 import { SESSION_EXAMPLES, TEAM_PRESETS, materialize, presetAgents } from "../lib/presets";
 import { useAccount, usageRatio } from "../lib/account";
 import { HOSTED_ENABLED } from "../config";
+import { messagesDB } from "../lib/db";
+import { checkForUpdate, type UpdateInfo } from "../lib/updates";
+import { Capacitor } from "@capacitor/core";
+
+interface Hit { m: Message; g: Group; }
 
 const EMOJIS = ["🚀", "💼", "🏪", "📈", "🧠", "🏥", "⚖️", "🎯", "🛠️", "✈️", "🏠", "🎨"];
 
@@ -19,6 +24,42 @@ export default function Home({ openChat, goAgents, goSettings }: { openChat: (id
   const [gEmoji, setGEmoji] = useState("🚀");
   const [gMembers, setGMembers] = useState<string[]>(agents.filter((a) => a.active).map((a) => a.id));
   const [gJudge, setGJudge] = useState(true);
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<Hit[] | null>(null);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!settings.checkUpdates || HOSTED_ENABLED || !(Capacitor.isNativePlatform() || Boolean((window as unknown as { majlisDesktop?: unknown }).majlisDesktop))) return;
+    checkForUpdate().then(setUpdate).catch(() => undefined);
+  }, [settings.checkUpdates]);
+
+  // Search across every chat (debounced; loads messages lazily from IndexedDB).
+  useEffect(() => {
+    const needle = q.trim().toLowerCase();
+    if (needle.length < 2) { setHits(null); return; }
+    let live = true;
+    const tm = window.setTimeout(async () => {
+      const out: Hit[] = [];
+      for (const g of groups) {
+        const ms = await messagesDB.get(g.id);
+        for (const m of ms) if ((m.text + " " + (m.verdict?.decision ?? "") + " " + m.files.map((f) => f.name).join(" ")).toLowerCase().includes(needle)) out.push({ m, g });
+        if (!live) return;
+      }
+      out.sort((a, b) => b.m.createdAt - a.m.createdAt);
+      setHits(out.slice(0, 60));
+    }, 220);
+    return () => { live = false; window.clearTimeout(tm); };
+  }, [q, groups]);
+
+  const senderName = (m: Message) => m.role === "user" ? (lang === "ar" ? "أنت" : "You") : m.agentId === JUDGE_ID ? judge.name : agents.find((a) => a.id === m.agentId)?.name ?? "?";
+  const snippet = (m: Message) => {
+    const text = m.verdict ? m.verdict.decision + " — " + m.verdict.summary : m.text || m.files.map((f) => f.name).join(", ");
+    const i = text.toLowerCase().indexOf(q.trim().toLowerCase());
+    const start = Math.max(0, i - 40);
+    return (start > 0 ? "…" : "") + text.slice(start, start + 120) + (text.length > start + 120 ? "…" : "");
+  };
+  const sortedGroups = useMemo(() => [...groups].sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || (b.updatedAt || 0) - (a.updatedAt || 0)), [groups]);
 
   const active = agents.filter((a) => a.active);
   const tokens = usageLog.reduce((n, e) => n + e.input + e.output, 0);
@@ -71,7 +112,35 @@ export default function Home({ openChat, goAgents, goSettings }: { openChat: (id
       </div>
 
       <div className="pad stack" style={{ marginTop: 14 }}>
-        <div className="card row" style={{ padding: "14px 16px" }}>
+        {update && !dismissed && (
+          <div className="card dark row" style={{ padding: "12px 16px" }}>
+            <span style={{ fontSize: 24 }}>🎁</span>
+            <div className="grow"><div style={{ fontWeight: 600 }}>{t(lang, "updateAvailable")} · {update.version}</div><div className="small" style={{ opacity: .7 }}>LiwaBot {update.version} (build {update.build})</div></div>
+            <a className="pill orange" href={update.url} target="_blank" rel="noreferrer">{t(lang, "updateNow")}</a>
+            <button className="icon-btn" style={{ background: "transparent", color: "#fff" }} onClick={() => setDismissed(true)}><Icon name="x" size={16} /></button>
+          </div>
+        )}
+        <div className="row input" style={{ padding: "0 14px", gap: 8, background: "var(--white)" }}>
+          <Icon name="search" size={18} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t(lang, "searchChats")} style={{ flex: 1, border: 0, background: "transparent", padding: "12px 0", fontSize: 15, color: "inherit", outline: "none" }} />
+          {q && <button onClick={() => setQ("")}><Icon name="x" size={16} /></button>}
+        </div>
+        {hits && (
+          <div className="stack" style={{ gap: 8 }}>
+            <div className="small muted">{hits.length} {t(lang, "results")}</div>
+            {hits.length === 0 && <div className="card soft empty">{t(lang, "noResults")}</div>}
+            {hits.map(({ m, g }) => (
+              <button key={m.id} className="list-item" style={{ textAlign: "start" }} onClick={() => openChat(g.id)}>
+                <div style={{ width: 44, height: 44, borderRadius: 14, background: "var(--cream-2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{g.emoji}</div>
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <div className="row between"><span style={{ fontWeight: 600 }}>{senderName(m)} <span className="small muted">· {g.name}</span></span><span className="small muted">{fmtDate(m.createdAt, lang)}</span></div>
+                  <div className="small muted" style={{ whiteSpace: "normal" }}>{snippet(m)}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+        {!hits && <div className="card row" style={{ padding: "14px 16px" }}>
           <span className="icon-btn" style={{ background: "var(--orange-soft)", color: "var(--orange)" }}><Icon name="bolt" /></span>
           <div className="grow">
             {me ? (
@@ -87,21 +156,21 @@ export default function Home({ openChat, goAgents, goSettings }: { openChat: (id
               </>
             )}
           </div>
-        </div>
+        </div>}
 
-        <div className="row between" style={{ marginTop: 6 }}>
+        {!hits && <div className="row between" style={{ marginTop: 6 }}>
           <h2 className="h2">{t(lang, "chats")}</h2>
           <button className="pill dark" onClick={() => setCreating(true)}><Icon name="plus" size={14} /> {t(lang, "newGroup")}</button>
-        </div>
-        {groups.length === 0 && <div className="card soft empty">{t(lang, "noGroups")}</div>}
-        {groups.map((g) => {
+        </div>}
+        {!hits && groups.length === 0 && <div className="card soft empty">{t(lang, "noGroups")}</div>}
+        {!hits && sortedGroups.map((g) => {
           const members = agents.filter((a) => g.memberIds.includes(a.id));
           const sender = g.lastSender === JUDGE_ID ? judge.name : g.lastSender === "user" ? (lang === "ar" ? "أنت" : "You") : agents.find((a) => a.id === g.lastSender)?.name ?? "";
           return (
             <button key={g.id} className="list-item" style={{ textAlign: "start" }} onClick={() => openChat(g.id)}>
               <div style={{ width: 52, height: 52, borderRadius: 18, background: "var(--cream-2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 }}>{g.emoji}</div>
               <div className="grow">
-                <div className="row between"><span style={{ fontWeight: 600 }}>{g.name}</span><span className="small muted">{g.updatedAt ? fmtDate(g.updatedAt, lang) : ""}</span></div>
+                <div className="row between"><span style={{ fontWeight: 600 }}>{g.pinned ? "📌 " : ""}{g.name}</span><span className="small muted">{g.updatedAt ? fmtDate(g.updatedAt, lang) : ""}</span></div>
                 <div className="small muted" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "70vw" }}>{g.lastPreview ? `${sender}: ${g.lastPreview}` : `${members.length} ${t(lang, "agentsCount")}`}</div>
               </div>
               <div className="row" style={{ gap: 0 }}>{members.slice(0, 3).map((m, i) => <span key={m.id} style={{ marginInlineStart: i ? -10 : 0 }}><RobotAvatar variant={m.avatar} color={m.color} size={28} /></span>)}</div>
@@ -109,11 +178,11 @@ export default function Home({ openChat, goAgents, goSettings }: { openChat: (id
           );
         })}
 
-        <div className="row between" style={{ marginTop: 10 }}>
+        {!hits && <div className="row between" style={{ marginTop: 10 }}>
           <h2 className="h2">{t(lang, "agents")}</h2>
           <button className="pill" onClick={goAgents}>{t(lang, "more")} <Icon name="fwd" size={13} /></button>
-        </div>
-        <div className="grid2">
+        </div>}
+        {!hits && <div className="grid2">
           {agents.slice(0, 4).map((a) => (
             <div key={a.id} className="agent-card">
               <div className="count">{a.skills.length}<small>{t(lang, "skills")}</small></div>
@@ -123,7 +192,7 @@ export default function Home({ openChat, goAgents, goSettings }: { openChat: (id
               <div className="av"><RobotAvatar variant={a.avatar} color={a.color} size={78} mood={a.active ? "idle" : "error"} /></div>
             </div>
           ))}
-        </div>
+        </div>}
       </div>
 
       <Sheet open={creating} onClose={() => setCreating(false)} title={t(lang, "newGroup")}>

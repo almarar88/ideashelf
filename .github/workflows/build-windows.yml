@@ -36,11 +36,16 @@ jobs:
           path: |
             app/dist-electron/LiwaBot-Setup-*.exe
             app/dist-electron/LiwaBot-Portable-*.exe
+      - name: Read version
+        id: ver
+        run: |
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "build=$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' android/app/build.gradle)" >> "$GITHUB_OUTPUT"
       - name: Publish to "latest" release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: LiwaBot — latest builds
+          name: LiwaBot ${{ steps.ver.outputs.version }} (build ${{ steps.ver.outputs.build }})
           body: |
             **Android:** LiwaBot.apk — ثبّته مباشرة.
             **iPhone:** LiwaBot-unsigned.ipa — غير موقّع؛ ثبّته عبر Sideloadly أو AltStore بحساب Apple ID.

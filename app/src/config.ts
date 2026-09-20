@@ -13,3 +13,10 @@ export const ENTITLEMENT_ULTRA = "liwabot_ultra";
 export const PRIVACY_URL = (import.meta.env.VITE_PRIVACY_URL as string | undefined) ?? "https://almarar88.github.io/ideashelf/legal/privacy.html";
 export const TERMS_URL = (import.meta.env.VITE_TERMS_URL as string | undefined) ?? "https://almarar88.github.io/ideashelf/legal/terms.html";
 export const HOSTED_ENABLED = Boolean(API_URL && SUPABASE_URL && SUPABASE_ANON_KEY);
+// Keep in sync with package.json, android/app/build.gradle (versionCode) and the iOS project.
+export const APP_VERSION = "2.1.0";
+export const APP_BUILD = 10;
+export const RELEASE_URL = "https://github.com/almarar88/ideashelf/releases/tag/latest";
+export const RELEASE_API = "https://api.github.com/repos/almarar88/ideashelf/releases/tags/latest";
+// Deep link the OAuth provider returns to on phones (declared in AndroidManifest.xml and Info.plist).
+export const AUTH_CALLBACK = "com.ideashelf.liwabot://auth-callback";

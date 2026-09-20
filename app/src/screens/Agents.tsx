@@ -5,6 +5,14 @@ import { t } from "../lib/i18n";
 import { Gauge, Icon, Sheet, Toggle } from "../components/ui";
 import { AVATAR_COLORS, JUDGE_ID, MODELS, uid, type Agent, type JudgeConfig, type JudgeStyle } from "../lib/types";
 import { materialize, presetAgents } from "../lib/presets";
+import { packAgents, packToJson, parseAgents } from "../lib/agentio";
+import { pickFiles, shareText } from "../lib/files";
+
+/** Share agents as JSON via the OS share sheet (falls back to the clipboard on the web). */
+export async function shareAgents(list: Agent[]): Promise<void> {
+  const json = packToJson(packAgents(list));
+  await shareText(list.length === 1 ? `LiwaBot agent: ${list[0].name}` : `LiwaBot agents (${list.length})`, json);
+}
 
 export default function Agents() {
   const { settings, agents, judge } = useStore((s) => s);
@@ -12,6 +20,20 @@ export default function Agents() {
   const [editing, setEditing] = useState<Agent | null>(null);
   const [editJudge, setEditJudge] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+
+  const doImport = (json: string) => {
+    try {
+      const list = parseAgents(json, agents.length);
+      list.forEach((a) => actions.upsertAgent(a));
+      setImportText(""); setImportMsg(`${t(lang, "imported")} ${list.length}: ${list.map((a) => a.name).join("، ")}`);
+    } catch (e) { setImportMsg(String(e instanceof Error ? e.message : e)); }
+  };
+  const importFile = async () => {
+    const [f] = await pickFiles("application/json,.json,text/plain", false);
+    if (f) doImport(await f.text());
+  };
 
   const blank = (): Agent => ({ id: uid(), name: "", title: "", field: "", skills: [], personality: "", instructions: "", avatar: Math.floor(Math.random() * AVATAR_COUNT), color: AVATAR_COLORS[agents.length % AVATAR_COLORS.length], webSearch: true, maxSearches: 5, creativity: 55, humor: 60, model: "default", active: true, createdAt: Date.now() });
 
@@ -58,6 +80,18 @@ export default function Agents() {
       </Sheet>
       <Sheet open={showTemplates} onClose={() => setShowTemplates(false)} title={t(lang, "templates")}>
         <div className="stack">
+          <div className="card soft stack" style={{ gap: 8 }}>
+            <div style={{ fontWeight: 600 }}><Icon name="share" size={16} /> {t(lang, "importAgents")}</div>
+            <div className="small muted">{t(lang, "importDesc")}</div>
+            <textarea className="input" dir="ltr" value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='{"agents":[...]}' style={{ minHeight: 60, fontFamily: "monospace", fontSize: 12 }} />
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn light grow" onClick={importFile}><Icon name="file" size={16} /> {t(lang, "importFile")}</button>
+              <button className="btn orange grow" disabled={!importText.trim()} onClick={() => doImport(importText)}><Icon name="plus" size={16} /> {t(lang, "importBtn")}</button>
+            </div>
+            {agents.length > 0 && <button className="btn light block" onClick={() => shareAgents(agents)}><Icon name="share" size={16} /> {t(lang, "exportAgents")} ({agents.length})</button>}
+            {importMsg && <div className="small">{importMsg}</div>}
+          </div>
+          <div className="divider" />
           {presetAgents(lang).map((p) => (
             <div key={p.id} className="list-item">
               <RobotAvatar variant={p.avatar} color={p.color} size={44} />
@@ -131,6 +165,7 @@ function AgentEditor({ initial, isNew, onClose }: { initial: Agent; isNew: boole
       <div className="row" style={{ marginTop: 6 }}>
         <button className="btn orange grow" onClick={save} disabled={!a.name.trim()}>{t(lang, "save")}</button>
         {!isNew && <button className="btn light" onClick={() => { actions.upsertAgent({ ...a, id: uid(), name: a.name + " 2", createdAt: Date.now() }); onClose(); }}>{t(lang, "duplicate")}</button>}
+        {!isNew && <button className="btn light" title={t(lang, "shareAgent")} onClick={() => shareAgents([a])}><Icon name="share" size={16} /></button>}
         {!isNew && <button className="icon-btn" style={{ background: "#fde8e8", color: "var(--red)" }} onClick={() => { if (confirm(t(lang, "confirmDelete"))) { actions.deleteAgent(a.id); onClose(); } }}><Icon name="trash" /></button>}
       </div>
     </div>

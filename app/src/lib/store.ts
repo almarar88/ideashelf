@@ -13,6 +13,8 @@ const defaultSettings: Settings = {
   control: { level: "ask", shell: true, files: true, screen: true, device: true, webFetch: true },
   speed: "fast",
   aiMode: HOSTED_ENABLED ? "hosted" : "byok",
+  autoRead: false,
+  checkUpdates: true,
 };
 
 function load(): AppState {

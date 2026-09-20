@@ -6,7 +6,9 @@ import { Dots, Gauge, Icon, Sheet, Toggle, fmtTime } from "../components/ui";
 import { Markdown } from "../components/markdown";
 import { FileChip, FileViewer } from "../components/FileViewer";
 import { messagesDB } from "../lib/db";
-import { ingestUpload, pickCamera, pickFiles, shareText } from "../lib/files";
+import { ingestUpload, pickCamera, pickFiles, saveGeneratedFile, shareFile, shareText } from "../lib/files";
+import { buildChatHtml } from "../lib/report";
+import { speakText, stopSpeaking } from "../lib/voice";
 import { handleUserMessage, regenerateReply } from "../lib/chat";
 import { keepAlive, notifyDone } from "../lib/background";
 import { hasAI } from "../lib/ai";
@@ -61,7 +63,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
   const listRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<number | undefined>(undefined);
 
-  useEffect(() => { messagesDB.get(groupId).then((m) => { msgsRef.current = m; setMsgs(m); setLoaded(true); }); }, [groupId]);
+  useEffect(() => { messagesDB.get(groupId).then((m) => { msgsRef.current = m; setMsgs(m); setLoaded(true); }); return () => stopSpeaking(); }, [groupId]);
 
   const persist = useCallback((list: Message[]) => {
     window.clearTimeout(saveTimer.current);
@@ -73,6 +75,9 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
     const idx = cur.findIndex((x) => x.id === m.id);
     const next = idx >= 0 ? cur.map((x) => (x.id === m.id ? m : x)) : [...cur, m];
     msgsRef.current = next; setMsgs(next); persist(next);
+    if (idx >= 0 && cur[idx].status === "streaming" && m.status === "done" && m.role !== "user" && !m.reaction && getState().settings.autoRead) {
+      speakText(m.verdict ? m.verdict.decision + ". " + m.verdict.summary : m.text, getState().settings.lang);
+    }
     if (m.status !== "streaming") {
       const who = m.role === "user" ? "user" : m.agentId ?? "";
       actions.patchGroup(groupId, { updatedAt: Date.now(), lastPreview: (m.text || (m.files[0]?.name ?? "")).slice(0, 80), lastSender: who, msgCount: next.length });
@@ -165,6 +170,12 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
   const exportChat = () => {
     const lines = msgs.map((m) => `[${m.role === "user" ? settings.userName || "Me" : m.agentId === JUDGE_ID ? judge.name : agentOf(m.agentId)?.name ?? "?"}] ${m.verdict ? m.verdict.decision + "\n" + m.verdict.summary : m.text}${m.files.length ? "\n(files: " + m.files.map((f) => f.name).join(", ") + ")" : ""}`);
     shareText(group.name, lines.join("\n\n"));
+  };
+  const exportHtml = async () => {
+    const html = buildChatHtml({ title: group.name, emoji: group.emoji, lang, userName: settings.userName, msgs, nameFor: (m) => nameFor(m), colorFor: (m) => m.agentId === JUDGE_ID ? judge.color : agentOf(m.agentId)?.color ?? "#999", isJudge: (m) => m.agentId === JUDGE_ID });
+    const ref = await saveGeneratedFile(groupId, "user", `${group.name.replace(/[\\/:*?"<>|]/g, "-")} - ${new Date().toISOString().slice(0, 10)}.html`, html, "report");
+    setShowSettings(false);
+    await shareFile(ref, group.name);
   };
 
   const nameFor = useCallback((m: Message) => m.agentId === JUDGE_ID ? judge.name : agentOf(m.agentId)?.name ?? "?", [judge.name, agentOf]);
@@ -272,13 +283,21 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
       <Sheet open={showSettings} onClose={() => setShowSettings(false)} title={t(lang, "groupSettings")}>
         <div className="stack">
           <div className="field"><label>{t(lang, "groupName")}</label><input className="input" value={group.name} onChange={(e) => actions.patchGroup(groupId, { name: e.target.value })} /></div>
+          <div className="field"><label>📌 {t(lang, "groupContext")}</label>
+            <textarea className="input" value={group.context ?? ""} onChange={(e) => actions.patchGroup(groupId, { context: e.target.value })} placeholder={t(lang, "groupContextPh")} style={{ minHeight: 90 }} maxLength={2000} />
+            <span className="small muted">{t(lang, "groupContextDesc")}</span>
+          </div>
           <div className="field"><label>{t(lang, "members")}</label>
             <div className="chips">{agents.map((a) => <button key={a.id} className={"chip" + (group.memberIds.includes(a.id) ? " on" : "")} onClick={() => actions.patchGroup(groupId, { memberIds: group.memberIds.includes(a.id) ? group.memberIds.filter((x) => x !== a.id) : [...group.memberIds, a.id] })}><RobotAvatar variant={a.avatar} color={a.color} size={20} /> {a.name}</button>)}</div>
           </div>
           <div className="row between card soft" style={{ padding: "12px 16px" }}><div><div style={{ fontWeight: 600 }}>{t(lang, "judgeEnabled")}</div><div className="small muted">{t(lang, "judgeDesc")}</div></div><Toggle on={group.judgeEnabled} onChange={(v) => actions.patchGroup(groupId, { judgeEnabled: v })} /></div>
           <div className="row between card soft" style={{ padding: "12px 16px" }}><div><div style={{ fontWeight: 600 }}>{t(lang, "banter")}</div><div className="small muted">{t(lang, "banterDesc")}</div></div><Toggle on={group.banter} onChange={(v) => actions.patchGroup(groupId, { banter: v })} /></div>
           <div className="row between card soft" style={{ padding: "12px 16px" }}><div><div style={{ fontWeight: 600 }}>{t(lang, "debateRound")}</div><div className="small muted">{t(lang, "debateDesc")}</div></div><Toggle on={group.debate} onChange={(v) => actions.patchGroup(groupId, { debate: v })} /></div>
-          <button className="btn light block" onClick={exportChat}><Icon name="share" size={18} /> {t(lang, "exportChat")}</button>
+          <button className="btn light block" onClick={() => actions.patchGroup(groupId, { pinned: !group.pinned })}>📌 {t(lang, group.pinned ? "unpinChat" : "pinChat")}</button>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn light grow" onClick={exportChat}><Icon name="share" size={18} /> {t(lang, "exportChat")}</button>
+            <button className="btn light grow" onClick={exportHtml}><Icon name="file" size={18} /> {t(lang, "exportHtml")}</button>
+          </div>
           <button className="btn block" style={{ background: "var(--red)" }} onClick={() => { if (confirm(t(lang, "confirmDeleteGroup"))) { messagesDB.del(groupId); actions.deleteGroup(groupId); onBack(); } }}><Icon name="trash" size={18} /> {t(lang, "deleteGroup")}</button>
         </div>
       </Sheet>

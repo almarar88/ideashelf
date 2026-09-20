@@ -11,7 +11,7 @@ import Settings from "./screens/Settings";
 import Onboarding from "./screens/Onboarding";
 import Auth from "./screens/Auth";
 import { App as CapApp } from "@capacitor/app";
-import { refreshMe, useAccount } from "./lib/account";
+import { handleAuthCallback, refreshMe, useAccount } from "./lib/account";
 import { billingAvailable, configureBilling, onEntitlementChange } from "./lib/billing";
 import { HOSTED_ENABLED } from "./config";
 import { Spinner } from "./components/ui";
@@ -39,6 +39,14 @@ export default function App() {
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
     document.body.className = settings.theme === "dark" ? "theme-dark" : "";
   }, [lang, settings.theme]);
+
+  // OAuth deep link (Google sign-in returns here on phones)
+  useEffect(() => {
+    if (!HOSTED_ENABLED) return;
+    const sub = CapApp.addListener("appUrlOpen", ({ url }) => { void handleAuthCallback(url); });
+    CapApp.getLaunchUrl().then((r) => { if (r?.url) void handleAuthCallback(r.url); }).catch(() => undefined);
+    return () => { sub.then((h) => h.remove()); };
+  }, []);
 
   // Android hardware back button
   useEffect(() => {
