@@ -19,6 +19,8 @@ export async function configureBilling(userId: string): Promise<void> {
   if (!billingAvailable()) return;
   const P = await rc();
   if (configuredFor === null) {
+    // Equivalent of `Purchases.logLevel = LogLevel.DEBUG` in the native SDK — only while using a Test Store key.
+    if (key().startsWith("test_")) { const { LOG_LEVEL } = await import("@revenuecat/purchases-capacitor"); await P.setLogLevel({ level: LOG_LEVEL.DEBUG }).catch(() => undefined); }
     await P.configure({ apiKey: key(), appUserID: userId });
   } else if (configuredFor !== userId) {
     await P.logIn({ appUserID: userId });
