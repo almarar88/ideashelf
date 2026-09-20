@@ -71,8 +71,10 @@ object Ar {
     }
 
     fun greeting(hour: Int = LocalTime.now().hour): String = when (hour) {
-        in 0..11 -> "صباح الخير"
+        in 0..4 -> "ليلة هادئة"
+        in 5..11 -> "صباح الخير"
         in 12..16 -> "طاب يومك"
+        in 17..21 -> "مساء الخير"
         else -> "مساء الخير"
     }
 

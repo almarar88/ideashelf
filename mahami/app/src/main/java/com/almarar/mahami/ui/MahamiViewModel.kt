@@ -340,11 +340,17 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun voiceNeedsPermission(): Boolean = !recognizer.hasPermission()
 
-    fun startListening() {
+    fun startListening() = startListening(preferOffline = true)
+
+    /**
+     * نبدأ بتفضيل المعالجة على الجهاز حفاظاً على الخصوصية، فإن لم يكن النموذج
+     * العربي منزّلاً أعدنا المحاولة عبر الإنترنت تلقائياً بدل إفشال الميزة.
+     */
+    private fun startListening(preferOffline: Boolean) {
         listenJob?.cancel()
         _voice.value = VoiceState(phase = VoicePhase.LISTENING)
         listenJob = viewModelScope.launch {
-            recognizer.listen().collect { event ->
+            recognizer.listen(preferOffline = preferOffline).collect { event ->
                 when (event) {
                     VoiceEvent.Ready -> Unit
                     is VoiceEvent.Level ->
@@ -352,6 +358,12 @@ class MahamiViewModel(app: Application) : AndroidViewModel(app) {
                     is VoiceEvent.Partial ->
                         _voice.update { it.copy(partial = event.text) }
                     is VoiceEvent.Final -> review(event.text)
+                    VoiceEvent.OfflineUnavailable ->
+                        if (preferOffline) startListening(preferOffline = false)
+                        else _voice.value = VoiceState(
+                            phase = VoicePhase.ERROR,
+                            message = VoiceRecognizer.NO_ENGINE
+                        )
                     is VoiceEvent.Failed -> _voice.value = VoiceState(
                         phase = VoicePhase.ERROR,
                         message = event.message,

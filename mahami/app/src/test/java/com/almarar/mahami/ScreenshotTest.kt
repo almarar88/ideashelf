@@ -202,6 +202,22 @@ class ScreenshotTest {
         shot("19-calendar-week") { CalendarScreen(vm) {} }
     }
 
+    /**
+     * الشاشة الرئيسية بلا أي مهمة.
+     * كل اللقطات الأخرى ببيانات موجودة، فلم تكشف أن القرص كان يعرض «0 يوم».
+     */
+    @Test fun homeEmpty() {
+        runBlocking { Repository.get(app).clearAll() }
+        idle()
+        shot("23-home-empty") {
+            HomeScreen(
+                vm = vm,
+                onOpenTask = {}, onOpenSettings = {}, onOpenTasks = {},
+                onOpenTemplates = {}, onNewTask = {}
+            )
+        }
+    }
+
     /** الورقة الصوتية أثناء الاستماع — الموجة عند مستوى صوت متوسط */
     @Test fun voiceListening() = shot("20-voice-listening") {
         VoiceSheet(

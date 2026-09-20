@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.CloudDone
@@ -611,21 +612,36 @@ private fun FeatureCard(
                     inactiveColor = colors.onFeatureMuted.copy(alpha = 0.3f)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        AnimatedCounter(
-                            value = task?.let { kotlin.math.abs(it.daysLeft(today)).toInt() } ?: 0,
-                            style = MaterialTheme.typography.displayMedium,
-                            color = colors.onFeature
-                        )
-                        Text(
-                            when {
-                                task == null -> "يوم"
-                                task.daysLeft(today) == 0L -> "اليوم"
-                                task.daysLeft(today) < 0 -> "يوم تأخير"
-                                else -> "يوم متبقٍ"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.onFeatureMuted
-                        )
+                        if (task == null) {
+                            // «0 يوم» بلا معنى حين لا توجد مهام أصلاً
+                            Icon(
+                                Icons.Rounded.Check,
+                                null,
+                                tint = colors.accent,
+                                modifier = Modifier.size(42.dp)
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "لا مواعيد",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.onFeatureMuted
+                            )
+                        } else {
+                            AnimatedCounter(
+                                value = kotlin.math.abs(task.daysLeft(today)).toInt(),
+                                style = MaterialTheme.typography.displayMedium,
+                                color = colors.onFeature
+                            )
+                            Text(
+                                when {
+                                    task.daysLeft(today) == 0L -> "اليوم"
+                                    task.daysLeft(today) < 0 -> "يوم تأخير"
+                                    else -> "يوم متبقٍ"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.onFeatureMuted
+                            )
+                        }
                     }
                 }
 

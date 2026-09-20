@@ -20,6 +20,8 @@ sealed interface VoiceEvent {
     /** مستوى الصوت من 0 إلى 1 — يغذّي الموجة المتحركة */
     data class Level(val value: Float) : VoiceEvent
     data class Final(val text: String) : VoiceEvent
+    /** المعالجة على الجهاز غير متاحة لهذه اللغة — يُعاد المحاولة عبر الإنترنت */
+    data object OfflineUnavailable : VoiceEvent
     data class Failed(val message: String, val recoverable: Boolean) : VoiceEvent
 }
 
@@ -42,7 +44,10 @@ class VoiceRecognizer(private val context: Context) {
      * يبدأ الاستماع ويُصدر الأحداث حتى يُلغى التدفّق.
      * يجب استدعاؤه من الخيط الرئيسي — SpeechRecognizer يشترط ذلك.
      */
-    fun listen(languageTag: String = "ar-SA"): Flow<VoiceEvent> = callbackFlow {
+    fun listen(
+        languageTag: String = "ar-SA",
+        preferOffline: Boolean = true
+    ): Flow<VoiceEvent> = callbackFlow {
         if (!isAvailable()) {
             trySend(VoiceEvent.Failed(NO_ENGINE, recoverable = false))
             close()
@@ -88,11 +93,18 @@ class VoiceRecognizer(private val context: Context) {
             }
 
             override fun onError(error: Int) {
-                // لو سمعنا شيئاً قبل الخطأ فالأولى أن نعتمده بدل أن نضيّعه
-                if (lastPartial.isNotBlank() && error in SALVAGEABLE) {
-                    trySend(VoiceEvent.Final(lastPartial))
-                } else {
-                    trySend(VoiceEvent.Failed(describe(error), recoverable = error !in FATAL))
+                when {
+                    // لو سمعنا شيئاً قبل الخطأ فالأولى أن نعتمده بدل أن نضيّعه
+                    lastPartial.isNotBlank() && error in SALVAGEABLE ->
+                        trySend(VoiceEvent.Final(lastPartial))
+
+                    // النموذج المحلي غير منزّل لهذه اللغة: نعيد المحاولة عبر
+                    // الإنترنت بدل أن نُفشل الميزة كلها في وجه المستخدم
+                    preferOffline && error in OFFLINE_MISSING ->
+                        trySend(VoiceEvent.OfflineUnavailable)
+
+                    else ->
+                        trySend(VoiceEvent.Failed(describe(error), recoverable = error !in FATAL))
                 }
                 close()
             }
@@ -109,7 +121,7 @@ class VoiceRecognizer(private val context: Context) {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             // نفضّل المعالجة على الجهاز حين تتوفّر، فلا يغادر الصوت الهاتف
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (preferOffline && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             }
             // مهلة صمت أطول قليلاً: إملاء المهام فيه وقفات تفكير
@@ -141,7 +153,14 @@ class VoiceRecognizer(private val context: Context) {
         SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "محرّك التعرّف مشغول، أعد المحاولة بعد لحظة."
         SpeechRecognizer.ERROR_SERVER -> "خطأ من خادم التعرّف على الكلام."
         SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "لم أسمع شيئاً — تحدّث بعد الضغط مباشرة."
-        else -> "تعذّر التعرّف على الكلام."
+        ERROR_TOO_MANY_REQUESTS -> "المحرّك مزدحم الآن، أعد المحاولة بعد قليل."
+        ERROR_SERVER_DISCONNECTED -> "انقطع الاتصال بمحرّك التعرّف."
+        ERROR_LANGUAGE_NOT_SUPPORTED ->
+            "محرّك الإملاء في جهازك لا يدعم العربية. غيّره من: الإعدادات ← النظام ← اللغات والإدخال."
+        ERROR_LANGUAGE_UNAVAILABLE ->
+            "اللغة العربية غير منزّلة في محرّك الإملاء. نزّلها من إعدادات «التعرّف على الكلام» في جهازك."
+        ERROR_CANNOT_CHECK_SUPPORT -> "تعذّر التحقق من دعم اللغة في المحرّك."
+        else -> "تعذّر التعرّف على الكلام (رمز $error)."
     }
 
     companion object {
@@ -158,6 +177,21 @@ class VoiceRecognizer(private val context: Context) {
         /** أخطاء لا تُصلحها إعادة المحاولة */
         private val FATAL = setOf(
             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS
+        )
+
+        // رموز أُضيفت في أندرويد 13 و14؛ نكتبها صراحةً لتعمل على الإصدارات الأقدم
+        private const val ERROR_TOO_MANY_REQUESTS = 10
+        private const val ERROR_SERVER_DISCONNECTED = 11
+        private const val ERROR_LANGUAGE_NOT_SUPPORTED = 12
+        private const val ERROR_LANGUAGE_UNAVAILABLE = 13
+        private const val ERROR_CANNOT_CHECK_SUPPORT = 14
+
+        /** أخطاء سببها غياب النموذج المحلي — تُحلّ بإعادة المحاولة عبر الإنترنت */
+        private val OFFLINE_MISSING = setOf(
+            ERROR_LANGUAGE_UNAVAILABLE,
+            ERROR_LANGUAGE_NOT_SUPPORTED,
+            ERROR_CANNOT_CHECK_SUPPORT,
+            SpeechRecognizer.ERROR_CLIENT
         )
     }
 }

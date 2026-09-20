@@ -45,6 +45,16 @@ class CoreLogicTest {
 
     // ---------- التواريخ بالعربية ----------
 
+    @Test
+    fun `greeting matches the hour, including after midnight`() {
+        // 3 فجراً ليست «صباح الخير»
+        assertEquals("ليلة هادئة", Ar.greeting(3))
+        assertEquals("صباح الخير", Ar.greeting(8))
+        assertEquals("طاب يومك", Ar.greeting(14))
+        assertEquals("مساء الخير", Ar.greeting(19))
+        assertEquals("مساء الخير", Ar.greeting(23))
+    }
+
     @Test fun `اسم اليوم والتاريخ الكامل`() {
         assertEquals("الجمعة", Ar.dayName(today))
         assertEquals("الجمعة 18-09-2026", Ar.fullDate(today))

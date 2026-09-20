@@ -359,16 +359,6 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                     )
                 }
 
-                val voiceState by vm.voice.collectAsStateWithLifecycle()
-                VoiceSheet(
-                    state = voiceState,
-                    onStop = { vm.stopListening() },
-                    onRetry = startVoice,
-                    onToggle = { vm.toggleVoiceCandidate(it) },
-                    onConfirm = { vm.confirmVoice() },
-                    onDismiss = { vm.dismissVoice() }
-                )
-
                 if (showNav) {
                     Box(
                         Modifier
@@ -392,6 +382,18 @@ fun MahamiApp(start: StartDestination = StartDestination.None) {
                         )
                     }
                 }
+
+                // آخر عنصر في الـBox = أعلى طبقة.
+                // لو رُسمت قبل شريط التنقل لغطّى الشريط وزر الإضافة أزرارها.
+                val voiceState by vm.voice.collectAsStateWithLifecycle()
+                VoiceSheet(
+                    state = voiceState,
+                    onStop = { vm.stopListening() },
+                    onRetry = startVoice,
+                    onToggle = { vm.toggleVoiceCandidate(it) },
+                    onConfirm = { vm.confirmVoice() },
+                    onDismiss = { vm.dismissVoice() }
+                )
             }
         }
     }
