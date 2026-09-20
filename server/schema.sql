@@ -1,4 +1,4 @@
--- Majlis AI — Supabase schema. Run this in the SQL editor of your Supabase project.
+-- LiwaBot — Supabase schema. Run this in the SQL editor of your Supabase project.
 
 -- Plans: what each subscription tier allows. Budgets protect your margin: a user can never
 -- consume more AI than monthly_budget_usd in a calendar month.

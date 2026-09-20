@@ -1,4 +1,4 @@
-name: Deploy Majlis AI web app (GitHub Pages)
+name: Deploy LiwaBot web app (GitHub Pages)
 
 on:
   push:

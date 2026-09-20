@@ -1,4 +1,4 @@
-// Majlis AI desktop shell (Electron). Serves the built web app from app://majlis
+// LiwaBot desktop shell (Electron). Serves the built web app from app://liwabot
 // and exposes device tools to the agents through a single IPC channel. All tools
 // are gated in the renderer by the user's Control settings (off / ask / full).
 const { app, BrowserWindow, protocol, ipcMain, shell, clipboard, desktopCapturer, screen, Notification, net, session } = require("electron");
@@ -17,11 +17,11 @@ protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: t
 function createWindow() {
   const win = new BrowserWindow({
     width: 460, height: 900, minWidth: 380, minHeight: 640,
-    backgroundColor: "#2b2724", title: "Majlis AI", autoHideMenuBar: true,
+    backgroundColor: "#2b2724", title: "LiwaBot", autoHideMenuBar: true,
     icon: path.join(__dirname, "..", "build", "icon.png"),
     webPreferences: { preload: path.join(__dirname, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: false },
   });
-  win.loadURL("app://majlis/index.html");
+  win.loadURL("app://liwabot/index.html");
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: "deny" }; });
 }
 
@@ -217,7 +217,7 @@ ipcMain.handle("majlis:tool", async (_e, { name, input }) => {
       case "system_info": return { ok: true, text: JSON.stringify({ os: `${os.type()} ${os.release()}`, platform: process.platform, arch: os.arch(), hostname: os.hostname(), user: os.userInfo().username, home: os.homedir(), cpus: os.cpus().length, cpu: os.cpus()[0]?.model, memory_gb: Math.round(os.totalmem() / 1e9), free_gb: Math.round(os.freemem() / 1e9), now: new Date().toString(), screen: screen.getPrimaryDisplay().size }) };
       case "clipboard_read": return { ok: true, text: clipboard.readText() };
       case "clipboard_write": clipboard.writeText(String(input.text ?? "")); return { ok: true, text: "Copied." };
-      case "notify": new Notification({ title: String(input.title || "Majlis AI"), body: String(input.body || "") }).show(); return { ok: true, text: "Shown." };
+      case "notify": new Notification({ title: String(input.title || "LiwaBot"), body: String(input.body || "") }).show(); return { ok: true, text: "Shown." };
       case "computer": return await computer(input);
       default: return { ok: false, error: "Unknown tool " + name };
     }

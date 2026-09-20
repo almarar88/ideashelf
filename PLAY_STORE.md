@@ -1,4 +1,4 @@
-# نشر مجلس (Majlis AI) على Google Play — الدليل الكامل
+# نشر مجلس (LiwaBot) على Google Play — الدليل الكامل
 
 هذا الدليل يأخذك من الصفر إلى تطبيق منشور للجميع، بحسابات واشتراكات، بحيث تدفع أنت فاتورة الذكاء الاصطناعي **بهامش ربح محمي**.
 
@@ -27,12 +27,12 @@
 ## 2. الخادم — 10 دقائق
 1. Railway.app → New Project → Deploy from GitHub → اختر `almarar88/ideashelf` → Root Directory: `server` (يكتشف Dockerfile تلقائياً).
 2. Variables: `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, وأضف `ADMIN_USERS=almarar707@gmail.com` (يعطيك باقة ألترا مجاناً للتجربة).
-3. Settings → Networking → Generate Domain. ستحصل على رابط مثل `https://majlis-api.up.railway.app`. افتح `/health` للتأكد.
+3. Settings → Networking → Generate Domain. ستحصل على رابط مثل `https://liwabot-api.up.railway.app`. افتح `/health` للتأكد.
 
 ## 3. RevenueCat (الاشتراكات) — 20 دقيقة
-1. revenuecat.com → New project "Majlis" → Add app → Google Play: Package `com.ideashelf.majlis`، وارفع Service Account JSON (شرح RevenueCat خطوة بخطوة داخل الصفحة).
-2. Google Play Console → Monetize → Subscriptions: أنشئ اشتراكين: `majlis_pro_monthly` (9.99$) و`majlis_ultra_monthly` (29.99$)، كل واحد بخطة أساسية شهرية. أضف عرض تجربة مجانية 7 أيام إن أردت.
-3. RevenueCat → Products: استورد المنتجين. Entitlements: `pro` ← مرتبط بـ majlis_pro_monthly، و`ultra` ← majlis_ultra_monthly. Offerings: default يحوي الباقتين.
+1. revenuecat.com → New project "LiwaBot" → Add app → Google Play: Package `com.ideashelf.liwabot`، وارفع Service Account JSON (شرح RevenueCat خطوة بخطوة داخل الصفحة).
+2. Google Play Console → Monetize → Subscriptions: أنشئ اشتراكين: `liwabot_pro_monthly` (9.99$) و`liwabot_ultra_monthly` (29.99$)، كل واحد بخطة أساسية شهرية. أضف عرض تجربة مجانية 7 أيام إن أردت.
+3. RevenueCat → Products: استورد المنتجين. Entitlements: `pro` ← مرتبط بـ liwabot_pro_monthly، و`ultra` ← liwabot_ultra_monthly. Offerings: default يحوي الباقتين.
 4. Integrations → Webhooks: URL `https://<خادمك>/webhooks/revenuecat`، Authorization: نص عشوائي طويل (ضعه أيضاً في متغير `REVENUECAT_WEBHOOK_AUTH` بالخادم).
 5. API keys → انسخ مفتاح Google Play العام (يبدأ بـ `goog_`) ومفتاح secret (للخادم: `REVENUECAT_SECRET_KEY`).
 
@@ -49,11 +49,11 @@ GitHub → المستودع → Settings → Secrets and variables → Actions:
 
 ## 5. بناء حزمة المتجر (AAB)
 - من GitHub → Actions → "Build Google Play bundle (AAB)" → Run workflow، أو ادفع وسماً `git tag v2.0.0 && git push --tags`.
-- حمّل `MajlisAI.aab` من Artifacts.
+- حمّل `LiwaBot.aab` من Artifacts.
 
 ## 6. Google Play Console
 1. play.google.com/console → إنشاء حساب مطوّر (25$).
-2. Create app → الاسم "مجلس - Majlis AI" → تطبيق → مجاني (مع مشتريات داخل التطبيق).
+2. Create app → الاسم "مجلس - LiwaBot" → تطبيق → مجاني (مع مشتريات داخل التطبيق).
 3. Setup → App integrity → Play App Signing: مفعّل (ارفع AAB الموقّع بمفتاح الرفع الخاص بك).
 4. Store listing: الوصف والصور (لقطات من التطبيق بمقاس الهاتف، أيقونة 512×512 من `app/public/icon-512.png` مكبّرة، صورة مميزة 1024×500).
 5. App content:

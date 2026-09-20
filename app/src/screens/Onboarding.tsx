@@ -32,7 +32,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         <div className="row" style={{ marginBottom: 18 }}>
           {[0, 3, 6, 11, 1].map((v, i) => <span key={i} style={{ marginInlineStart: i ? -16 : 0, filter: "drop-shadow(0 4px 10px rgba(0,0,0,.35))" }}><RobotAvatar variant={v} color={["#f47a4b", "#4f8ef7", "#ef6aa0", "#e35d5d", "#3aa7a3"][i]} size={72} mood="happy" /></span>)}
         </div>
-        <div className="pill orange" style={{ alignSelf: "flex-start" }}>Majlis AI</div>
+        <div className="pill orange" style={{ alignSelf: "flex-start" }}>LiwaBot</div>
         <h1 className="h1" style={{ fontSize: 34 }}>{t(lang, "welcome1")}</h1>
         <p className="sub" style={{ fontSize: 15, lineHeight: 1.6 }}>{t(lang, "welcome2")}</p>
       </div>

@@ -1,13 +1,13 @@
 {
-  "name": "Majlis AI — مجلس",
-  "short_name": "Majlis",
+  "name": "LiwaBot — ليوا بوت",
+  "short_name": "LiwaBot",
   "description": "فريقك من وكلاء الذكاء الاصطناعي — يبحثون، يناقشون، ويقرّرون",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#2b2724",
-  "theme_color": "#2b2724",
+  "theme_color": "#F2703C",
   "lang": "ar",
   "dir": "rtl",
   "icons": [

@@ -32,7 +32,7 @@ export default function Auth({ onSkipToKey }: { onSkipToKey?: () => void }) {
         <div className="row" style={{ marginBottom: 14 }}>
           {[0, 3, 6, 11].map((v, i) => <span key={i} style={{ marginInlineStart: i ? -16 : 0 }}><RobotAvatar variant={v} color={["#f47a4b", "#4f8ef7", "#ef6aa0", "#e35d5d"][i]} size={64} mood="happy" /></span>)}
         </div>
-        <div className="pill orange" style={{ alignSelf: "flex-start" }}>Majlis AI</div>
+        <div className="pill orange" style={{ alignSelf: "flex-start" }}>LiwaBot</div>
         <h1 className="h1" style={{ fontSize: 30 }}>{t(lang, "welcomeSignIn")}</h1>
         <div className="sub">{t(lang, "welcome2")}</div>
       </div>

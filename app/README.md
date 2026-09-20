@@ -1,4 +1,4 @@
-# Majlis AI — مجلس الوكلاء
+# LiwaBot — ليوا بوت
 
 تطبيق أندرويد (APK) يعمل كـ **مجموعة دردشة مثل واتساب** بينك وبين فريق من وكلاء الذكاء الاصطناعي، كل وكيل خبير في مجاله، ووكيل "قاضٍ" يحلّل آراء الجميع ويتخذ القرار النهائي.
 
@@ -22,15 +22,15 @@
 ## المنصات
 | المنصة | الملف | التحكم بالجهاز |
 |---|---|---|
-| أندرويد | `MajlisAI.apk` | مزايا الهاتف: الموقع، فتح التطبيقات، الاتصال، SMS، الحافظة، الإشعارات |
-| آيفون | `MajlisAI-unsigned.ipa` (Sideloadly / AltStore) | مزايا محدودة |
-| ويندوز | `MajlisAI-Setup-x.y.z.exe` أو `MajlisAI-Portable-x.y.z.exe` | تحكم كامل: أوامر PowerShell، ملفات، فتح برامج، رؤية الشاشة والتحكم بالماوس والكيبورد |
+| أندرويد | `LiwaBot.apk` | مزايا الهاتف: الموقع، فتح التطبيقات، الاتصال، SMS، الحافظة، الإشعارات |
+| آيفون | `LiwaBot-unsigned.ipa` (Sideloadly / AltStore) | مزايا محدودة |
+| ويندوز | `LiwaBot-Setup-x.y.z.exe` أو `LiwaBot-Portable-x.y.z.exe` | تحكم كامل: أوامر PowerShell، ملفات، فتح برامج، رؤية الشاشة والتحكم بالماوس والكيبورد |
 | الويب | https://almarar88.github.io/ideashelf/app/ | بدون تحكم |
 
 مستوى التحكم يُضبط من الإعدادات: **مغلق / اسألني كل مرة (الافتراضي) / تحكم كامل**، مع مفاتيح لكل فئة.
 
 ## التثبيت
-1. حمّل `MajlisAI.apk` من صفحة **Releases** في المستودع (يُبنى تلقائياً بواسطة GitHub Actions).
+1. حمّل `LiwaBot.apk` من صفحة **Releases** في المستودع (يُبنى تلقائياً بواسطة GitHub Actions).
 2. ثبّته على الهاتف (اسمح بالتثبيت من مصادر غير معروفة).
 3. عند أول تشغيل أدخل اسمك و**مفتاح Anthropic API** من https://console.anthropic.com/settings/keys
 
@@ -50,6 +50,6 @@ cd android && ./gradlew assembleRelease   # يخرج APK في android/app/build/
 ---
 
 ## English
-Majlis AI is an Android app that works like a WhatsApp group between you and a team of AI agents. Each agent is a specialist you define (name, title, field, skills, personality, robot face, web search, thinking depth, model). A "judge" agent analyses everyone's replies and makes the final decision. You can upload images/PDF/text files, agents can generate reports (.md/.csv/.html) you can view and share, address a specific agent, or run **Council mode** for a structured verdict with confidence, per-agent scores, action plan and risks.
+LiwaBot is an Android app that works like a WhatsApp group between you and a team of AI agents. Each agent is a specialist you define (name, title, field, skills, personality, robot face, web search, thinking depth, model). A "judge" agent analyses everyone's replies and makes the final decision. You can upload images/PDF/text files, agents can generate reports (.md/.csv/.html) you can view and share, address a specific agent, or run **Council mode** for a structured verdict with confidence, per-agent scores, action plan and risks.
 
 Get the APK from the repo's Releases page, install it, and enter your Anthropic API key on first launch.

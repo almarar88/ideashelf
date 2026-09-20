@@ -1,4 +1,4 @@
-package com.ideashelf.majlis;
+package com.ideashelf.liwabot;
 
 import com.getcapacitor.BridgeActivity;
 

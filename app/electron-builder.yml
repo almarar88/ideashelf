@@ -1,5 +1,5 @@
-appId: com.ideashelf.majlis
-productName: Majlis AI
+appId: com.ideashelf.liwabot
+productName: LiwaBot
 copyright: IdeaShelf
 directories:
   output: dist-electron
@@ -15,16 +15,16 @@ win:
       arch: [x64]
     - target: portable
       arch: [x64]
-  artifactName: MajlisAI-${version}-${os}-${arch}.${ext}
+  artifactName: LiwaBot-${version}-${os}-${arch}.${ext}
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
-  shortcutName: Majlis AI
-  artifactName: MajlisAI-Setup-${version}.${ext}
+  shortcutName: LiwaBot
+  artifactName: LiwaBot-Setup-${version}.${ext}
 portable:
-  artifactName: MajlisAI-Portable-${version}.${ext}
+  artifactName: LiwaBot-Portable-${version}.${ext}
 mac:
   target: [dmg]
   category: public.app-category.productivity

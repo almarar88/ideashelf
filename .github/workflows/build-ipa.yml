@@ -1,4 +1,4 @@
-name: Build Majlis AI IPA (unsigned, for sideloading)
+name: Build LiwaBot IPA (unsigned, for sideloading)
 
 on:
   push:
@@ -46,18 +46,18 @@ jobs:
         run: |
           rm -rf Payload && mkdir Payload
           cp -R build/App.xcarchive/Products/Applications/App.app Payload/
-          zip -qr ../../MajlisAI-unsigned.ipa Payload
-          ls -la ../../MajlisAI-unsigned.ipa
+          zip -qr ../../LiwaBot-unsigned.ipa Payload
+          ls -la ../../LiwaBot-unsigned.ipa
       - uses: actions/upload-artifact@v4
         with:
-          name: MajlisAI-ipa
-          path: app/MajlisAI-unsigned.ipa
+          name: LiwaBot-ipa
+          path: app/LiwaBot-unsigned.ipa
       - name: Publish to "latest" release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: Majlis AI — latest builds
+          name: LiwaBot — latest builds
           body: |
-            **Android:** MajlisAI.apk — ثبّته مباشرة.
-            **iPhone:** MajlisAI-unsigned.ipa — غير موقّع؛ ثبّته عبر Sideloadly أو AltStore بحساب Apple ID.
-          files: app/MajlisAI-unsigned.ipa
+            **Android:** LiwaBot.apk — ثبّته مباشرة.
+            **iPhone:** LiwaBot-unsigned.ipa — غير موقّع؛ ثبّته عبر Sideloadly أو AltStore بحساب Apple ID.
+          files: app/LiwaBot-unsigned.ipa

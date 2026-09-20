@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.ideashelf.majlis",
-  appName: "Majlis AI",
+  appId: "com.ideashelf.liwabot",
+  appName: "LiwaBot",
   webDir: "dist",
   android: {
     allowMixedContent: false,

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icon: white LiwaBot glyph with eyes cut out (even-odd). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="1024" android:viewportHeight="1024">
+    <path android:fillColor="#FFFFFF" android:pathData="M497,212h30v76h-30z"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M512,196m-34,0a34,34 0,1 1,68 0a34,34 0,1 1,-68 0"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M240,470a26,26 0,0 1,26 -26a26,26 0,0 1,26 26v150a26,26 0,0 1,-52 0z"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M784,470a26,26 0,0 0,-26 -26a26,26 0,0 0,-26 26v150a26,26 0,0 0,52 0z"/>
+    <path android:fillColor="#FFFFFF" android:fillType="evenOdd"
+        android:pathData="M400,300h224c88,0 160,72 160,160v170c0,88 -72,160 -160,160H400c-88,0 -160,-72 -160,-160V460c0,-88 72,-160 160,-160z M426,490a40,40 0,0 0,-40 40v40a40,40 0,0 0,80 0v-40a40,40 0,0 0,-40 -40z M598,490a40,40 0,0 0,-40 40v40a40,40 0,0 0,80 0v-40a40,40 0,0 0,-40 -40z"/>
+</vector>

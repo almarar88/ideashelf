@@ -1,7 +1,7 @@
 import type { Lang } from "./types";
 
 const dict = {
-  appName: { ar: "مجلس", en: "Majlis" },
+  appName: { ar: "ليوا بوت", en: "LiwaBot" },
   hi: { ar: "مرحباً،", en: "Hi," },
   tagline: { ar: "فريقك من الوكلاء الأذكياء — يبحثون، يناقشون، ويقرّرون", en: "Your team of AI agents — they research, debate, and decide" },
   newSession: { ar: "جلسة جديدة", en: "New session" },
@@ -177,7 +177,7 @@ const dict = {
   gallery: { ar: "صورة", en: "Photo" },
   document: { ar: "ملف", en: "File" },
   whatsUp: { ar: "شو الأخبار؟", en: "What's up?" },
-  workingBg: { ar: "المجلس يعمل في الخلفية…", en: "Majlis is working in the background…" },
+  workingBg: { ar: "المجلس يعمل في الخلفية…", en: "LiwaBot is working in the background…" },
   teamReading: { ar: "الفريق يقرأ رسالتك…", en: "The team is reading your message…" },
   account: { ar: "الحساب", en: "Account" },
   signIn: { ar: "تسجيل الدخول", en: "Sign in" },
@@ -209,7 +209,7 @@ const dict = {
   featUltra: { ar: "كل مزايا برو · Opus 5 الأذكى · رصيد أكبر 3 مرات", en: "Everything in Pro · Opus 5 · 3x the allowance" },
   fairUse: { ar: "*ضمن رصيد الاستخدام العادل الشهري لكل باقة", en: "*within each plan's monthly fair-use allowance" },
   aiSource: { ar: "مصدر الذكاء الاصطناعي", en: "AI source" },
-  aiHosted: { ar: "حساب مجلس (اشتراك)", en: "Majlis account (subscription)" },
+  aiHosted: { ar: "حساب LiwaBot (اشتراك)", en: "LiwaBot account (subscription)" },
   aiByok: { ar: "مفتاح Anthropic الخاص بي", en: "My own Anthropic key" },
   welcomeSignIn: { ar: "سجّل الدخول لتبدأ مع فريقك", en: "Sign in to start with your team" },
   voice: { ar: "تحدّث", en: "Speak" },

@@ -1,9 +1,9 @@
 {
-  "name": "majlis-server",
+  "name": "liwabot-server",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Majlis AI hosted API: auth, plans, quotas and a metered proxy to the Claude API",
+  "description": "LiwaBot hosted API: auth, plans, quotas and a metered proxy to the Claude API",
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",

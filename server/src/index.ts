@@ -1,4 +1,4 @@
-// Majlis AI hosted API.
+// LiwaBot hosted API.
 // - Verifies the user's Supabase session (Bearer JWT)
 // - Enforces the user's plan: allowed models, web search, monthly AI budget, daily message cap
 // - Proxies /v1/messages to the Claude API (streaming passthrough) and meters real usage/cost
@@ -203,4 +203,4 @@ app.post("/v1/messages", async (c) => {
 });
 
 const port = Number(env("PORT", "8080"));
-serve({ fetch: app.fetch, port }, () => console.log(`Majlis server listening on :${port}`));
+serve({ fetch: app.fetch, port }, () => console.log(`LiwaBot server listening on :${port}`));

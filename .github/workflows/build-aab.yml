@@ -1,4 +1,4 @@
-name: Build Google Play bundle (AAB)
+name: Build LiwaBot Play bundle (AAB)
 
 # Builds a Play-ready, signed Android App Bundle. Requires repository secrets:
 #   ANDROID_UPLOAD_KEYSTORE_B64  – base64 of your PRIVATE upload keystore (never the dev one in the repo)
@@ -57,18 +57,18 @@ jobs:
         run: cd android && chmod +x gradlew && ./gradlew bundleRelease assembleRelease --no-daemon
       - name: Collect outputs
         run: |
-          cp android/app/build/outputs/bundle/release/app-release.aab MajlisAI.aab
-          cp android/app/build/outputs/apk/release/app-release.apk MajlisAI-hosted.apk
+          cp android/app/build/outputs/bundle/release/app-release.aab LiwaBot.aab
+          cp android/app/build/outputs/apk/release/app-release.apk LiwaBot-hosted.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: MajlisAI-play-bundle
+          name: LiwaBot-play-bundle
           path: |
-            app/MajlisAI.aab
-            app/MajlisAI-hosted.apk
+            app/LiwaBot.aab
+            app/LiwaBot-hosted.apk
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            app/MajlisAI.aab
-            app/MajlisAI-hosted.apk
+            app/LiwaBot.aab
+            app/LiwaBot-hosted.apk

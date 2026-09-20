@@ -17,7 +17,7 @@ export async function configureBilling(userId: string): Promise<void> {
   configuredFor = userId;
 }
 
-/** Packages from the current offering, mapped to plan ids by product id (majlis_pro_*, majlis_ultra_*). */
+/** Packages from the current offering, mapped to plan ids by product id (liwabot_pro_*, liwabot_ultra_*). */
 export async function getOffers(): Promise<Offer[]> {
   if (!billingAvailable()) return [];
   const P = await rc();
