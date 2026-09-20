@@ -11,7 +11,8 @@ import Settings from "./screens/Settings";
 import Onboarding from "./screens/Onboarding";
 import Auth from "./screens/Auth";
 import { App as CapApp } from "@capacitor/app";
-import { useAccount } from "./lib/account";
+import { refreshMe, useAccount } from "./lib/account";
+import { billingAvailable, configureBilling, onEntitlementChange } from "./lib/billing";
 import { HOSTED_ENABLED } from "./config";
 import { Spinner } from "./components/ui";
 
@@ -21,6 +22,15 @@ export interface Nav { tab: Tab; chatId?: string; }
 export default function App() {
   const settings = useStore((s) => s.settings);
   const account = useAccount();
+
+  // Billing: configure RevenueCat for the signed-in user and keep the plan in sync with entitlement changes.
+  useEffect(() => {
+    const uid = account.session?.user.id;
+    if (!uid || !billingAvailable()) return;
+    let off: (() => void) | undefined;
+    configureBilling(uid).then(() => onEntitlementChange(() => { void refreshMe(true); })).then((o) => { off = o; }).catch((e) => console.warn("billing init", e));
+    return () => { off?.(); };
+  }, [account.session?.user.id]);
   const [nav, setNav] = useState<Nav>({ tab: "home" });
   const lang = settings.lang;
 

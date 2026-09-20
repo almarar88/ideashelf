@@ -57,6 +57,17 @@ export async function getOffers(): Promise<Offer[]> {
 type Ents = Record<string, unknown>;
 const hasPro = (active: Ents) => Boolean(active[ENTITLEMENT_PRO] || active[ENTITLEMENT_ULTRA] || active["pro"] || active["ultra"]);
 
+/** Equivalent of `Purchases.sharedInstance.updatedCustomerInfoListener`: fires on purchase, renewal, expiry, restore. */
+export async function onEntitlementChange(cb: (state: { pro: boolean; ultra: boolean }) => void): Promise<() => void> {
+  if (!billingAvailable()) return () => undefined;
+  const P = await rc();
+  const handle = await P.addCustomerInfoUpdateListener((info) => {
+    const a = info.entitlements.active as Ents;
+    cb({ pro: hasPro(a), ultra: Boolean(a[ENTITLEMENT_ULTRA] || a["ultra"]) });
+  });
+  return () => { void P.removeCustomerInfoUpdateListener({ listenerToRemove: handle }); };
+}
+
 /** Current entitlement state straight from RevenueCat (the server is still the source of truth for plan limits). */
 export async function checkEntitlement(): Promise<{ pro: boolean; ultra: boolean }> {
   if (!billingAvailable() || configuredFor === null) return { pro: false, ultra: false };
