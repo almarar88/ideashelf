@@ -18,6 +18,10 @@
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>LiwaBot uses the microphone for voice messages and voice calls with your agents.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>LiwaBot transcribes your voice so your agents can answer you.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
