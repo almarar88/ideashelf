@@ -1,5 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { TextToSpeech } from "@capacitor-community/text-to-speech";
+import { KeepAwake } from "@capacitor-community/keep-awake";
 import { requireSupabase, supabase } from "./supabase";
 import { loadSettings } from "./settings";
 
@@ -157,6 +158,21 @@ function createCloudNarrator(bookId: string, opts: NarratorOptions): Narrator {
 /* ------------------------------------------------------------------ */
 
 export const isNative = () => Capacitor.isNativePlatform();
+
+/**
+ * Hands-free listening only works if the screen stays on: Android suspends the WebView's
+ * JavaScript when the device sleeps, which stops the chunk-to-chunk chaining and the page
+ * turns. Held while narrating, released the moment it stops.
+ */
+export async function setScreenAwake(on: boolean): Promise<void> {
+  if (!isNative()) return;
+  try {
+    if (on) await KeepAwake.keepAwake();
+    else await KeepAwake.allowSleep();
+  } catch {
+    /* plugin unavailable on this platform */
+  }
+}
 
 export function deviceVoicesAvailable(): boolean {
   return isNative() || (typeof window !== "undefined" && "speechSynthesis" in window);

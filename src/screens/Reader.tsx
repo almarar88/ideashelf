@@ -20,7 +20,7 @@ import { db, logReading } from "@/lib/db";
 import { TEXT_VERSION } from "@/lib/pdf";
 import { createCloudSource, createLocalSource, type Geom, type PageSource, type RenderHandle } from "@/lib/reader-source";
 import { saveProgress } from "@/lib/cloud";
-import { createNarrator, openVoiceInstall, type NarrationStatus, type Narrator } from "@/lib/narration";
+import { createNarrator, openVoiceInstall, setScreenAwake, type NarrationStatus, type Narrator } from "@/lib/narration";
 import type { PageEffect, Settings } from "@/lib/settings";
 import { Gauge } from "@/components/Gauge";
 import { IconButton, Toggle } from "@/components/ui";
@@ -447,6 +447,14 @@ export function ReaderScreen({
     const t = setTimeout(() => void narratorRef.current?.play(pageRef.current), 400);
     return () => clearTimeout(t);
   }, [target.autoPlay, source, narration.engine]);
+
+  // Keep the screen on only while it is actually reading aloud.
+  useEffect(() => {
+    void setScreenAwake(narration.playing);
+    return () => {
+      void setScreenAwake(false);
+    };
+  }, [narration.playing]);
 
   const toggleNarration = useCallback(() => {
     const n = narratorRef.current;
