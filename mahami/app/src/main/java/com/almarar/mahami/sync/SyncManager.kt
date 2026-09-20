@@ -147,8 +147,18 @@ class SyncManager private constructor(private val context: Context) {
     // ---------- السحب ----------
 
     private suspend fun pull(token: String, since: Long): Int {
+        // سحب تزايدي: ننزّل ما تغيّر منذ آخر مزامنة فقط.
+        // نطرح يوماً كهامش أمان لأن «since» من ساعة الجهاز و updated_at من ساعة
+        // الخادم؛ فرق الساعتين قد يُسقط سجلاً لو قارنّا بلا هامش.
+        val filter = if (since <= 0L) "" else {
+            val from = Instant.ofEpochMilli(since - SAFETY_MARGIN_MS)
+                .atZone(ZoneOffset.UTC)
+                .format(DateTimeFormatter.ISO_INSTANT)
+            "&updated_at=gt.$from"
+        }
         val response = Http.request(
-            url = "${config.baseUrl()}/rest/v1/records?select=sync_id,kind,payload,updated_at,deleted",
+            url = "${config.baseUrl()}/rest/v1/records" +
+                "?select=sync_id,kind,payload,updated_at,deleted$filter",
             method = "GET",
             headers = mapOf(
                 "apikey" to config.anonKey(),
@@ -247,6 +257,9 @@ class SyncManager private constructor(private val context: Context) {
     }
 
     companion object {
+        /** هامش أمان ليوم كامل يغطي فرق الساعة بين الجهاز والخادم */
+        private const val SAFETY_MARGIN_MS = 24L * 60 * 60 * 1000
+
         @Volatile private var INSTANCE: SyncManager? = null
         fun get(context: Context): SyncManager = INSTANCE ?: synchronized(this) {
             INSTANCE ?: SyncManager(context.applicationContext).also { INSTANCE = it }
