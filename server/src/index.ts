@@ -83,8 +83,8 @@ async function recordUsage(userId: string, model: string, u: UsageTotals, isUser
 
 // ---------- RevenueCat ----------
 const RC_SECRET = env("REVENUECAT_SECRET_KEY");
-const RC_PRO = env("RC_ENTITLEMENT_PRO", "pro");
-const RC_ULTRA = env("RC_ENTITLEMENT_ULTRA", "ultra");
+const RC_PRO = env("RC_ENTITLEMENT_PRO", "liwabot_pro");
+const RC_ULTRA = env("RC_ENTITLEMENT_ULTRA", "liwabot_ultra");
 function planFromEntitlements(ents: Record<string, { expires_date?: string | null }> | undefined): { plan: string; expires: string | null } {
   if (!ents) return { plan: "free", expires: null };
   const active = (id: string) => { const e = ents[id]; return e && (!e.expires_date || new Date(e.expires_date).getTime() > Date.now()); };

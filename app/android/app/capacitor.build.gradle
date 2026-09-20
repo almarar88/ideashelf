@@ -23,6 +23,7 @@ dependencies {
     implementation project(':capacitor-share')
     implementation project(':capawesome-team-capacitor-android-foreground-service')
     implementation project(':revenuecat-purchases-capacitor')
+    implementation project(':revenuecat-purchases-capacitor-ui')
 
 }
 

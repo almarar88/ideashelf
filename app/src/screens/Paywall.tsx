@@ -2,59 +2,74 @@ import { useEffect, useState } from "react";
 import { useStore } from "../lib/store";
 import { t } from "../lib/i18n";
 import { refreshMe, useAccount, usageRatio } from "../lib/account";
-import { billingAvailable, configureBilling, getOffers, purchase, restore, type Offer } from "../lib/billing";
+import { billingAvailable, configureBilling, getOffers, presentNativePaywall, purchase, restore, type Offer } from "../lib/billing";
 import { Icon, Spinner } from "../components/ui";
-
-const PLAN_COLORS: Record<string, string> = { free: "var(--cream-2)", pro: "var(--orange)", ultra: "var(--dark)" };
 
 export default function Paywall({ reason, onClose }: { reason?: string | null; onClose: () => void }) {
   const lang = useStore((s) => s.settings.lang);
-  const { me } = useAccount();
+  const { me, session } = useAccount();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const available = billingAvailable();
+  const userId = me?.user.id ?? session?.user.id;
 
   useEffect(() => {
-    if (!available || !me) return;
-    configureBilling(me.user.id).then(getOffers).then(setOffers).catch((e) => setErr(String(e)));
-  }, [available, me]);
+    if (!available || !userId) { setLoading(false); return; }
+    configureBilling(userId).then(getOffers).then(setOffers).catch((e) => setErr(String(e))).finally(() => setLoading(false));
+  }, [available, userId]);
 
-  const buy = async (planId: "pro" | "ultra") => {
-    const o = offers.find((x) => x.planId === planId);
-    if (!o) { setErr(t(lang, "billingUnavailable")); return; }
-    setBusy(planId); setErr(null);
-    try { if (await purchase(o)) { await refreshMe(true); onClose(); } }
+  const finish = async () => { await refreshMe(true); onClose(); };
+  const buy = async (o: Offer) => {
+    setBusy(o.id); setErr(null);
+    try { if (await purchase(o)) await finish(); }
+    catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(null); }
+  };
+  const native = async () => {
+    setBusy("native"); setErr(null);
+    try { const ok = await presentNativePaywall(); if (ok) await finish(); }
     catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(null); }
   };
   const doRestore = async () => {
     setBusy("restore"); setErr(null);
-    try { await restore(); await refreshMe(true); } catch (e) { setErr(String(e)); } finally { setBusy(null); }
+    try { if (await restore()) await finish(); else setErr(lang === "ar" ? "لا توجد مشتريات سابقة لهذا الحساب" : "No previous purchases for this account"); }
+    catch (e) { setErr(String(e)); } finally { setBusy(null); }
   };
 
-  const plans = me?.plans ?? [];
-  const feat = (id: string) => t(lang, id === "free" ? "featFree" : id === "pro" ? "featPro" : "featUltra");
-  const priceOf = (id: string) => offers.find((o) => o.planId === id)?.priceString ?? (plans.find((p) => p.id === id)?.price_usd ? `$${plans.find((p) => p.id === id)!.price_usd}` : "");
+  const termLabel = (term: Offer["term"]) => t(lang, term === "monthly" ? "termMonthly" : term === "yearly" ? "termYearly" : term === "lifetime" ? "termLifetime" : "subscribe");
+  const isPro = me?.plan.id === "pro" || me?.plan.id === "ultra";
 
   return (
     <div className="stack">
       <div><h3 className="h3">{t(lang, "paywallTitle")}</h3><div className="small muted">{t(lang, "paywallSub")}</div></div>
       {reason && <div className="error-box">{t(lang, reason === "daily_messages" ? "quotaDaily" : "quotaMonthly")}</div>}
       {me && <div className="card soft small"><div className="row between"><span>{t(lang, "currentPlan")}: <b>{me.plan.name}</b></span><span>{t(lang, "usageThisMonth")}: {Math.round(usageRatio(me) * 100)}%</span></div><div className="score-bar" style={{ marginTop: 6 }}><div style={{ width: `${usageRatio(me) * 100}%` }} /></div></div>}
-      {plans.filter((p) => p.id !== "free").map((p) => (
-        <div key={p.id} className="card" style={{ background: PLAN_COLORS[p.id], color: p.id === "free" ? "var(--text)" : "#fff" }}>
-          <div className="row between"><span style={{ fontSize: 20, fontWeight: 700 }}>{p.name}</span><span style={{ fontSize: 22, fontWeight: 700 }}>{priceOf(p.id)}<span className="small" style={{ opacity: .8 }}>{t(lang, "perMonth")}</span></span></div>
-          <div className="small" style={{ opacity: .9, marginTop: 6, lineHeight: 1.5 }}>{feat(p.id)}</div>
-          {me?.plan.id === p.id
-            ? <div className="pill ghost" style={{ marginTop: 10 }}><Icon name="check" size={14} /> {t(lang, "currentPlan")}</div>
-            : <button className="btn block" style={{ marginTop: 12, background: "#fff", color: "var(--text)" }} disabled={busy !== null} onClick={() => buy(p.id as "pro" | "ultra")}>{busy === p.id ? <Spinner /> : t(lang, "subscribe")}</button>}
-        </div>
-      ))}
+
+      <div className="card" style={{ background: "var(--orange)", color: "#fff" }}>
+        <div className="row between"><span style={{ fontSize: 22, fontWeight: 700 }}>LiwaBot Pro</span>{isPro && <span className="pill ghost"><Icon name="check" size={14} /> {t(lang, "currentPlan")}</span>}</div>
+        <div className="small" style={{ opacity: .92, marginTop: 6, lineHeight: 1.6 }}>{t(lang, "featPro")}</div>
+        {loading && <div style={{ marginTop: 12 }}><Spinner /></div>}
+        {!loading && !isPro && offers.length > 0 && (
+          <div className="stack" style={{ marginTop: 12, gap: 8 }}>
+            {offers.map((o) => (
+              <button key={o.id} className="btn block" style={{ background: "#fff", color: "var(--text)", justifyContent: "space-between" }} disabled={busy !== null} onClick={() => buy(o)}>
+                <span>{termLabel(o.term)}{o.term === "yearly" ? <span className="pill orange" style={{ marginInlineStart: 8, padding: "2px 8px", fontSize: 10 }}>{t(lang, "bestValue")}</span> : null}</span>
+                <span>{busy === o.id ? <Spinner size={16} /> : o.priceString}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {!loading && !isPro && available && offers.length === 0 && !err && <div className="small" style={{ marginTop: 10, opacity: .9 }}>{t(lang, "noOffers")}</div>}
+      </div>
+
       {!available && <div className="card soft small muted">{t(lang, "billingUnavailable")}</div>}
       {err && <div className="error-box">{err}</div>}
       <div className="small muted" style={{ textAlign: "center" }}>{t(lang, "fairUse")}</div>
-      {available && <button className="btn light block" disabled={busy !== null} onClick={doRestore}>{t(lang, "restore")}</button>}
+      {available && !isPro && <button className="btn light block" disabled={busy !== null} onClick={native}>{busy === "native" ? <Spinner /> : t(lang, "seeAllPlans")}</button>}
+      {available && <button className="btn light block" disabled={busy !== null} onClick={doRestore}>{busy === "restore" ? <Spinner /> : t(lang, "restore")}</button>}
     </div>
   );
 }

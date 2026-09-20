@@ -10,6 +10,7 @@ import { useState } from "react";
 import { HOSTED_ENABLED, PRIVACY_URL, TERMS_URL } from "../config";
 import { deleteAccount, refreshMe, signOut, useAccount, usageRatio } from "../lib/account";
 import Paywall from "./Paywall";
+import { billingAvailable, configureBilling, logoutBilling, presentCustomerCenter } from "../lib/billing";
 
 function AccountCard() {
   const lang = useStore((x) => x.settings.lang);
@@ -28,8 +29,9 @@ function AccountCard() {
       <div className="row" style={{ gap: 8 }}>
         <button className="btn orange grow" onClick={() => setPay(true)}><Icon name="star" size={16} /> {t(lang, "upgrade")}</button>
         <button className="btn light" onClick={() => refreshMe(true)}><Icon name="refresh" size={16} /></button>
-        <button className="btn light" onClick={() => signOut()}>{t(lang, "signOut")}</button>
+        <button className="btn light" onClick={async () => { await logoutBilling(); await signOut(); }}>{t(lang, "signOut")}</button>
       </div>
+      {billingAvailable() && <button className="btn light block" onClick={async () => { await configureBilling(session.user.id); if (!(await presentCustomerCenter())) setPay(true); }}><Icon name="settings" size={16} /> {t(lang, "manageSub")}</button>}
       <div className="row between small muted">
         <span><a href={PRIVACY_URL} target="_blank" rel="noreferrer">{t(lang, "legal")}</a></span>
         <button style={{ color: "var(--red)" }} onClick={async () => { if (confirm(t(lang, "confirmDeleteAccount"))) { const e = await deleteAccount(); if (e) alert(e); } }}>{t(lang, "deleteAccount")}</button>

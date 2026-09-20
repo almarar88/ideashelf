@@ -31,8 +31,10 @@
 
 ## 3. RevenueCat (الاشتراكات) — 20 دقيقة
 1. revenuecat.com → New project "LiwaBot" → Add app → Google Play: Package `com.ideashelf.liwabot`، وارفع Service Account JSON (شرح RevenueCat خطوة بخطوة داخل الصفحة).
-2. Google Play Console → Monetize → Subscriptions: أنشئ اشتراكين: `liwabot_pro_monthly` (9.99$) و`liwabot_ultra_monthly` (29.99$)، كل واحد بخطة أساسية شهرية. أضف عرض تجربة مجانية 7 أيام إن أردت.
-3. RevenueCat → Products: استورد المنتجين. Entitlements: `pro` ← مرتبط بـ liwabot_pro_monthly، و`ultra` ← liwabot_ultra_monthly. Offerings: default يحوي الباقتين.
+2. Google Play Console → Monetize: أنشئ اشتراكين `monthly` (شهري) و`yearly` (سنوي) بخطة أساسية لكل منهما، ومنتجاً غير استهلاكي `lifetime` (دفعة واحدة مدى الحياة). أضف تجربة مجانية 7 أيام على الشهري/السنوي إن أردت.
+3. RevenueCat → Products: استورد المنتجات الثلاثة. Entitlements: `liwabot_pro` ← اربطه بالمنتجات الثلاثة (monthly, yearly, lifetime). Offerings: `default` يحوي 3 حزم: Monthly, Annual, Lifetime. ثم Paywalls: صمّم Paywall واربطه بالـ Offering (يظهر داخل التطبيق بزر "عرض الباقات الكامل")، وCustomer Center: فعّله (زر "إدارة الاشتراك").
+   - مفتاح المتجر التجريبي (Test Store) `test_iWOGDkLMBJQpDwnkBXuzefUvMCF` مضبوط افتراضياً في التطبيق: تستطيع تجربة الشراء كاملاً الآن بدون Google Play (شراء وهمي). للإنتاج ضع مفتاح `goog_...` في المتغير `VITE_REVENUECAT_ANDROID_KEY`.
+   - باقة "ألترا" اختيارية: أنشئ entitlement باسم `liwabot_ultra` بمنتجات تحوي كلمة `ultra` في معرّفها، وإلا فالخادم يتعامل مع باقتين فقط: مجاني وبرو.
 4. Integrations → Webhooks: URL `https://<خادمك>/webhooks/revenuecat`، Authorization: نص عشوائي طويل (ضعه أيضاً في متغير `REVENUECAT_WEBHOOK_AUTH` بالخادم).
 5. API keys → انسخ مفتاح Google Play العام (يبدأ بـ `goog_`) ومفتاح secret (للخادم: `REVENUECAT_SECRET_KEY`).
 
