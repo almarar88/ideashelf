@@ -25,6 +25,7 @@ jobs:
       VITE_REVENUECAT_ANDROID_KEY: ${{ vars.VITE_REVENUECAT_ANDROID_KEY }}
       VITE_PRIVACY_URL: ${{ vars.VITE_PRIVACY_URL }}
       VITE_TERMS_URL: ${{ vars.VITE_TERMS_URL }}
+      HAS_UPLOAD_KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_B64 != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -42,7 +43,7 @@ jobs:
           yes | "$SDKM" --licenses > /dev/null 2>&1 || true
           "$SDKM" --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" > /dev/null
       - name: Restore upload keystore
-        if: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_B64 != '' }}
+        if: env.HAS_UPLOAD_KEYSTORE == 'true'
         run: echo "${{ secrets.ANDROID_UPLOAD_KEYSTORE_B64 }}" | base64 -d > android/app/upload.keystore
       - name: Install dependencies and build web app
         run: npm ci && npm run build
@@ -50,7 +51,7 @@ jobs:
         run: npx cap sync android
       - name: Build signed bundle
         env:
-          UPLOAD_KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_B64 != '' && 'upload.keystore' || '' }}
+          UPLOAD_KEYSTORE: ${{ env.HAS_UPLOAD_KEYSTORE == 'true' && 'upload.keystore' || '' }}
           UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
