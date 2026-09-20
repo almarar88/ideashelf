@@ -28,6 +28,52 @@ def resource_path(name: str) -> Path:
     return candidates[-1]
 
 
+def harden_stdio() -> None:
+    """A windowed (no console) exe has sys.stdout/sys.stderr = None. Anything that writes to them raises
+    AttributeError - that is what broke APK parsing in the frozen build. Route them to a log file instead."""
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    try:
+        from .config import logs_dir
+        f = open(logs_dir() / "stdio.log", "a", encoding="utf-8", errors="replace", buffering=1)
+    except Exception:  # pragma: no cover
+        f = open(os.devnull, "w", encoding="utf-8")
+    if sys.stdout is None:
+        sys.stdout = f
+    if sys.stderr is None:
+        sys.stderr = f
+
+
+def install_excepthook() -> None:
+    """Log uncaught exceptions (PySide slots swallow them otherwise) and show them once to the user."""
+    import logging
+    import traceback
+    log = logging.getLogger("car_app_manager.crash")
+    shown = {"n": 0}
+
+    def hook(exc_type, exc, tb):
+        text = "".join(traceback.format_exception(exc_type, exc, tb))
+        log.error("uncaught exception:\n%s", text)
+        try:
+            sys.__stderr__ and sys.__stderr__.write(text)
+        except Exception:
+            pass
+        if shown["n"] < 3 and QApplication.instance():
+            shown["n"] += 1
+            try:
+                from PySide6.QtWidgets import QMessageBox
+                box = QMessageBox(QMessageBox.Critical, "Car App Manager",
+                                  "Unexpected error (logged to %LOCALAPPDATA%\\CarAppManager\\logs):\n\n" + text[-1500:])
+                box.setAttribute(Qt.WA_DeleteOnClose, True)
+                box.show()  # non-modal: never blocks the event loop (or a test)
+                hook.boxes.append(box)
+            except Exception:
+                pass
+
+    hook.boxes = []
+    sys.excepthook = hook
+
+
 def create_app(argv: list[str] | None = None) -> QApplication:
     app = QApplication.instance() or QApplication(argv or sys.argv)
     app.setApplicationName(APP_NAME)
@@ -69,11 +115,13 @@ def apk_args(argv: list[str]) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    harden_stdio()
     argv = list(argv if argv is not None else sys.argv[1:])
     rc = _cli(argv)
     if rc is not None:
         return rc
     app = create_app(argv)
+    install_excepthook()
     icon_file = resource_path("icon.ico")
     icon = QIcon(str(icon_file)) if icon_file.exists() else QIcon()
     app.setWindowIcon(icon)

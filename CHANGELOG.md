@@ -5,6 +5,7 @@ All notable changes to Car App Manager are documented here.
 ## [0.6.0] - Robustness & support
 ### Fixed
 - **APK inspection failed inside the Windows exe** (androguard could not parse manifests in the frozen build, so package / minSdk / permissions showed empty). Inspection now uses a built-in, dependency-free binary-XML parser (package, versions, SDK levels, permissions, components, features, split name, native ABIs, v1/v2/v3 signature presence). androguard is only used opportunistically to resolve the app label.
+- Root cause hardened: a windowed exe has no stdout/stderr, so any library writing to them crashed. They are now routed to `logs\stdio.log`, and uncaught exceptions are logged and shown in a non-blocking dialog instead of vanishing.
 - API keys are stored through an explicitly selected Windows Credential Manager backend, so the frozen build cannot silently fall back to session-only storage.
 - Resource lookup inside the frozen build checks the bundled path first.
 ### Added
