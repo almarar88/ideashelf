@@ -53,7 +53,7 @@ jobs:
           $r = Start-Process -FilePath "dist\CarAppManager.exe" -ArgumentList "--inspect `"$env:TEMP\fdroid.apk`" --out `"$env:TEMP\inspect.json`"" -PassThru -Wait
           if ($r.ExitCode -ne 0) { Write-Error "--inspect exited with $($r.ExitCode)"; exit 1 }
           $j = Get-Content "$env:TEMP\inspect.json" -Raw | ConvertFrom-Json
-          if ($j.package -ne "org.fdroid.fdroid" -or $j.min_sdk -lt 1) { Write-Error "unexpected inspect result: $($j.package) minSdk=$($j.min_sdk)"; exit 1 }
+          if ($j.package -ne "org.fdroid.fdroid" -or $j.min_sdk -lt 1) { Write-Host "parse_error: $($j.parse_error)"; Get-Content "$env:TEMP\inspect.json" -Raw; Write-Error "unexpected inspect result: $($j.package) minSdk=$($j.min_sdk)"; exit 1 }
           Write-Host "inspect OK: $($j.package) $($j.version_name) minSdk=$($j.min_sdk) abis=$($j.native_abis)"
           # 2) the GUI must start with the native Windows platform plugin and reach the main window
           $p = Start-Process -FilePath "dist\CarAppManager.exe" -PassThru
