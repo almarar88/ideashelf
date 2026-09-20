@@ -1,7 +1,9 @@
-import { useState } from "react";
-import { Check, ChevronLeft, Eye, EyeOff, KeyRound, ShieldCheck, User } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, ChevronLeft, Eye, EyeOff, Headphones, KeyRound, ShieldCheck, User } from "lucide-react";
 import { MODELS, type Effort, type PageEffect, type Settings } from "@/lib/settings";
 import { testApiKey } from "@/lib/ai";
+import { deviceVoicesAvailable, listVoices, type Voice } from "@/lib/narration";
+import { Toggle } from "@/components/ui";
 import type { Route } from "@/App";
 import { Button, Card } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -13,6 +15,12 @@ export function SettingsScreen({ settings, update, navigate, auth }: { settings:
   const [show, setShow] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [voices, setVoices] = useState<Voice[]>([]);
+
+  useEffect(() => {
+    if (!cloudEnabled || !auth.session) return;
+    listVoices().then(setVoices).catch(() => setVoices([]));
+  }, [auth.session]);
 
   async function test() {
     setTesting(true);
@@ -113,6 +121,53 @@ export function SettingsScreen({ settings, update, navigate, auth }: { settings:
             ))}
           </div>
           <p className="mt-2 text-[11px] text-ink-muted">لا ينطبق على Haiku 4.5. العمق الأعلى أدق لكنه أبطأ وأغلى.</p>
+        </Card>
+
+        <Card tone="white" className="p-5">
+          <p className="mb-1 flex items-center gap-2 text-sm font-semibold">
+            <Headphones size={16} className="text-accent" /> الكتاب الصوتي
+          </p>
+          <p className="mb-3 text-[11px] leading-5 text-ink-muted">
+            {cloudEnabled
+              ? "كتب المتجر تُقرأ بصوت عربي طبيعي من ElevenLabs. كتبك الخاصة تُقرأ بصوت الجهاز."
+              : "تُقرأ الكتب بصوت الجهاز. يحتاج جهازك إلى حزمة نطق عربية مثبّتة."}
+          </p>
+
+          {voices.length > 0 && (
+            <>
+              <label className="mb-1 block text-xs font-semibold">الصوت</label>
+              <select
+                value={settings.ttsVoiceId}
+                onChange={(e) => update({ ttsVoiceId: e.target.value })}
+                className="mb-3 h-11 w-full rounded-full bg-cream-soft px-4 text-sm outline-none"
+              >
+                <option value="">الصوت الافتراضي للخادم</option>
+                {voices.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+
+          <p className="mb-2 text-xs font-semibold">سرعة القراءة</p>
+          <div className="grid grid-cols-4 gap-2">
+            {[0.9, 1, 1.25, 1.5].map((r) => (
+              <button key={r} onClick={() => update({ ttsRate: r })} className={cn("rounded-full py-2 text-xs font-medium", settings.ttsRate === r ? "bg-accent text-white" : "bg-cream-soft")}>
+                {r}x
+              </button>
+            ))}
+          </div>
+
+          <label className="mt-3 flex items-center justify-between rounded-2xl bg-cream-soft px-4 py-3 text-xs">
+            <span>الانتقال تلقائيًا للصفحة التالية</span>
+            <Toggle checked={settings.ttsAutoAdvance} onChange={(v) => update({ ttsAutoAdvance: v })} label="انتقال تلقائي" />
+          </label>
+
+          {!cloudEnabled && !deviceVoicesAvailable() && (
+            <p className="mt-2 text-[11px] text-red-600">هذا الجهاز لا يدعم النطق.</p>
+          )}
         </Card>
 
         <Card tone="white" className="p-5">

@@ -12,6 +12,11 @@ export interface Settings {
   theme: "system" | "light" | "dark";
   catalogUrl: string;
   pageEffect: PageEffect;
+  /** ElevenLabs voice and model used for the audiobook; empty means the server default. */
+  ttsVoiceId: string;
+  ttsModelId: string;
+  ttsRate: number;
+  ttsAutoAdvance: boolean;
 }
 
 const KEY = "dcl.settings.v1";
@@ -25,6 +30,10 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   catalogUrl: "https://almarar88.github.io/ideashelf/catalog.json",
   pageEffect: "flip",
+  ttsVoiceId: "",
+  ttsModelId: "eleven_flash_v2_5",
+  ttsRate: 1,
+  ttsAutoAdvance: true,
 };
 
 export const MODELS: { id: ModelId; label: string; hint: string }[] = [

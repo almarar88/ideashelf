@@ -6,10 +6,13 @@ import {
   HelpCircle,
   Lightbulb,
   ListChecks,
+  Headphones,
   Lock,
   Minimize2,
   Minus,
   MoreHorizontal,
+  Pause,
+  Play,
   Plus,
   Sparkles,
 } from "lucide-react";
@@ -17,6 +20,7 @@ import { db, logReading } from "@/lib/db";
 import { TEXT_VERSION } from "@/lib/pdf";
 import { createCloudSource, createLocalSource, type Geom, type PageSource, type RenderHandle } from "@/lib/reader-source";
 import { saveProgress } from "@/lib/cloud";
+import { createNarrator, type NarrationStatus, type Narrator } from "@/lib/narration";
 import type { PageEffect, Settings } from "@/lib/settings";
 import { Gauge } from "@/components/Gauge";
 import { IconButton, Toggle } from "@/components/ui";
@@ -65,6 +69,7 @@ function cloneCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
 export function ReaderScreen({
   target,
   settings,
+  update,
   wide,
   userId,
   watermark,
@@ -73,6 +78,7 @@ export function ReaderScreen({
 }: {
   target: ReaderTarget;
   settings: Settings;
+  update: (patch: Partial<Settings>) => void;
   wide: boolean;
   userId: string | null;
   watermark: string;
@@ -105,6 +111,7 @@ export function ReaderScreen({
   const [menu, setMenu] = useState(false);
   const [error, setError] = useState("");
   const [viewportKey, setViewportKey] = useState("");
+  const [narration, setNarration] = useState<NarrationStatus>({ engine: "none", playing: false, loading: false, page: null, error: "" });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const holderRef = useRef<HTMLDivElement | null>(null);
@@ -121,6 +128,16 @@ export function ReaderScreen({
   const aliveRef = useRef(true);
   const effectRef = useRef<PageEffect>(settings.pageEffect);
   effectRef.current = settings.pageEffect;
+
+  const narratorRef = useRef<Narrator | null>(null);
+  const goToRef = useRef<(p: number, animate?: boolean) => Promise<void>>(async () => {});
+  const maxPageRef = useRef(1);
+  const playingRef = useRef(false);
+  /** True while auto-advance drives the turn, so goTo does not also start playback. */
+  const advancingRef = useRef(false);
+  const autoAdvanceRef = useRef(settings.ttsAutoAdvance);
+  autoAdvanceRef.current = settings.ttsAutoAdvance;
+  playingRef.current = narration.playing;
 
   const cacheRef = useRef(new Map<string, HTMLCanvasElement>());
   const pendingRef = useRef(new Map<string, Promise<HTMLCanvasElement | null>>());
@@ -382,12 +399,52 @@ export function ReaderScreen({
         setPage(next);
         persist(next, next - current);
         prefetch(next, g);
+        if (advancingRef.current) {
+          if (next + 1 <= maxPageRef.current) narratorRef.current?.prefetch(next + 1);
+        }
+        else if (playingRef.current) void narratorRef.current?.play(next);
+        else narratorRef.current?.prefetch(next);
       } finally {
         busyRef.current = false;
       }
     },
     [animateTurn, geometry, getPageCanvas, maxPage, persist, prefetch, zoom],
   );
+
+  goToRef.current = goTo;
+
+  useEffect(() => {
+    if (!source) return;
+    const n = createNarrator(target.kind, target.bookId, {
+      getText: (from, to) => (sourceRef.current ? sourceRef.current.getText(from, to) : Promise.resolve([])),
+      onStatus: (patch) => setNarration((prev) => ({ ...prev, ...patch })),
+      onPageEnd: (finished) => {
+        if (!autoAdvanceRef.current) return;
+        const next = finished + 1;
+        if (next > maxPageRef.current) return;
+        advancingRef.current = true;
+        void goToRef.current(next)
+          .then(() => narratorRef.current?.play(next))
+          .finally(() => {
+            advancingRef.current = false;
+          });
+      },
+    });
+    narratorRef.current = n;
+    setNarration((prev) => ({ ...prev, engine: n.engine }));
+    return () => {
+      n.destroy();
+      narratorRef.current = null;
+      setNarration({ engine: "none", playing: false, loading: false, page: null, error: "" });
+    };
+  }, [source, target]);
+
+  const toggleNarration = useCallback(() => {
+    const n = narratorRef.current;
+    if (!n) return;
+    if (narration.playing) n.pause();
+    else void n.play(pageRef.current);
+  }, [narration.playing]);
 
   useEffect(() => {
     if (target.kind !== "local") return;
@@ -466,6 +523,7 @@ export function ReaderScreen({
     );
   }
 
+  maxPageRef.current = maxPage;
   const progress = maxPage > 1 ? (page - 1) / (maxPage - 1) : 1;
   const showChrome = chrome || wide;
   const atPreviewEnd = target.kind === "cloud" && !target.readable && page >= maxPage;
@@ -553,8 +611,19 @@ export function ReaderScreen({
       )}
 
       {!showChrome && (
-        <div className="pointer-events-none absolute inset-x-0 z-10 text-center text-[11px] text-cream/40" style={{ bottom: "calc(var(--safe-bottom) + 8px)" }}>
-          {page} من {maxPage}
+        <div className="pointer-events-none absolute inset-x-0 z-10 flex items-center justify-center gap-3 text-[11px] text-cream/40" style={{ bottom: "calc(var(--safe-bottom) + 8px)" }}>
+          {narration.engine !== "none" && (
+            <button
+              onClick={toggleNarration}
+              className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-cream/80 backdrop-blur"
+              aria-label={narration.playing ? "إيقاف الاستماع" : "استمع"}
+            >
+              {narration.playing ? <Pause size={15} /> : <Play size={15} className="-scale-x-100" />}
+            </button>
+          )}
+          <span>
+            {page} من {maxPage}
+          </span>
         </div>
       )}
 
@@ -599,6 +668,50 @@ export function ReaderScreen({
         <div className="px-6 pb-1">
           <input type="range" min={1} max={maxPage} value={page} onChange={(e) => void goTo(+e.target.value, false)} aria-label="الانتقال إلى صفحة" className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-cream/20 accent-[#ee7a4b]" />
         </div>
+
+        {narration.engine !== "none" && (
+          <div className="mx-4 mb-2 mt-1 flex items-center gap-3 rounded-3xl bg-white/10 px-3 py-2">
+            <button
+              onClick={toggleNarration}
+              disabled={narration.loading}
+              className={cn(
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition active:scale-95",
+                narration.playing ? "bg-cream text-ink" : "bg-accent text-white",
+                narration.loading && "opacity-60",
+              )}
+              aria-label={narration.playing ? "إيقاف الاستماع" : "استمع للصفحة"}
+            >
+              {narration.playing ? <Pause size={18} /> : <Play size={18} className="-scale-x-100" />}
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1.5 text-xs font-semibold">
+                <Headphones size={13} className="text-accent" />
+                {narration.loading ? "جارٍ تحضير الصوت…" : narration.playing ? `يقرأ الصفحة ${narration.page ?? page}` : "استماع للكتاب"}
+              </p>
+              <p className="truncate text-[10px] text-cream/50">
+                {narration.error
+                  ? narration.error
+                  : narration.engine === "cloud"
+                    ? "صوت عربي طبيعي · يتابع الصفحة التالية تلقائيًا"
+                    : "صوت الجهاز"}
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-1">
+              {[1, 1.25, 1.5].map((r) => (
+                <button
+                  key={r}
+                  onClick={() => {
+                    update({ ttsRate: r });
+                    narratorRef.current?.setRate(r);
+                  }}
+                  className={cn("rounded-full px-2 py-1 text-[10px] font-semibold", settings.ttsRate === r ? "bg-accent text-white" : "bg-white/10 text-cream/70")}
+                >
+                  {r}x
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-4 gap-2 px-4 pb-4 pt-2" style={{ paddingBottom: "calc(var(--safe-bottom) + 12px)" }}>
           {MODES.map(({ id, label, Icon }) => {

@@ -108,6 +108,7 @@ export default function App() {
       <ReaderScreen
         target={route.target}
         settings={settings}
+        update={update}
         wide={wide}
         userId={auth.session?.user.id ?? null}
         watermark={auth.session?.user.email ?? ""}

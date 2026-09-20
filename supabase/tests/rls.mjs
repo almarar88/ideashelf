@@ -100,6 +100,32 @@ await A.client.from("reading_progress").upsert({ user_id: A.id, book_id: book.id
 const bSeesA = await B.client.from("reading_progress").select("*").eq("user_id", A.id);
 check("reader B cannot read A's progress", (bSeesA.data ?? []).length === 0);
 
+// ---- narration follows exactly the same access rule as the page ----
+const narrationPath = `${book.id}/0005-voiceX-modelY.mp3`;
+await admin.storage.from("narration").upload(narrationPath, png, { contentType: "audio/mpeg", upsert: true });
+await admin.from("narrations").insert({ book_id: book.id, page: 5, voice_id: "voiceX", model_id: "modelY", audio_path: narrationPath, chars: 100 });
+const previewNarrationPath = `${book.id}/0001-voiceX-modelY.mp3`;
+await admin.storage.from("narration").upload(previewNarrationPath, png, { contentType: "audio/mpeg", upsert: true });
+await admin.from("narrations").insert({ book_id: book.id, page: 1, voice_id: "voiceX", model_id: "modelY", audio_path: previewNarrationPath, chars: 80 });
+
+const narrationsSeenBy = async (c) => {
+  const { data } = await c.from("narrations").select("page").eq("book_id", book.id).order("page");
+  return (data ?? []).map((r) => r.page);
+};
+const signAudio = async (c, path) => {
+  const { data } = await c.storage.from("narration").createSignedUrl(path, 60);
+  return !!data?.signedUrl;
+};
+
+// B's subscription is expired at this point, so B is a preview-only reader again
+check("preview reader sees only the preview narration", JSON.stringify(await narrationsSeenBy(B.client)) === "[1]", `got ${JSON.stringify(await narrationsSeenBy(B.client))}`);
+check("preview reader CAN play the preview narration", await signAudio(B.client, previewNarrationPath));
+check("preview reader CANNOT play a locked narration", !(await signAudio(B.client, narrationPath)), "signed audio url was issued!");
+check("paying reader A sees both narrations", JSON.stringify(await narrationsSeenBy(A.client)) === "[1,5]", `got ${JSON.stringify(await narrationsSeenBy(A.client))}`);
+check("paying reader A CAN play the locked narration", await signAudio(A.client, narrationPath));
+const fakeNarration = await A.client.from("narrations").insert({ book_id: book.id, page: 6, voice_id: "v", model_id: "m", audio_path: "x" });
+check("reader CANNOT insert a narration row", !!fakeNarration.error, fakeNarration.error?.message ?? "insert succeeded!");
+
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);
 process.exit(failed.length ? 1 : 0);
