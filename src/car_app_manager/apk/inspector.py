@@ -103,7 +103,23 @@ def _native_abis_from_files(files: list[str]) -> list[str]:
     return sorted(abis)
 
 
+APK_SIG_BLOCK_MAGIC = b"APK Sig Block 42"
+
+
+def is_signed_zip(z: "zipfile.ZipFile", raw: bytes) -> bool:
+    """v1: META-INF/*.RSA|DSA|EC ; v2/v3: 'APK Sig Block 42' just before the central directory."""
+    for n in z.namelist():
+        if n.upper().startswith("META-INF/") and n.upper().endswith((".RSA", ".DSA", ".EC")):
+            return True
+    # the signing block ends 16 bytes before the central directory start; search the tail region
+    return APK_SIG_BLOCK_MAGIC in raw
+
+
 def inspect_apk(path: str | os.PathLike) -> ApkInfo:
+    """Dependency-free inspection (own AXML parser). androguard is used only opportunistically for the label."""
+    import zipfile
+    from .axml import parse_manifest
+
     p = Path(path)
     info = ApkInfo(path=str(p), size=p.stat().st_size if p.exists() else 0)
     try:
@@ -112,46 +128,51 @@ def inspect_apk(path: str | os.PathLike) -> ApkInfo:
         info.parse_error = str(e)
         return info
     try:
+        with zipfile.ZipFile(p) as z:
+            names = z.namelist()
+            manifest = parse_manifest(z.read("AndroidManifest.xml"))
+            info.native_abis = _native_abis_from_files(names)
+            # signature: look at the last 64 KB before the central directory for the v2/v3 block magic
+            with open(p, "rb") as f:
+                f.seek(max(0, info.size - 2 * 1024 * 1024))
+                tail = f.read()
+            info.signed = is_signed_zip(z, tail)
+    except KeyError:
+        info.parse_error = "AndroidManifest.xml missing (not an APK)"
+        return info
+    except (zipfile.BadZipFile, OSError, ValueError) as e:
+        info.parse_error = f"{type(e).__name__}: {e}"
+        log.warning("APK parse failed for %s: %s", p, info.parse_error)
+        return info
+    info.package = manifest.package
+    info.label = manifest.label
+    info.version_name = manifest.version_name
+    info.version_code = manifest.version_code
+    info.min_sdk, info.target_sdk, info.max_sdk = manifest.min_sdk, manifest.target_sdk, manifest.max_sdk
+    info.permissions = sorted(set(manifest.permissions))
+    info.services, info.receivers = manifest.services, manifest.receivers
+    info.activities, info.providers = manifest.activities, manifest.providers
+    info.features = manifest.features
+    if manifest.split:
+        info.is_split, info.split_name = True, manifest.split
+    if not info.label:
+        info.label = _label_via_androguard(p)
+    return info
+
+
+def _label_via_androguard(p: Path) -> str:
+    """Best effort only: resolving a @string label needs resources.arsc, which androguard can read."""
+    try:
         try:
-            from loguru import logger as _loguru  # androguard is noisy
+            from loguru import logger as _loguru
             _loguru.disable("androguard")
         except Exception:
             pass
-        from androguard.core.apk import APK  # imported lazily; heavy
-
-        apk = APK(str(p))
-        info.package = apk.get_package() or ""
-        try:
-            info.label = apk.get_app_name() or ""
-        except Exception:
-            info.label = ""
-        info.version_name = str(apk.get_androidversion_name() or "")
-        try:
-            info.version_code = int(apk.get_androidversion_code() or 0)
-        except (TypeError, ValueError):
-            info.version_code = 0
-        info.min_sdk = _to_int(apk.get_min_sdk_version())
-        info.target_sdk = _to_int(apk.get_target_sdk_version())
-        info.max_sdk = _to_int(apk.get_max_sdk_version())
-        info.permissions = sorted(set(apk.get_permissions() or []))
-        info.native_abis = _native_abis_from_files(list(apk.get_files()))
-        info.services = list(apk.get_services() or [])
-        info.receivers = list(apk.get_receivers() or [])
-        info.activities = list(apk.get_activities() or [])
-        info.providers = list(apk.get_providers() or [])
-        info.features = list(apk.get_features() or [])
-        split = apk.get_attribute_value("manifest", "split") if hasattr(apk, "get_attribute_value") else None
-        if split:
-            info.is_split = True
-            info.split_name = str(split)
-        try:
-            info.signed = bool(apk.is_signed())
-        except Exception:
-            info.signed = True
-    except Exception as e:  # androguard raises many exception types
-        info.parse_error = f"{type(e).__name__}: {e}"
-        log.warning("APK parse failed for %s: %s", p, info.parse_error)
-    return info
+        from androguard.core.apk import APK
+        return str(APK(str(p)).get_app_name() or "")
+    except Exception as e:  # noqa: BLE001 - optional feature
+        log.info("label lookup via androguard unavailable: %s", e)
+        return ""
 
 
 def _to_int(v) -> int:
