@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import Fuse from "fuse.js";
-import { Heart, MoreHorizontal, Search, Trash2 } from "lucide-react";
+import { Headphones, Heart, MoreHorizontal, Search, Trash2 } from "lucide-react";
 import { db, deleteBook, type Book } from "@/lib/db";
 import type { Route } from "@/App";
 import { UploadButton } from "@/components/UploadButton";
@@ -72,7 +72,14 @@ export function LibraryScreen({ navigate }: { navigate: (r: Route) => void }) {
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {list.map((b) => (
-              <BookCard key={b.id} book={b} open={() => navigate({ name: "reader", target: { kind: "local", bookId: b.id } })} menuOpen={menuFor === b.id} toggleMenu={() => setMenuFor(menuFor === b.id ? null : b.id)} />
+              <BookCard
+              key={b.id}
+              book={b}
+              open={() => navigate({ name: "reader", target: { kind: "local", bookId: b.id } })}
+              listen={() => navigate({ name: "reader", target: { kind: "local", bookId: b.id, autoPlay: true } })}
+              menuOpen={menuFor === b.id}
+              toggleMenu={() => setMenuFor(menuFor === b.id ? null : b.id)}
+            />
             ))}
           </div>
         )}
@@ -81,7 +88,7 @@ export function LibraryScreen({ navigate }: { navigate: (r: Route) => void }) {
   );
 }
 
-function BookCard({ book, open, menuOpen, toggleMenu }: { book: Book; open: () => void; menuOpen: boolean; toggleMenu: () => void }) {
+function BookCard({ book, open, listen, menuOpen, toggleMenu }: { book: Book; open: () => void; listen: () => void; menuOpen: boolean; toggleMenu: () => void }) {
   const pct = Math.round(((book.lastPage - 1) / Math.max(1, book.pages - 1)) * 100);
   return (
     <div className="rise relative overflow-hidden rounded-3xl bg-white p-3">
@@ -111,7 +118,10 @@ function BookCard({ book, open, menuOpen, toggleMenu }: { book: Book; open: () =
         <MoreHorizontal size={16} />
       </button>
       {menuOpen && (
-        <div className="absolute end-4 top-14 z-10 w-40 overflow-hidden rounded-2xl bg-ink text-cream shadow-lift" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute end-4 top-14 z-10 w-44 overflow-hidden rounded-2xl bg-ink text-cream shadow-lift" onClick={(e) => e.stopPropagation()}>
+          <button className="flex w-full items-center gap-2 px-4 py-3 text-sm hover:bg-white/10" onClick={listen}>
+            <Headphones size={14} /> استمع للكتاب
+          </button>
           <button className="flex w-full items-center gap-2 px-4 py-3 text-sm hover:bg-white/10" onClick={() => db.books.update(book.id, { favorite: !book.favorite })}>
             <Heart size={14} /> {book.favorite ? "إزالة من المفضلة" : "إضافة للمفضلة"}
           </button>

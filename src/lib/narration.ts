@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+import { TextToSpeech } from "@capacitor-community/text-to-speech";
 import { requireSupabase, supabase } from "./supabase";
 import { loadSettings } from "./settings";
 
@@ -8,7 +10,7 @@ export interface Voice {
 }
 
 /** Where a page's audio comes from. */
-export type NarrationEngine = "cloud" | "device" | "none";
+export type NarrationEngine = "cloud" | "native" | "device" | "none";
 
 export interface NarrationStatus {
   engine: NarrationEngine;
@@ -154,8 +156,99 @@ function createCloudNarrator(bookId: string, opts: NarratorOptions): Narrator {
 /* only option for books the reader imported themselves.               */
 /* ------------------------------------------------------------------ */
 
+export const isNative = () => Capacitor.isNativePlatform();
+
 export function deviceVoicesAvailable(): boolean {
-  return typeof window !== "undefined" && "speechSynthesis" in window;
+  return isNative() || (typeof window !== "undefined" && "speechSynthesis" in window);
+}
+
+/** Android's own speech engine. The WebView does not expose the Web Speech API, so the
+ *  browser path silently does nothing inside the app — this is the one that works. */
+export async function nativeArabicAvailable(): Promise<boolean> {
+  try {
+    const { supported } = await TextToSpeech.isLanguageSupported({ lang: "ar" });
+    if (supported) return true;
+  } catch {
+    /* fall through to the full list */
+  }
+  try {
+    const { languages } = await TextToSpeech.getSupportedLanguages();
+    return languages.some((l) => l.toLowerCase().startsWith("ar"));
+  } catch {
+    return false;
+  }
+}
+
+/** Opens Android's "install voice data" screen so the reader can add the Arabic voice. */
+export async function openVoiceInstall(): Promise<void> {
+  try {
+    await TextToSpeech.openInstall();
+  } catch {
+    /* not available on this platform */
+  }
+}
+
+function createNativeNarrator(opts: NarratorOptions): Narrator {
+  let destroyed = false;
+  let current: number | null = null;
+  let generation = 0;
+
+  return {
+    engine: "native",
+    async play(page) {
+      if (destroyed) return;
+      const run = ++generation;
+      opts.onStatus({ loading: true, error: "", page });
+      await TextToSpeech.stop().catch(() => {});
+      const rows = await opts.getText(page, page);
+      const text = rows.map((r) => r.text).join("\n").trim();
+      if (!text) {
+        opts.onStatus({ loading: false, error: "لا يوجد نص في هذه الصفحة" });
+        return;
+      }
+      if (!(await nativeArabicAvailable())) {
+        opts.onStatus({ loading: false, error: "لا يوجد صوت عربي على الجهاز. اضغط لتثبيته." });
+        return;
+      }
+      current = page;
+      opts.onStatus({ loading: false, playing: true });
+      // speak() resolves when a chunk finishes, so chunking also gives us pause points.
+      for (const part of chunk(text, 400)) {
+        if (destroyed || run !== generation) return;
+        try {
+          await TextToSpeech.speak({ text: part, lang: "ar", rate: loadSettings().ttsRate, category: "playback" });
+        } catch {
+          if (run === generation) opts.onStatus({ playing: false, error: "توقف النطق" });
+          return;
+        }
+      }
+      if (destroyed || run !== generation) return;
+      opts.onStatus({ playing: false });
+      if (current != null) opts.onPageEnd(current);
+    },
+    pause() {
+      generation += 1;
+      void TextToSpeech.stop().catch(() => {});
+      opts.onStatus({ playing: false });
+    },
+    stop() {
+      generation += 1;
+      void TextToSpeech.stop().catch(() => {});
+      current = null;
+      opts.onStatus({ playing: false, loading: false, page: null });
+    },
+    setRate() {
+      /* applied to the next chunk */
+    },
+    prefetch() {
+      /* synthesis is local */
+    },
+    destroy() {
+      destroyed = true;
+      generation += 1;
+      void TextToSpeech.stop().catch(() => {});
+    },
+  };
 }
 
 function pickArabicVoice(): SpeechSynthesisVoice | null {
@@ -254,7 +347,8 @@ function createDeviceNarrator(opts: NarratorOptions): Narrator {
 
 export function createNarrator(kind: "local" | "cloud", bookId: string, opts: NarratorOptions): Narrator {
   if (kind === "cloud" && supabase) return createCloudNarrator(bookId, opts);
-  if (deviceVoicesAvailable()) return createDeviceNarrator(opts);
+  if (isNative()) return createNativeNarrator(opts);
+  if (typeof window !== "undefined" && "speechSynthesis" in window) return createDeviceNarrator(opts);
   return {
     engine: "none",
     async play() {

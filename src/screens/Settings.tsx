@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, ChevronLeft, Eye, EyeOff, Headphones, KeyRound, ShieldCheck, User } from "lucide-react";
 import { MODELS, type Effort, type PageEffect, type Settings } from "@/lib/settings";
 import { testApiKey } from "@/lib/ai";
-import { deviceVoicesAvailable, listVoices, type Voice } from "@/lib/narration";
+import { isNative, listVoices, openVoiceInstall, type Voice } from "@/lib/narration";
 import { Toggle } from "@/components/ui";
 import type { Route } from "@/App";
 import { Button, Card } from "@/components/ui";
@@ -165,8 +165,15 @@ export function SettingsScreen({ settings, update, navigate, auth }: { settings:
             <Toggle checked={settings.ttsAutoAdvance} onChange={(v) => update({ ttsAutoAdvance: v })} label="انتقال تلقائي" />
           </label>
 
-          {!cloudEnabled && !deviceVoicesAvailable() && (
-            <p className="mt-2 text-[11px] text-red-600">هذا الجهاز لا يدعم النطق.</p>
+          {isNative() && (
+            <>
+              <Button tone="light" className="mt-3 w-full" onClick={() => void openVoiceInstall()}>
+                <Headphones size={16} /> تثبيت أو تحديث الصوت العربي
+              </Button>
+              <p className="mt-2 text-[11px] leading-5 text-ink-muted">
+                يفتح شاشة أندرويد لتنزيل بيانات النطق. اختر العربية إن لم تكن مثبّتة، وإلا لن يعمل صوت الجهاز.
+              </p>
+            </>
           )}
         </Card>
 

@@ -20,7 +20,7 @@ import { db, logReading } from "@/lib/db";
 import { TEXT_VERSION } from "@/lib/pdf";
 import { createCloudSource, createLocalSource, type Geom, type PageSource, type RenderHandle } from "@/lib/reader-source";
 import { saveProgress } from "@/lib/cloud";
-import { createNarrator, type NarrationStatus, type Narrator } from "@/lib/narration";
+import { createNarrator, openVoiceInstall, type NarrationStatus, type Narrator } from "@/lib/narration";
 import type { PageEffect, Settings } from "@/lib/settings";
 import { Gauge } from "@/components/Gauge";
 import { IconButton, Toggle } from "@/components/ui";
@@ -30,6 +30,9 @@ import { cn } from "@/lib/utils";
 export type ReaderTarget =
   | { kind: "local"; bookId: string }
   | { kind: "cloud"; bookId: string; pages: number; title: string; author?: string; previewPages: number; readable: boolean };
+
+/** Set when the reader is opened from a "listen" action, so narration starts by itself. */
+export type ReaderIntent = { autoPlay?: boolean };
 
 const MODES: { id: Mode; label: string; Icon: typeof Sparkles }[] = [
   { id: "summary", label: "تلخيص", Icon: Sparkles },
@@ -44,7 +47,7 @@ type Dir = "next" | "prev";
 const FLIP_MS = 540;
 const SLIDE_MS = 300;
 const CHROME_HEIGHT = 330;
-const AUTO_HIDE_MS = 2200;
+const AUTO_HIDE_MS = 4000;
 
 function blit(src: HTMLCanvasElement, dst: HTMLCanvasElement, withCssSize = true) {
   dst.width = src.width;
@@ -76,7 +79,7 @@ export function ReaderScreen({
   onBack,
   onBuy,
 }: {
-  target: ReaderTarget;
+  target: ReaderTarget & ReaderIntent;
   settings: Settings;
   update: (patch: Partial<Settings>) => void;
   wide: boolean;
@@ -439,6 +442,12 @@ export function ReaderScreen({
     };
   }, [source, target]);
 
+  useEffect(() => {
+    if (!target.autoPlay || !source || !narratorRef.current) return;
+    const t = setTimeout(() => void narratorRef.current?.play(pageRef.current), 400);
+    return () => clearTimeout(t);
+  }, [target.autoPlay, source, narration.engine]);
+
   const toggleNarration = useCallback(() => {
     const n = narratorRef.current;
     if (!n) return;
@@ -582,6 +591,13 @@ export function ReaderScreen({
             {zoom > 1 && ` · تكبير ${Math.round(zoom * 100)}%`}
           </p>
         </div>
+        <IconButton
+          tone={narration.playing ? "accent" : "ghost"}
+          onClick={toggleNarration}
+          aria-label={narration.playing ? "إيقاف الاستماع" : "استمع للكتاب"}
+        >
+          <Headphones size={18} />
+        </IconButton>
         {!wide && (
           <IconButton tone="ghost" onClick={() => setChrome(false)} aria-label="ملء الشاشة">
             <Minimize2 size={18} />
@@ -669,11 +685,11 @@ export function ReaderScreen({
           <input type="range" min={1} max={maxPage} value={page} onChange={(e) => void goTo(+e.target.value, false)} aria-label="الانتقال إلى صفحة" className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-cream/20 accent-[#ee7a4b]" />
         </div>
 
-        {narration.engine !== "none" && (
+        {(
           <div className="mx-4 mb-2 mt-1 flex items-center gap-3 rounded-3xl bg-white/10 px-3 py-2">
             <button
-              onClick={toggleNarration}
-              disabled={narration.loading}
+              onClick={narration.error.includes("اضغط لتثبيته") ? () => void openVoiceInstall() : toggleNarration}
+              disabled={narration.loading || narration.engine === "none"}
               className={cn(
                 "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition active:scale-95",
                 narration.playing ? "bg-cream text-ink" : "bg-accent text-white",
@@ -693,11 +709,13 @@ export function ReaderScreen({
                   ? narration.error
                   : narration.engine === "cloud"
                     ? "صوت عربي طبيعي · يتابع الصفحة التالية تلقائيًا"
-                    : "صوت الجهاز"}
+                    : narration.engine === "none"
+                      ? "القراءة الصوتية غير مدعومة على هذا الجهاز"
+                      : "صوت الجهاز · يتابع الصفحة التالية تلقائيًا"}
               </p>
             </div>
             <div className="flex shrink-0 gap-1">
-              {[1, 1.25, 1.5].map((r) => (
+              {narration.engine !== "none" && [1, 1.25, 1.5].map((r) => (
                 <button
                   key={r}
                   onClick={() => {

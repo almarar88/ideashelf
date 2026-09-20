@@ -8,7 +8,7 @@ import { getBook, isReadable } from "@/lib/cloud";
 import { cn } from "@/lib/utils";
 import { HomeScreen } from "@/screens/Home";
 import { LibraryScreen } from "@/screens/Library";
-import { ReaderScreen, type ReaderTarget } from "@/screens/Reader";
+import { ReaderScreen, type ReaderIntent, type ReaderTarget } from "@/screens/Reader";
 import { InsightsScreen } from "@/screens/Insights";
 import { SettingsScreen } from "@/screens/Settings";
 import { AdminScreen } from "@/screens/Admin";
@@ -21,7 +21,7 @@ export type Route =
   | { name: "home" }
   | { name: "store" }
   | { name: "library" }
-  | { name: "reader"; target: ReaderTarget }
+  | { name: "reader"; target: ReaderTarget & ReaderIntent }
   | { name: "insights" }
   | { name: "settings" }
   | { name: "admin" }
