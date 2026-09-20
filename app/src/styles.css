@@ -178,3 +178,26 @@ textarea.input { min-height: 96px; line-height: 1.5; }
 .hero-img .go { position: absolute; top: 12px; inset-inline-end: 12px; }
 .robots-row { position: absolute; bottom: 10px; inset-inline-end: 12px; display: flex; }
 .robots-row > * { margin-inline-start: -10px; }
+
+/* Voice call */
+.voice-call { position: fixed; inset: 0; z-index: 60; background: radial-gradient(circle at 50% 20%, #3a332e, #1d1a18 70%); color: #f3efe9; display: flex; flex-direction: column; padding: calc(12px + var(--safe-top)) 16px calc(16px + var(--safe-bottom)); }
+.voice-stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; min-height: 0; }
+.voice-speaker { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.voice-ring { position: absolute; inset: -14px; border-radius: 50%; border: 3px solid var(--orange); opacity: 0; }
+.voice-speaker.on .voice-ring { animation: voicering 1.4s ease-out infinite; }
+.voice-speaker.on .voice-ring.r2 { animation-delay: .7s; }
+@keyframes voicering { 0% { transform: scale(.85); opacity: .9; } 100% { transform: scale(1.35); opacity: 0; } }
+.voice-others { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.voice-others > button { opacity: .55; transition: opacity .2s, transform .2s; background: transparent; }
+.voice-others > button.on { opacity: 1; transform: scale(1.12); }
+.voice-caption { background: rgba(255,255,255,.07); border-radius: 18px; padding: 12px 16px; max-height: 32vh; overflow: auto; font-size: 16px; line-height: 1.6; width: 100%; }
+.voice-caption .who { color: var(--orange); font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.voice-caption.me { background: rgba(242,112,60,.18); }
+.voice-mic { width: 84px; height: 84px; border-radius: 50%; background: var(--orange); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 34px; box-shadow: 0 10px 30px rgba(242,112,60,.35); transition: transform .15s; }
+.voice-mic.listening { background: var(--red); animation: pulse 1s infinite; }
+.voice-mic.speaking { background: #4cb37a; }
+.voice-mic:disabled { opacity: .5; }
+.voice-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.voice-bar .ctl { width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,.1); color: #fff; display: flex; align-items: center; justify-content: center; }
+.voice-bar .ctl.on { background: var(--orange); }
+.voice-status { text-align: center; font-size: 14px; opacity: .75; min-height: 20px; }

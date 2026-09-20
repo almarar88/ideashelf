@@ -15,7 +15,12 @@ export interface ChatCtx {
   signal: AbortSignal;
   /** Ask the boss to approve a sensitive device action. Resolves true to allow. */
   askPermission?: (agentName: string, description: string) => Promise<boolean>;
+  /** Voice call: replies are spoken aloud, so agents answer briefly in spoken style. */
+  voice?: boolean;
 }
+
+const VOICE_TEXT = `VOICE MODE: the boss is talking to you BY VOICE and your reply will be read aloud by text-to-speech. Talk like a real person on a phone call with a friend: 1-4 short sentences, natural spoken dialect, warm and expressive — react first like a human would ("ههه", "والله؟", "أكيد", "لا لا اسمعني") then answer. Strictly NO markdown, NO lists, NO headings, NO links or URLs, NO emojis, NO tables, no code; write numbers simply. If the task needs a long deliverable, say the gist out loud and offer to write the full version as a file when the boss asks. If you need something, ask ONE short question.`;
+const voiceBlock = (voice?: boolean) => (voice ? VOICE_TEXT + "\n\n" : "");
 
 const platform = detectPlatform();
 
@@ -115,7 +120,7 @@ function groupBrief(group: Group): string {
 }
 
 /** System prompt as two blocks: a stable, cached prefix (persona + rules) and a small dynamic tail. */
-function agentSystem(a: Agent, group: Group, members: Agent[], judge: JudgeConfig, catalog: string, council: boolean): Anthropic.TextBlockParam[] {
+function agentSystem(a: Agent, group: Group, members: Agent[], judge: JudgeConfig, catalog: string, council: boolean, voice?: boolean): Anthropic.TextBlockParam[] {
   const st = getState().settings;
   const others = members.filter((m) => m.id !== a.id).map((m) => `- ${m.name}: ${m.title} (${m.field})`).join("\n") || "(none)";
   const judgeLine = group.judgeEnabled ? `- ${judge.name}: the group's JUDGE/manager — reads everyone's input and makes the final decision.` : "";
@@ -134,7 +139,7 @@ ${VIBE_TEXT[st.vibe]}
 
 ${CHAT_RULES}
 ${controlPromptText(platform, st.control)}`;
-  const dynamic = `${groupBrief(group)}What you remember about the boss and their projects:
+  const dynamic = `${voiceBlock(voice)}${groupBrief(group)}What you remember about the boss and their projects:
 ${memoriesText(a.id)}
 
 Files catalog (shared in this group):
@@ -151,7 +156,7 @@ const STYLE_TEXT: Record<JudgeConfig["style"], string> = {
   bold: "Be decisive and bold: take a clear stance quickly, commit to one path, and say plainly what to do next.",
 };
 
-function judgeSystem(j: JudgeConfig, group: Group, members: Agent[], catalog: string, extra = ""): Anthropic.TextBlockParam[] {
+function judgeSystem(j: JudgeConfig, group: Group, members: Agent[], catalog: string, extra = "", voice?: boolean): Anthropic.TextBlockParam[] {
   const team = members.map((m) => `- ${m.name}: ${m.title} (${m.field})`).join("\n") || "(no other members)";
   const st = getState().settings;
   const stable = `You are ${j.name}, the JUDGE and manager of the group "${group.name}". Boss: ${bossName()}.
@@ -167,7 +172,7 @@ ${VIBE_TEXT[st.vibe]}
 ${CHAT_RULES}
 ${controlPromptText(platform, st.control)}
 As the judge: when several colleagues answered, don't restate everything — synthesize, say who is right and why, give the decision, the next 2-5 concrete steps, and the main risk. If the boss's request was simple and only one person answered, just add a brief managerial note or nothing new. If you need the boss's input to decide, ask ONE precise question.`;
-  const dynamic = `${groupBrief(group)}What you remember about the boss and their projects:
+  const dynamic = `${voiceBlock(voice)}${groupBrief(group)}What you remember about the boss and their projects:
 ${memoriesText(JUDGE_ID)}
 
 Files catalog:
@@ -290,9 +295,9 @@ async function runAgentReply(ctx: ChatCtx, client: Anthropic, a: Agent, members:
   const push = (p: Partial<Message>) => { cur = { ...cur, ...p }; ctx.upsert(cur); };
   try {
     const r = await runTurn({
-      client, model, system: agentSystem(a, ctx.group, members, judge, catalog, council),
+      client, model, system: agentSystem(a, ctx.group, members, judge, catalog, council, ctx.voice),
       messages: [{ role: "user", content }],
-      tools: opts.reaction ? [] : toolsFor(a, model), effort: opts.reaction ? "low" : capEffort(effortFor(a.creativity), profile().effortCap), signal: ctx.signal, maxTokens: opts.maxTokens, countMessage: opts.countMessage,
+      tools: opts.reaction ? [] : toolsFor(a, model), effort: opts.reaction ? "low" : capEffort(effortFor(a.creativity), profile().effortCap), signal: ctx.signal, maxTokens: opts.maxTokens ?? (ctx.voice ? 700 : undefined), countMessage: opts.countMessage,
       onText: (t) => push({ text: t }),
       onPhase: (p) => push({ phase: p }),
       onToolCall: async (name, input, toolset) => {
@@ -366,7 +371,7 @@ async function runJudge(ctx: ChatCtx, client: Anthropic, judge: JudgeConfig, mem
       const roster = members.map((m) => `${m.id} = ${m.name} (${m.title})`).join("; ");
       const r = await client.messages.parse({
         model, max_tokens: 16000,
-        system: judgeSystem(judge, ctx.group, members, catalog, "\nRespond ONLY with the structured verdict. All free-text fields in the boss's language."),
+        system: judgeSystem(judge, ctx.group, members, catalog, "\nRespond ONLY with the structured verdict. All free-text fields in the boss's language.", ctx.voice),
         messages: [{ role: "user", content: `Chat history:\n${history}\n\nThe boss asked the council: """${userMsg.text}"""\n\nCouncil positions:\n${replyText}\n\nAgent ids: ${roster}\n\nProduce the verdict.` }],
         output_config: { format: zodOutputFormat(VerdictSchema), ...(model !== "claude-haiku-4-5" ? { effort: profile().judgeEffort } : {}) },
       }, { signal: ctx.signal, timeout: 300_000, maxRetries: 3 });
@@ -377,7 +382,7 @@ async function runJudge(ctx: ChatCtx, client: Anthropic, judge: JudgeConfig, mem
       actions.logUsage({ ts: Date.now(), agentId: JUDGE_ID, model, input: usage.input, output: usage.output, groupId: ctx.group.id });
     } else {
       const r = await runTurn({
-        client, model, system: judgeSystem(judge, ctx.group, members, catalog),
+        client, model, system: judgeSystem(judge, ctx.group, members, catalog, "", ctx.voice),
         messages: [{ role: "user", content: `Chat history:\n${history}\n\nThe boss's latest message: """${userMsg.text}"""\n\nColleagues' replies to it:\n${replyText || "(none — you are answering directly)"}\n\nNow post your message as the judge/manager.` }],
         tools: toolsFor(null, model), effort: profile().judgeEffort, signal: ctx.signal,
         onText: (t) => push({ text: t }), onPhase: (p) => push({ phase: p }),

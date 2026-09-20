@@ -1,5 +1,5 @@
 // Procedural robot faces. 12 variants, tinted by color.
-interface Props { variant: number; color: string; size?: number; mood?: "idle" | "busy" | "happy" | "error"; }
+interface Props { variant: number; color: string; size?: number; mood?: "idle" | "busy" | "happy" | "error" | "talking"; }
 
 export const AVATAR_COUNT = 12;
 
@@ -41,7 +41,9 @@ export function RobotAvatar({ variant, color, size = 64, mood = "idle" }: Props)
     }
   })();
 
-  const mouth = mood === "happy"
+  const mouth = mood === "talking"
+    ? <rect x="27" y="41" width="10" height="4" rx="2" fill={eyeColor}><animate attributeName="height" values="2;7;3;6;2" dur="0.5s" repeatCount="indefinite" /><animate attributeName="y" values="42.5;40;42;40.5;42.5" dur="0.5s" repeatCount="indefinite" /></rect>
+    : mood === "happy"
     ? <path d="M27 43 q5 4 10 0" stroke={eyeColor} strokeWidth="2.2" fill="none" strokeLinecap="round" />
     : mood === "error"
       ? <path d="M27 45 q5 -4 10 0" stroke={eyeColor} strokeWidth="2.2" fill="none" strokeLinecap="round" />

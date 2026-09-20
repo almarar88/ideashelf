@@ -280,6 +280,17 @@ const dict = {
   upToDate: { ar: "لديك أحدث إصدار", en: "You are up to date" },
   signInGoogle: { ar: "المتابعة بحساب Google", en: "Continue with Google" },
   orSep: { ar: "أو", en: "or" },
+  voiceCall: { ar: "مكالمة صوتية", en: "Voice call" },
+  voiceCallHint: { ar: "تكلم مع فريقك بالصوت — يردّون عليك بالصوت وبأسلوب طبيعي", en: "Talk to your team by voice — they answer out loud, naturally" },
+  tapToTalk: { ar: "اضغط وتكلم", en: "Tap to talk" },
+  handsFree: { ar: "تلقائي", en: "Hands-free" },
+  handsFreeDesc: { ar: "يبدأ الاستماع تلقائياً بعد كل رد", en: "Starts listening again after every reply" },
+  thinking: { ar: "يفكّرون…", en: "Thinking…" },
+  speaking: { ar: "يتكلم", en: "speaking" },
+  endCall: { ar: "إنهاء", en: "End" },
+  youSaid: { ar: "أنت", en: "You" },
+  voiceUnavailable: { ar: "الإدخال الصوتي غير متاح على هذا الجهاز — اكتب رسالتك وسيُقرأ الرد بصوت", en: "Voice input is unavailable on this device — type your message and the reply will be spoken" },
+  micDenied: { ar: "لم يُسمح باستخدام الميكروفون", en: "Microphone permission was denied" },
   fullWarning: { ar: "تحذير: التحكم الكامل يعني أن الوكلاء ينفّذون الأوامر بدون سؤالك. استخدمه فقط إذا كنت تثق بما تطلبه.", en: "Warning: full control means agents act without asking. Use only if you trust what you're asking for." },
 };
 

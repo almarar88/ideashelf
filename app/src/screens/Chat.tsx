@@ -15,6 +15,7 @@ import { hasAI } from "../lib/ai";
 import { refreshMe } from "../lib/account";
 import { listenOnce, stopListening, voiceAvailable } from "../lib/voice";
 import Paywall from "./Paywall";
+import VoiceCall from "./VoiceCall";
 import { JUDGE_ID, uid, type Agent, type FileRef, type JudgeConfig, type Message, type Verdict } from "../lib/types";
 import { SESSION_EXAMPLES } from "../lib/presets";
 
@@ -39,6 +40,9 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
   const [paywall, setPaywall] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [voiceOk, setVoiceOk] = useState(false);
+  const [voiceCall, setVoiceCall] = useState(false);
+  const voiceCallRef = useRef(false);
+  useEffect(() => { voiceCallRef.current = voiceCall; }, [voiceCall]);
   useEffect(() => { voiceAvailable().then(setVoiceOk); }, []);
   useEffect(() => {
     const h = (e: Event) => { setPaywall((e as CustomEvent<string>).detail || "quota"); refreshMe(); };
@@ -75,7 +79,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
     const idx = cur.findIndex((x) => x.id === m.id);
     const next = idx >= 0 ? cur.map((x) => (x.id === m.id ? m : x)) : [...cur, m];
     msgsRef.current = next; setMsgs(next); persist(next);
-    if (idx >= 0 && cur[idx].status === "streaming" && m.status === "done" && m.role !== "user" && !m.reaction && getState().settings.autoRead) {
+    if (idx >= 0 && cur[idx].status === "streaming" && m.status === "done" && m.role !== "user" && !m.reaction && getState().settings.autoRead && !voiceCallRef.current) {
       speakText(m.verdict ? m.verdict.decision + ". " + m.verdict.summary : m.text, getState().settings.lang);
     }
     if (m.status !== "streaming") {
@@ -96,21 +100,22 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
 
   if (!group) return <div className="empty">…</div>;
 
-  const send = async () => {
-    const body = text.trim();
-    if (!body && !pending.length) return;
+  const sendMessage = async (body: string, files: FileRef[], opts: { voice?: boolean } = {}) => {
+    if (!body && !files.length) return;
     if (!hasAI()) { alert(t(lang, "needKey")); return; }
-    const m: Message = { id: uid(), groupId, role: "user", text: body, files: pending, sources: [], status: "done", createdAt: Date.now(), mentions: mention ? [mention] : undefined, replyTo: replyTo?.id, council };
+    if (abortRef.current) return;
+    const m: Message = { id: uid(), groupId, role: "user", text: body, files, sources: [], status: "done", createdAt: Date.now(), mentions: mention ? [mention] : undefined, replyTo: replyTo?.id, council, voice: opts.voice };
     upsert(m);
     setText(""); setPending([]); setReplyTo(null);
     const ac = new AbortController(); abortRef.current = ac; setRunning(true);
     await keepAlive.start(t(lang, "workingBg"), group.name);
     try {
-      await handleUserMessage({ group: getState().groups.find((g) => g.id === groupId)!, getMessages: () => msgsRef.current, upsert, remove, askPermission, signal: ac.signal }, m, council);
+      await handleUserMessage({ group: getState().groups.find((g) => g.id === groupId)!, getMessages: () => msgsRef.current, upsert, remove, askPermission, signal: ac.signal, voice: opts.voice }, m, council);
       const last = msgsRef.current[msgsRef.current.length - 1];
-      if (last && last.role !== "user") notifyDone(`${group.emoji} ${group.name}`, `${nameFor(last)}: ${(last.text || last.files[0]?.name || "").slice(0, 90)}`);
+      if (last && last.role !== "user" && !opts.voice) notifyDone(`${group.emoji} ${group.name}`, `${nameFor(last)}: ${(last.text || last.files[0]?.name || "").slice(0, 90)}`);
     } finally { setRunning(false); abortRef.current = null; keepAlive.stop(); }
   };
+  const send = () => sendMessage(text.trim(), pending);
 
   // Auto-resume replies that were cut by a network drop (e.g. app was sent to background).
   const resumeBroken = useCallback(async () => {
@@ -192,6 +197,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
               {typingNow.length ? typingNow.map((m) => nameFor(m)).join("، ") + " " + t(lang, "typing") : running ? t(lang, "teamReading") : `${members.length} ${t(lang, "agentsCount")}${group.judgeEnabled ? " + " + judge.name : ""}`}
             </div>
           </div>
+          <button className="icon-btn" onClick={() => setVoiceCall(true)} title={t(lang, "voiceCall")}>📞</button>
           <button className="icon-btn" onClick={() => setShowSettings(true)}><Icon name="more" /></button>
         </div>
         <div className="row" style={{ gap: 0, marginTop: 10, justifyContent: "center" }}>
@@ -241,6 +247,8 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
       </div>
 
       {viewing && <FileViewer file={viewing} onClose={() => setViewing(null)} />}
+      {voiceCall && <VoiceCall group={group} members={members} judge={judge} lang={lang} userName={settings.userName} msgs={msgs} running={running}
+        onSend={(txt) => sendMessage(txt, [], { voice: true })} onStop={() => abortRef.current?.abort()} onClose={() => setVoiceCall(false)} />}
 
       <Sheet open={!!menuMsg} onClose={() => setMenuMsg(null)}>
         {menuMsg && (
@@ -320,6 +328,7 @@ const MessageRow = memo(function MessageRow({ m, replyTarget, agent, mentionName
           {replyTarget && <div className="small" style={{ opacity: .8, borderInlineStart: "2px solid rgba(255,255,255,.6)", paddingInlineStart: 8, marginBottom: 6 }}>{nameFor(replyTarget)}: {replyTarget.text.slice(0, 60)}</div>}
           {mentionName ? <div className="small" style={{ opacity: .85, marginBottom: 4 }}>@{mentionName}</div> : null}
           {m.council && <div className="small" style={{ opacity: .85, marginBottom: 4 }}>🏛 {t(lang, "council")}</div>}
+          {m.voice && <div className="small" style={{ opacity: .85, marginBottom: 4 }}>🎙️ {t(lang, "voiceCall")}</div>}
           {m.files.length > 0 && <div className="stack" style={{ gap: 6, marginBottom: m.text ? 8 : 0 }}>{m.files.map((f) => <FileChip key={f.id} file={f} onOpen={onOpenFile} light />)}</div>}
           {m.text && <div className="prose" style={{ margin: 0 }}>{m.text}</div>}
           <div className="small" style={{ opacity: .7, textAlign: "end", marginTop: 4 }}>{fmtTime(m.createdAt, lang)}</div>

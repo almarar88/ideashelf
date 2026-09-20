@@ -94,6 +94,7 @@ export interface Message {
   error?: string;
   reactions?: string[];   // emoji the boss put on this message
   reaction?: boolean;     // short spontaneous reaction from a colleague
+  voice?: boolean;        // sent by voice (voice call)
 }
 
 export interface Group {
