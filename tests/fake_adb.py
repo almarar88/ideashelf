@@ -19,6 +19,12 @@ if "pm list packages" in line and "-s" not in line and "-3" not in line:
     print("package:com.android.settings\npackage:com.chery.appguard\npackage:com.spotify.music"); sys.exit(0)
 if "pm list packages -s" in line:
     print("package:com.android.systemui\npackage:com.chery.hmi\npackage:com.oem.radio"); sys.exit(0)
+if "pm list packages -3 -f" in line:
+    print("package:/data/app/com.spotify.music/base.apk=com.spotify.music\npackage:/data/app/org.videolan.vlc/base.apk=org.videolan.vlc\npackage:/data/app/com.chery.usercfg/base.apk=com.chery.usercfg"); sys.exit(0)
+if "dumpsys package packages" in line:
+    for pkg in ("com.spotify.music", "org.videolan.vlc", "com.chery.usercfg"):
+        print(f"  Package [{pkg}] (abc):\n    versionCode=1000 minSdk=21 targetSdk=29\n    versionName=8.9.1\n    firstInstallTime=2024-01-01 10:00:00\n    lastUpdateTime=2024-02-01 10:00:00")
+    sys.exit(0)
 if "pm list packages -3" in line:
     print("package:com.spotify.music\npackage:org.videolan.vlc\npackage:com.chery.usercfg"); sys.exit(0)
 if "dumpsys package" in line:

@@ -110,6 +110,11 @@ class MainWindow(QMainWindow):
         self._update_status()
         self._update_adb_status()
 
+    def open_install_with(self, files: list[str]) -> None:
+        self.nav.setCurrentRow(NAV.index("install"))
+        self.pages["install"].tabs.setCurrentIndex(0)
+        self.pages["install"].add_paths(files)
+
     def _toggle_lang(self) -> None:
         self.ctx.set_language("en" if current_lang() == "ar" else "ar")
 

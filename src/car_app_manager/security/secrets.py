@@ -10,8 +10,29 @@ SERVICE = "CarAppManager"
 _memory: dict[str, str] = {}  # fallback only when no keyring backend exists (e.g. headless CI)
 
 
+_forced = False
+
+
+def _force_windows_backend() -> None:
+    """In a PyInstaller build entry-point discovery can miss the WinVault backend; select it explicitly."""
+    global _forced
+    if _forced:
+        return
+    _forced = True
+    import sys
+    if sys.platform != "win32":
+        return
+    try:
+        import keyring
+        from keyring.backends.Windows import WinVaultKeyring
+        keyring.set_keyring(WinVaultKeyring())
+    except Exception as e:  # pragma: no cover
+        log.warning("could not select WinVault keyring: %s", e)
+
+
 def _backend_ok() -> bool:
     try:
+        _force_windows_backend()
         import keyring
         from keyring.backends.fail import Keyring as Fail
         from keyring.backends.null import Keyring as Null

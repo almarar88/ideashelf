@@ -17,11 +17,15 @@ from .ui.theme import DARK_QSS
 
 
 def resource_path(name: str) -> Path:
-    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-    p = base / "resources" / name
-    if p.exists():
-        return p
-    return Path(__file__).resolve().parent / "resources" / name
+    here = Path(__file__).resolve().parent
+    candidates = [here / "resources" / name]
+    mei = getattr(sys, "_MEIPASS", None)
+    if mei:
+        candidates = [Path(mei) / "car_app_manager" / "resources" / name, Path(mei) / "resources" / name] + candidates
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[-1]
 
 
 def create_app(argv: list[str] | None = None) -> QApplication:
@@ -49,9 +53,19 @@ def _cli(argv: list[str]) -> int | None:
         info = inspect_apk(path)
         d = asdict(info)
         d["dangerous_permissions"] = info.dangerous_permissions
-        print(json.dumps(d, ensure_ascii=False, indent=2))
+        text = json.dumps(d, ensure_ascii=False, indent=2)
+        if "--out" in argv:  # a windowed exe has no stdout; write to a file instead
+            Path(argv[argv.index("--out") + 1]).write_text(text, encoding="utf-8")
+        else:
+            print(text)
         return 0
     return None
+
+
+def apk_args(argv: list[str]) -> list[str]:
+    """APK / bundle paths passed on the command line (Open with…, drag onto the exe)."""
+    from .apk.bundle import APK_EXTENSIONS
+    return [a for a in argv if not a.startswith("-") and a.lower().endswith(APK_EXTENSIONS) and os.path.isfile(a)]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -64,6 +78,10 @@ def main(argv: list[str] | None = None) -> int:
     icon = QIcon(str(icon_file)) if icon_file.exists() else QIcon()
     app.setWindowIcon(icon)
     ctx = AppContext()
+    import logging
+    from . import __version__
+    from .support import build_info
+    logging.getLogger("car_app_manager").info("app started v%s build=%s adb=%s", __version__, build_info().get("sha", "")[:12], ctx.adb_path or "-")
     if not ctx.adb_available and os.environ.get("CAR_APP_MANAGER_SKIP_FIRSTRUN") != "1":
         dlg = FirstRunDialog()
         dlg.setWindowIcon(icon)
@@ -71,6 +89,9 @@ def main(argv: list[str] | None = None) -> int:
             ctx.set_adb_path(dlg.adb_path)
     win = MainWindow(ctx, icon)
     win.show()
+    files = apk_args(argv)
+    if files:
+        win.open_install_with(files)
     return app.exec()
 
 

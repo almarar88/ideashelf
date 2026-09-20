@@ -435,6 +435,17 @@ S: dict[str, tuple[str, str]] = {
     "apps.selected": ("{n} محدد", "{n} selected"),
     "apps.confirm.uninstall_many": ("سيتم إلغاء تثبيت {n} تطبيق:\n{list}\n\nمتابعة؟", "{n} apps will be uninstalled:\n{list}\n\nContinue?"),
     "apps.batch_done": ("اكتمل: {ok} نجاح، {fail} فشل", "Finished: {ok} succeeded, {fail} failed"),
+    # v0.6
+    "device.none_help": ("تحقق من: (1) الكابل ومنفذ USB في الشاشة، (2) تعريف USB على الحاسوب (إدارة الأجهزة ← يجب أن يظهر جهاز ADB وليس علامة تعجب)، (3) أو استخدم الاتصال اللاسلكي من الأسفل.",
+                         "Check: (1) the cable and the unit's USB port, (2) the USB driver on the PC (Device Manager should show an ADB device, not a warning), (3) or use the wireless connection below."),
+    "logs.bundle": ("حزمة الدعم (zip)…", "Support bundle (zip)…"),
+    "logs.bundle_done": ("تم إنشاء حزمة الدعم: {path}\nأرسل هذا الملف عند طلب المساعدة. لا يحتوي على مفاتيح API.", "Support bundle created: {path}\nSend this file when asking for help. It contains no API keys."),
+    "settings.about": ("حول البرنامج والتحديثات", "About & updates"),
+    "settings.check_update": ("التحقق من وجود تحديث", "Check for updates"),
+    "settings.open_release": ("فتح صفحة التنزيل", "Open download page"),
+    "settings.update_available": ("يوجد إصدار أحدث (نُشر {date}). افتح صفحة التنزيل.", "A newer build is available (published {date}). Open the download page."),
+    "settings.update_none": ("لديك أحدث إصدار.", "You have the latest build."),
+    "settings.update_unknown": ("تعذّر تحديد الإصدار الأحدث.", "Could not determine the latest build."),
     "ai.title": ("المساعد الذكي", "AI Assistant"),
 }
 

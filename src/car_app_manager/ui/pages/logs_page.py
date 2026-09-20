@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QFileDialog, QHBoxLayout, QHea
 from ...db import ActionRow
 from ...i18n import tr
 from ..widgets.common import StatusLine, button, confirm, title_label
+from ...workers import run_in_background
 from .base import BasePage
 
 
@@ -21,9 +22,10 @@ class LogsPage(BasePage):
         self.search.textChanged.connect(lambda _t: self._debounce.start())
         self.btn_refresh = button("", slot=self.reload)
         self.btn_export = button("", slot=self._export)
+        self.btn_bundle = button("", "primary", self._bundle)
         self.btn_clear = button("", "danger", self._clear)
         bar.addWidget(self.search, 1)
-        for b in (self.btn_refresh, self.btn_export, self.btn_clear):
+        for b in (self.btn_refresh, self.btn_export, self.btn_bundle, self.btn_clear):
             bar.addWidget(b)
         self.root.addLayout(bar)
         split = QSplitter(Qt.Vertical)
@@ -55,6 +57,7 @@ class LogsPage(BasePage):
         self.search.setPlaceholderText(tr("search"))
         self.btn_refresh.setText(tr("refresh"))
         self.btn_export.setText(tr("logs.export"))
+        self.btn_bundle.setText(tr("logs.bundle"))
         self.btn_clear.setText(tr("logs.clear"))
         self.table.setHorizontalHeaderLabels([tr("logs.col.time"), tr("logs.col.action"), tr("logs.col.result"), tr("logs.col.device")])
         self.reload()
@@ -105,6 +108,31 @@ class LogsPage(BasePage):
         if path:
             self.ctx.logger.export(path)
             self.status.set(tr("logs.exported", path=path), "ok")
+
+    def _bundle(self) -> None:
+        from datetime import datetime
+        from ...support import write_support_bundle
+        default = f"car_app_manager_support_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
+        path, _ = QFileDialog.getSaveFileName(self, tr("logs.bundle"), default, "Zip (*.zip)")
+        if not path:
+            return
+        self.status.set(tr("working"))
+        ctx = self.ctx
+
+        def work():
+            diag = ""
+            if ctx.device_ready:
+                from ...adb.diagnostics import run_diagnostics
+                rep = run_diagnostics(ctx.runner, ctx.adb_path)
+                diag = rep.to_text("en") + "\n\n" + rep.to_text("ar")
+            dev = {}
+            if ctx.device_info:
+                i = ctx.device_info
+                dev = {"model": i.model, "android": i.android_version, "sdk": i.sdk, "abis": i.abis, "build": i.build_id}
+            return write_support_bundle(path, ctx.logger, diag, dev)
+
+        run_in_background(work, on_done=lambda p: self.status.set(tr("logs.bundle_done", path=str(p)), "ok"),
+                          on_error=lambda m: self.status.set(m, "error"))
 
     def _clear(self) -> None:
         if confirm(self, tr("logs.confirm_clear"), danger=True):

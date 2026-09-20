@@ -119,6 +119,22 @@ class SettingsPage(BasePage):
         sv.addWidget(self.lbl_safety)
         self.root.addWidget(self.g_safety)
 
+        self.g_about = QGroupBox()
+        ab = QVBoxLayout(self.g_about)
+        from ... import __version__
+        from ...support import build_info
+        bi = build_info()
+        self.lbl_about = muted(f"v{__version__}  ·  build {bi.get('sha', '')[:12] or '-'}  {bi.get('date', '')}")
+        ab.addWidget(self.lbl_about)
+        hu = QHBoxLayout()
+        self.btn_update = button("", slot=self._check_update)
+        self.btn_release = button("", slot=self._open_release)
+        hu.addWidget(self.btn_update); hu.addWidget(self.btn_release); hu.addStretch(1)
+        ab.addLayout(hu)
+        self.update_status = StatusLine()
+        ab.addWidget(self.update_status)
+        self.root.addWidget(self.g_about)
+
         row = QHBoxLayout()
         self.btn_save = button("", "primary", self._save)
         row.addWidget(self.btn_save); row.addStretch(1)
@@ -154,6 +170,7 @@ class SettingsPage(BasePage):
             self.ai_status.set(tr("settings.ai_usage", spent=spent))
         except Exception:
             pass
+        self.g_about.setTitle(tr("settings.about")); self.btn_update.setText(tr("settings.check_update")); self.btn_release.setText(tr("settings.open_release"))
         self.g_safety.setTitle(tr("settings.safety"))
         self.lbl_safety.setText(tr("settings.safety_text"))
         self.btn_save.setText(tr("settings.save"))
@@ -216,6 +233,26 @@ class SettingsPage(BasePage):
 
         run_in_background(lambda progress: download_platform_tools(lambda d, t: progress((d, t))),
                           on_done=done, on_error=fail, on_progress=prog)
+
+    def _check_update(self) -> None:
+        from ...updates import check_for_update
+        self.update_status.set(tr("working"))
+
+        def done(u):
+            if u.available:
+                self.update_status.set(tr("settings.update_available", date=u.published[:10]), "warn")
+            elif not u.latest_sha:
+                self.update_status.set(tr("settings.update_unknown"), "muted")
+            else:
+                self.update_status.set(tr("settings.update_none"), "ok")
+
+        run_in_background(check_for_update, on_done=done, on_error=lambda m: self.update_status.set(m, "error"))
+
+    def _open_release(self) -> None:
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        from ...updates import RELEASE_PAGE
+        QDesktopServices.openUrl(QUrl(RELEASE_PAGE))
 
     def _test_vt(self) -> None:
         key = self.ed_vt_key.text().strip()

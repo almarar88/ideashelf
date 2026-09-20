@@ -164,7 +164,7 @@ class DevicePage(BasePage):
                 self.combo.setCurrentIndex(i)
         self._loading_combo = False
         if not devices:
-            self.status.set(tr("device.none_found"), "warn")
+            self.status.set(tr("device.none_found") + "\n" + tr("device.none_help"), "warn")
         elif len([d for d in devices if d.is_ready]) > 1:
             self.status.set(tr("device.multiple_help"), "warn")
 

@@ -2,6 +2,18 @@
 
 All notable changes to Car App Manager are documented here.
 
+## [0.6.0] - Robustness & support
+### Fixed
+- API keys are stored through an explicitly selected Windows Credential Manager backend, so the frozen build cannot silently fall back to session-only storage.
+- Resource lookup inside the frozen build checks the bundled path first.
+### Added
+- **Support bundle** (Logs page): one zip with the action log, text logs, settings (no secrets), device info and a fresh diagnostics report, to attach when asking for help.
+- **Check for updates** (Settings → About): compares the build sha embedded by CI with the published release and links to the download page.
+- App list loads with two device calls instead of two per app (`pm list packages -3 -f` + one filtered `dumpsys package packages`), falling back per app when needed.
+- APK / bundle paths on the command line open the Install page (drag files onto the exe, or "Open with").
+- Clearer guidance when no device is found (cable/port, USB driver in Device Manager, wireless alternative).
+- CI now runs the built exe on the native Windows platform (not offscreen), verifies the main window started, and verifies the frozen androguard parses a real APK.
+
 ## [0.5.0] - Install reliability & diagnostics
 ### Fixed
 - Pressing Install while files were still being checked was silently ignored. The install now waits for the checks and starts automatically.

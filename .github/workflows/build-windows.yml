@@ -30,23 +30,39 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest -q
 
+      - name: Embed build info
+        shell: pwsh
+        run: |
+          $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd")
+          '{"sha": "' + "${{ github.sha }}" + '", "date": "' + $date + '"}' | Set-Content -Encoding utf8 src\car_app_manager\resources\build.json
+          Get-Content src\car_app_manager\resources\build.json
+
       - name: Build CarAppManager.exe
         run: |
           python assets\make_icon.py
           python -m PyInstaller --noconfirm --clean CarAppManager.spec
           dist\CarAppManager.exe --version
 
-      - name: Smoke-test the exe (starts, inspects an APK)
+      - name: Smoke-test the exe (real Windows GUI, APK inspection inside the frozen build)
         shell: pwsh
         env:
-          QT_QPA_PLATFORM: offscreen
           CAR_APP_MANAGER_SKIP_FIRSTRUN: "1"
         run: |
+          # 1) the frozen androguard must parse a real APK (windowed exe has no stdout -> --out file)
+          Invoke-WebRequest -Uri "https://f-droid.org/F-Droid.apk" -OutFile "$env:TEMP\fdroid.apk"
+          $r = Start-Process -FilePath "dist\CarAppManager.exe" -ArgumentList "--inspect `"$env:TEMP\fdroid.apk`" --out `"$env:TEMP\inspect.json`"" -PassThru -Wait
+          if ($r.ExitCode -ne 0) { Write-Error "--inspect exited with $($r.ExitCode)"; exit 1 }
+          $j = Get-Content "$env:TEMP\inspect.json" -Raw | ConvertFrom-Json
+          if ($j.package -ne "org.fdroid.fdroid" -or $j.min_sdk -lt 1) { Write-Error "unexpected inspect result: $($j.package) minSdk=$($j.min_sdk)"; exit 1 }
+          Write-Host "inspect OK: $($j.package) $($j.version_name) minSdk=$($j.min_sdk) abis=$($j.native_abis)"
+          # 2) the GUI must start with the native Windows platform plugin and reach the main window
           $p = Start-Process -FilePath "dist\CarAppManager.exe" -PassThru
-          Start-Sleep -Seconds 12
+          Start-Sleep -Seconds 15
           if ($p.HasExited) { Write-Error "exe exited early with code $($p.ExitCode)"; exit 1 }
           Stop-Process -Id $p.Id -Force
-          Write-Host "exe stayed alive for 12s - OK"
+          $log = Get-Content "$env:LOCALAPPDATA\CarAppManager\logs\car_app_manager.log" -Raw
+          if ($log -notmatch "app started") { Write-Error "main window did not initialise (no 'app started' in log)"; Write-Host $log; exit 1 }
+          Write-Host "GUI started on the native Windows platform - OK"
 
       - name: Build installer (Inno Setup)
         shell: pwsh

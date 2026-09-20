@@ -56,6 +56,37 @@ def parse_dumpsys_package(output: str) -> dict[str, str]:
     return info
 
 
+def parse_packages_dump(output: str) -> dict[str, dict[str, str]]:
+    """Parse `dumpsys package packages` (optionally pre-filtered with grep) into {package: {versionName, versionCode, ...}}."""
+    info: dict[str, dict[str, str]] = {}
+    cur: Optional[str] = None
+    for line in output.splitlines():
+        m = re.match(r"^\s*Package \[([^\]]+)\]", line)
+        if m:
+            cur = m.group(1)
+            info.setdefault(cur, {})
+            continue
+        if cur is None:
+            continue
+        for key in ("versionName", "versionCode", "firstInstallTime", "lastUpdateTime", "codePath"):
+            m = re.search(rf"\b{key}=(\S+)", line)
+            if m and key not in info[cur]:
+                info[cur][key] = m.group(1)
+    return info
+
+
+def parse_packages_with_paths(output: str) -> dict[str, str]:
+    """Parse `pm list packages -f` lines: package:/data/app/x/base.apk=com.x"""
+    out: dict[str, str] = {}
+    for line in output.splitlines():
+        line = line.strip()
+        if line.startswith("package:") and "=" in line:
+            path, _, pkg = line[len("package:"):].rpartition("=")
+            if pkg:
+                out[pkg] = path
+    return out
+
+
 def parse_stat_sizes(output: str) -> dict[str, int]:
     """Parse `stat -c '%s %n' f1 f2` output -> {path: size}."""
     sizes: dict[str, int] = {}
@@ -120,13 +151,45 @@ class PackageManager:
     def list_user_apps(self, progress: Optional[Callable[[int, int, str], None]] = None) -> list[AppInfo]:
         sys_pkgs = self.list_system_packages(refresh=True)
         pkgs = self.list_user_packages()
+        if not pkgs:
+            return []
+        fast = self._fast_details(pkgs, progress)
         apps: list[AppInfo] = []
         for i, pkg in enumerate(pkgs):
+            if pkg in fast:
+                apps.append(fast[pkg])
+                continue
             if progress:
                 progress(i, len(pkgs), pkg)
             apps.append(self.get_app_info(pkg, sys_pkgs))
+        for a in apps:
+            a.is_system = a.package in sys_pkgs
+            a.protected = is_protected(a.package, sys_pkgs)
         self.fill_sizes(apps)
         return apps
+
+    def _fast_details(self, pkgs: list[str], progress=None) -> dict[str, AppInfo]:
+        """Two device calls instead of two per app. Returns only packages fully resolved; others fall back."""
+        if progress:
+            progress(0, len(pkgs), "dumpsys")
+        r = self.runner.shell("pm list packages -3 -f", action="list user packages (paths)", timeout=60)
+        paths = parse_packages_with_paths(r.stdout) if r.ok else {}
+        r = self.runner.shell(
+            "dumpsys package packages | grep -E '^  Package \\[|versionCode=|versionName=|firstInstallTime=|lastUpdateTime='",
+            action="dumpsys packages (summary)", timeout=120)
+        dump = parse_packages_dump(r.stdout) if r.ok else {}
+        out: dict[str, AppInfo] = {}
+        for pkg in pkgs:
+            d = dump.get(pkg)
+            if not d or pkg not in paths:
+                continue
+            try:
+                vc = int(d.get("versionCode", "0"))
+            except ValueError:
+                vc = 0
+            out[pkg] = AppInfo(package=pkg, version_name=d.get("versionName", ""), version_code=vc,
+                               apk_paths=[paths[pkg]], first_install=d.get("firstInstallTime", ""), last_update=d.get("lastUpdateTime", ""))
+        return out
 
     def fill_sizes(self, apps: list[AppInfo]) -> None:
         paths = [p for a in apps for p in a.apk_paths]
