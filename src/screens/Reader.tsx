@@ -20,7 +20,7 @@ import { db, logReading } from "@/lib/db";
 import { TEXT_VERSION } from "@/lib/pdf";
 import { createCloudSource, createLocalSource, type Geom, type PageSource, type RenderHandle } from "@/lib/reader-source";
 import { saveProgress } from "@/lib/cloud";
-import { createNarrator, openVoiceInstall, setScreenAwake, type NarrationStatus, type Narrator } from "@/lib/narration";
+import { cloudAudioUrl, createNarrator, openVoiceInstall, setScreenAwake, type NarrationStatus, type Narrator } from "@/lib/narration";
 import type { PageEffect, Settings } from "@/lib/settings";
 import { Gauge } from "@/components/Gauge";
 import { IconButton, Toggle } from "@/components/ui";
@@ -135,6 +135,7 @@ export function ReaderScreen({
   const narratorRef = useRef<Narrator | null>(null);
   const goToRef = useRef<(p: number, animate?: boolean) => Promise<void>>(async () => {});
   const maxPageRef = useRef(1);
+  const metaRef = useRef<{ id: string; title: string; author: string; pages: number } | null>(null);
   const playingRef = useRef(false);
   /** True while auto-advance drives the turn, so goTo does not also start playback. */
   const advancingRef = useRef(false);
@@ -421,6 +422,17 @@ export function ReaderScreen({
     const n = createNarrator(target.kind, target.bookId, {
       getText: (from, to) => (sourceRef.current ? sourceRef.current.getText(from, to) : Promise.resolve([])),
       onStatus: (patch) => setNarration((prev) => ({ ...prev, ...patch })),
+      getInfo: () => ({ lastPage: maxPageRef.current, title: metaRef.current?.title ?? "", author: metaRef.current?.author ?? "" }),
+      audioUrlFor: target.kind === "cloud" ? cloudAudioUrl(target.bookId) : undefined,
+      // The background service turns pages itself; follow it on screen without
+      // restarting playback.
+      onPageSync: (p) => {
+        if (p === pageRef.current) return;
+        advancingRef.current = true;
+        void goToRef.current(p).finally(() => {
+          advancingRef.current = false;
+        });
+      },
       onPageEnd: (finished) => {
         if (!autoAdvanceRef.current) return;
         const next = finished + 1;
@@ -541,6 +553,7 @@ export function ReaderScreen({
   }
 
   maxPageRef.current = maxPage;
+  metaRef.current = meta;
   const progress = maxPage > 1 ? (page - 1) / (maxPage - 1) : 1;
   const showChrome = chrome || wide;
   const atPreviewEnd = target.kind === "cloud" && !target.readable && page >= maxPage;

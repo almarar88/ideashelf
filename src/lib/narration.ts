@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { TextToSpeech } from "@capacitor-community/text-to-speech";
 import { KeepAwake } from "@capacitor-community/keep-awake";
+import { Audiobook, type AudiobookPage } from "./audiobook-native";
 import { requireSupabase, supabase } from "./supabase";
 import { loadSettings } from "./settings";
 
@@ -37,6 +38,18 @@ export interface NarratorOptions {
   onStatus: (patch: Partial<NarrationStatus>) => void;
   /** Called when a page finishes, so the reader can turn to the next one. */
   onPageEnd: (page: number) => void;
+  /**
+   * The background service turns pages by itself. This asks the reader to *display* the
+   * given page without restarting playback.
+   */
+  onPageSync?: (page: number) => void;
+  /**
+   * Read at playback time, not at creation: the narrator is built as soon as the book
+   * opens, which can be before the title and page count are known.
+   */
+  getInfo: () => { lastPage: number; title: string; author: string };
+  /** Mints a playable audio URL for a store page; absent for the device voice. */
+  audioUrlFor?: (page: number) => Promise<string>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -59,6 +72,11 @@ async function cloudUrl(bookId: string, page: number, voiceId: string, modelId: 
   const url = (data as { url?: string } | null)?.url;
   if (!url) throw new Error("لم يصل رابط الصوت");
   return url;
+}
+
+export function cloudAudioUrl(bookId: string): (page: number) => Promise<string> {
+  const s = loadSettings();
+  return (page: number) => cloudUrl(bookId, page, s.ttsVoiceId, s.ttsModelId);
 }
 
 export async function listVoices(): Promise<Voice[]> {
@@ -204,68 +222,126 @@ export async function openVoiceInstall(): Promise<void> {
   }
 }
 
-function createNativeNarrator(opts: NarratorOptions): Narrator {
+/** How many store pages are signed up front so listening continues off-screen. */
+const CLOUD_WINDOW = 5;
+
+/**
+ * Background narration, driven by AudiobookService.
+ *
+ * The service is handed the whole run of pages when playback starts, because once the app
+ * is backgrounded the web layer is suspended and can no longer be asked for the next one.
+ * Page turns, the notification controls and the lock screen are all the service's job;
+ * this object only relays state back into the reader.
+ */
+function createServiceNarrator(mode: "tts" | "audio", opts: NarratorOptions): Narrator {
   let destroyed = false;
-  let current: number | null = null;
-  let generation = 0;
+  let handles: { remove: () => void }[] = [];
+  let loadedUpTo = 0;
+  let currentPage = 0;
+  let isPlaying = false;
+
+  void Audiobook.ensureNotificationPermission().catch(() => {});
+
+  void Audiobook.addListener("pageChanged", ({ page }) => {
+    if (destroyed) return;
+    currentPage = page;
+    opts.onStatus({ page, loading: false, error: "" });
+    opts.onPageSync?.(page);
+  }).then((h) => handles.push(h));
+  void Audiobook.addListener("stateChanged", ({ playing }) => {
+    if (destroyed) return;
+    isPlaying = playing;
+    opts.onStatus({ playing, loading: false });
+  }).then((h) => handles.push(h));
+  void Audiobook.addListener("finished", () => {
+    if (!destroyed) opts.onStatus({ playing: false, loading: false });
+  }).then((h) => handles.push(h));
+  void Audiobook.addListener("narrationError", ({ message }) => {
+    if (!destroyed) opts.onStatus({ playing: false, loading: false, error: message });
+  }).then((h) => handles.push(h));
+
+  async function buildPages(from: number): Promise<AudiobookPage[]> {
+    const last = Math.max(from, opts.getInfo().lastPage);
+    if (mode === "tts") {
+      const rows = await opts.getText(from, last);
+      loadedUpTo = last;
+      return rows.map((r) => ({ page: r.page, text: r.text }));
+    }
+    // Store books: sign a window now. Signed URLs last an hour, so a window covers a
+    // real listening session; the reader extends it while the app is in the foreground.
+    const to = Math.min(last, from + CLOUD_WINDOW - 1);
+    const pages: AudiobookPage[] = [];
+    for (let p = from; p <= to; p++) {
+      try {
+        pages.push({ page: p, url: await opts.audioUrlFor!(p) });
+      } catch {
+        break;
+      }
+    }
+    loadedUpTo = to;
+    return pages;
+  }
 
   return {
-    engine: "native",
+    engine: mode === "audio" ? "cloud" : "native",
     async play(page) {
       if (destroyed) return;
-      const run = ++generation;
       opts.onStatus({ loading: true, error: "", page });
-      await TextToSpeech.stop().catch(() => {});
-      const rows = await opts.getText(page, page);
-      const text = rows.map((r) => r.text).join("\n").trim();
-      if (!text) {
-        opts.onStatus({ loading: false, error: "لا يوجد نص في هذه الصفحة" });
-        return;
-      }
-      if (!(await nativeArabicAvailable())) {
-        opts.onStatus({ loading: false, error: "لا يوجد صوت عربي على الجهاز. اضغط لتثبيته." });
-        return;
-      }
-      current = page;
-      opts.onStatus({ loading: false, playing: true });
-      // speak() resolves when a chunk finishes, so chunking also gives us pause points.
-      for (const part of chunk(text, 400)) {
-        if (destroyed || run !== generation) return;
-        try {
-          await TextToSpeech.speak({ text: part, lang: "ar", rate: loadSettings().ttsRate, category: "playback" });
-        } catch {
-          if (run === generation) opts.onStatus({ playing: false, error: "توقف النطق" });
+      try {
+        const pages = await buildPages(page);
+        if (destroyed) return;
+        if (!pages.length) {
+          opts.onStatus({ loading: false, error: "لا يوجد نص في هذه الصفحة" });
           return;
         }
+        const info = opts.getInfo();
+        await Audiobook.start({
+          mode,
+          title: info.title,
+          author: info.author,
+          rate: loadSettings().ttsRate,
+          startPage: page,
+          pages,
+        });
+      } catch (e) {
+        opts.onStatus({ loading: false, playing: false, error: e instanceof Error ? e.message : "تعذر بدء القراءة" });
       }
-      if (destroyed || run !== generation) return;
-      opts.onStatus({ playing: false });
-      if (current != null) opts.onPageEnd(current);
     },
     pause() {
-      generation += 1;
-      void TextToSpeech.stop().catch(() => {});
-      opts.onStatus({ playing: false });
+      void Audiobook.pause().catch(() => {});
     },
     stop() {
-      generation += 1;
-      void TextToSpeech.stop().catch(() => {});
-      current = null;
+      void Audiobook.stop().catch(() => {});
       opts.onStatus({ playing: false, loading: false, page: null });
     },
     setRate() {
-      /* applied to the next chunk */
+      // The service reads speed when it starts, so apply it by restarting this page.
+      if (isPlaying && currentPage) void this.play(currentPage);
     },
-    prefetch() {
-      /* synthesis is local */
+    prefetch(page) {
+      // Extend the signed window while the app is still awake to do it.
+      if (mode !== "audio" || page < loadedUpTo - 1) return;
+      void opts.audioUrlFor?.(page + 1).catch(() => {});
     },
     destroy() {
       destroyed = true;
-      generation += 1;
-      void TextToSpeech.stop().catch(() => {});
+      for (const h of handles) {
+        try {
+          h.remove();
+        } catch {
+          /* already gone */
+        }
+      }
+      handles = [];
+      void Audiobook.stop().catch(() => {});
     },
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Web fallback: the browser's own speech engine. Android WebView does  */
+/* not implement it, which is why the phone uses the service above.     */
+/* ------------------------------------------------------------------ */
 
 function pickArabicVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis.getVoices();
@@ -362,8 +438,11 @@ function createDeviceNarrator(opts: NarratorOptions): Narrator {
 /* ------------------------------------------------------------------ */
 
 export function createNarrator(kind: "local" | "cloud", bookId: string, opts: NarratorOptions): Narrator {
+  // On the phone everything goes through the background service so listening survives the
+  // screen turning off; the browser paths below are for the web build.
+  if (isNative() && kind === "cloud" && supabase && opts.audioUrlFor) return createServiceNarrator("audio", opts);
+  if (isNative()) return createServiceNarrator("tts", opts);
   if (kind === "cloud" && supabase) return createCloudNarrator(bookId, opts);
-  if (isNative()) return createNativeNarrator(opts);
   if (typeof window !== "undefined" && "speechSynthesis" in window) return createDeviceNarrator(opts);
   return {
     engine: "none",
