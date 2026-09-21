@@ -35,6 +35,7 @@ export default function VoiceCall({ group, members, judge, lang, userName, msgs,
   const handsFreeRef = useRef(true);
   const runningRef = useRef(running);
   const closed = useRef(false);
+  const silentRounds = useRef(0);
   const onSendRef = useRef(onSend); onSendRef.current = onSend;
   const userNameRef = useRef(userName); userNameRef.current = userName;
   useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
@@ -56,7 +57,13 @@ export default function VoiceCall({ group, members, judge, lang, userName, msgs,
       const text = (await listenOnce(lang, setPartial)).trim();
       if (closed.current) return;
       setPartial("");
-      if (!text) { setPhase("idle"); return; }
+      if (!text) {
+        // Heard nothing: in hands-free mode keep the mic open for a couple more rounds, then wait for a tap.
+        setPhase("idle");
+        if (handsFreeRef.current && silentRounds.current < 2) { silentRounds.current++; setTimeout(() => { if (!closed.current && phaseRef.current === "idle") void listen(); }, 300); }
+        return;
+      }
+      silentRounds.current = 0;
       setCaption({ who: userNameRef.current || t(lang, "youSaid"), text, me: true });
       setPhase("thinking");
       await onSendRef.current(text);
@@ -123,6 +130,7 @@ export default function VoiceCall({ group, members, judge, lang, userName, msgs,
     if (phase === "listening") { await stopListening(); return; }
     if (phase === "speaking") speaker.current.stop();
     if (running) onStop();
+    silentRounds.current = 0;
     void listen();
   };
   const end = () => { closed.current = true; speaker.current.stop(); void stopListening(); if (running) onStop(); onClose(); };

@@ -289,7 +289,7 @@ const dict = {
   speaking: { ar: "يتكلم", en: "speaking" },
   endCall: { ar: "إنهاء", en: "End" },
   youSaid: { ar: "أنت", en: "You" },
-  voiceUnavailable: { ar: "الإدخال الصوتي غير متاح على هذا الجهاز — اكتب رسالتك وسيُقرأ الرد بصوت", en: "Voice input is unavailable on this device — type your message and the reply will be spoken" },
+  voiceUnavailable: { ar: "التعرف على الكلام غير متاح على هذا الجهاز. على أندرويد ثبّت تطبيق Google و\"Google Speech Services\" وفعّل التعرف على الكلام دون اتصال للعربية، ثم أعد فتح التطبيق.", en: "Speech recognition is unavailable on this device. On Android install the Google app and \"Google Speech Services\", enable offline speech for Arabic, then reopen the app." },
   micDenied: { ar: "لم يُسمح باستخدام الميكروفون", en: "Microphone permission was denied" },
   fullWarning: { ar: "تحذير: التحكم الكامل يعني أن الوكلاء ينفّذون الأوامر بدون سؤالك. استخدمه فقط إذا كنت تثق بما تطلبه.", en: "Warning: full control means agents act without asking. Use only if you trust what you're asking for." },
 };

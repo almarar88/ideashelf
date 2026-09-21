@@ -18,6 +18,8 @@ import Paywall from "./Paywall";
 import VoiceCall from "./VoiceCall";
 import { JUDGE_ID, uid, type Agent, type FileRef, type JudgeConfig, type Message, type Verdict } from "../lib/types";
 import { SESSION_EXAMPLES } from "../lib/presets";
+import { Capacitor } from "@capacitor/core";
+const isNative = Capacitor.isNativePlatform();
 
 export default function Chat({ groupId, onBack }: { groupId: string; onBack: () => void }) {
   const { settings, agents, judge, groups } = useStore((s) => s);
@@ -53,7 +55,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
     if (listening) { await stopListening(); setListening(false); return; }
     setListening(true);
     try { const txt = await listenOnce(lang, (p) => setText(p)); if (txt) setText(txt); }
-    catch (e) { console.warn(e); }
+    catch (e) { alert(/permission/i.test(String(e)) ? t(lang, "micDenied") : String(e instanceof Error ? e.message : e)); }
     finally { setListening(false); }
   };
   const allowAllRef = useRef(false);
@@ -236,7 +238,7 @@ export default function Chat({ groupId, onBack }: { groupId: string; onBack: () 
         </div>
         <div className="row" style={{ alignItems: "flex-end", gap: 8 }}>
           <button className="icon-btn" onClick={() => setAttachMenu(true)} disabled={uploading} title={t(lang, "attachHint")}>{uploading ? <Dots /> : <Icon name="clip" />}</button>
-          {voiceOk && <button className="icon-btn" style={listening ? { background: "var(--red)", color: "#fff" } : {}} onClick={speakToType} title={t(lang, "voice")}>{listening ? <Dots /> : "🎙️"}</button>}
+          {(voiceOk || isNative) && <button className="icon-btn" style={listening ? { background: "var(--red)", color: "#fff" } : {}} onClick={() => (voiceOk ? speakToType() : alert(t(lang, "voiceUnavailable")))} title={t(lang, "voice")}>{listening ? <Dots /> : "🎙️"}</button>}
           <textarea className="input" rows={1} value={text} onChange={(e) => setText(e.target.value)} placeholder={t(lang, "chatPlaceholder")} style={{ borderRadius: 24, minHeight: 48, maxHeight: 140, padding: "13px 16px", background: "var(--white)" }}
             onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = Math.min(140, el.scrollHeight) + "px"; }}
             onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send(); }} />

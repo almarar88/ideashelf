@@ -18,12 +18,27 @@ export async function listenOnce(lang: "ar" | "en", onPartial?: (t: string) => v
     const { SpeechRecognition } = await import("@capacitor-community/speech-recognition");
     const perm = await SpeechRecognition.requestPermissions();
     if (perm.speechRecognition !== "granted") throw new Error("mic permission denied");
-    let last = "";
-    const sub = await SpeechRecognition.addListener("partialResults", (d: { matches?: string[] }) => { if (d.matches?.[0]) { last = d.matches[0]; onPartial?.(last); } });
+    // With partialResults the native start() resolves immediately; the transcript arrives through the
+    // partialResults events and the session ends with listeningState "stopped" (silence or stop()).
+    // Android fires "stopped" (end of speech) BEFORE the final results arrive, so wait a short grace
+    // period after it. Recognizer errors (silence timeout etc.) reach JS only through inactivity, so an
+    // inactivity timer ends the session too: 8s with nothing heard, 4s after the last words.
+    let last = ""; let done = false;
+    let finish: (v: string) => void = () => undefined;
+    const result = new Promise<string>((resolve) => { finish = (v) => { if (!done) { done = true; resolve(v); } }; });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const endSoon = (ms: number, stopEngine: boolean) => { clearTimeout(timer); timer = setTimeout(() => { if (stopEngine) void SpeechRecognition.stop().catch(() => undefined); finish(last); }, ms); };
+    const subs = await Promise.all([
+      SpeechRecognition.addListener("partialResults", (d: { matches?: string[] }) => { if (d.matches?.[0]) { last = d.matches[0]; onPartial?.(last); endSoon(4000, true); } }),
+      SpeechRecognition.addListener("listeningState", (d: { status: "started" | "stopped" }) => { if (d.status === "stopped") endSoon(1200, false); }),
+    ]);
+    endSoon(8000, true);
     try {
       const r = await SpeechRecognition.start({ language: locale, maxResults: 1, partialResults: true, popup: false });
-      return (r as { matches?: string[] }).matches?.[0] ?? last;
-    } finally { sub.remove(); }
+      const direct = (r as { matches?: string[] } | undefined)?.matches?.[0];
+      if (direct) return direct;
+      return await result;
+    } finally { clearTimeout(timer); subs.forEach((s) => s.remove()); }
   }
   const Ctor = webCtor();
   if (!Ctor) throw new Error("speech recognition unavailable");
